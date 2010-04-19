@@ -27,8 +27,97 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#include <errno.h>
+#include <stdarg.h>
+#include <stddef.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
+/*******************************************************************************
+ * Error handling and memory managment
+ *   Wapiti use a very simple system for error handling: violently fail. Errors
+ *   can occurs in two cases, when user feed Wapiti with bad datas or when there
+ *   is a problem on the system side. In both cases, there is nothing we can do,
+ *   so the best thing is to exit with a meaning full error message.
+ *
+ *   Memory allocation is one of the possible point of failure and its painfull
+ *   to always remeber to check return value of malloc so we provide wrapper
+ *   around it and realloc who check and fail in case of error.
+ ******************************************************************************/
+
+/* fatal:
+ *   This is the main error function, it will print the given message with same
+ *   formating than the printf family and exit program with an error. We let the
+ *   OS care about freeing ressources.
+ */
+static void fatal(const char *msg, ...) {
+	va_list args;
+	fprintf(stderr, "error: ");
+	va_start(args, msg);
+	vfprintf(stderr, msg, args);
+	va_end(args);
+	fprintf(stderr, "\n");
+	exit(EXIT_FAILURE);
+}
+
+/* pfatal:
+ *   This one is very similar to the fatal function but print an additional
+ *   system error message depending on the errno. This can be used when a
+ *   function who set the errno fail to print more detailed informations. You
+ *   must be carefull to not call other functino that might reset it before
+ *   calling pfatal.
+ */
+static void pfatal(const char *msg, ...) {
+	const char *err = strerror(errno);
+	va_list args;
+	fprintf(stderr, "error: ");
+	va_start(args, msg);
+	vfprintf(stderr, msg, args);
+	va_end(args);
+	fprintf(stderr, "\n\t<%s>\n", err);
+	exit(EXIT_FAILURE);
+}
+
+/* warning:
+ *   This one is less violent as it just print a warning on stderr, but doesn't
+ *   exit the program. It is intended to inform the user that something strange
+ *   have happen and the result might be not what it have expected.
+ */
+static void warning(const char *msg, ...) {
+	va_list args;
+	fprintf(stderr, "warning: ");
+	va_start(args, msg);
+	vfprintf(stderr, msg, args);
+	va_end(args);
+	fprintf(stderr, "\n");
+}
+
+/* xmalloc:
+ *   A simple wrapper around malloc who violently fail if memory cannot be
+ *   allocated, so it will never return NULL.
+ */
+static void *xmalloc(size_t size) {
+	void *ptr = malloc(size);
+	if (ptr == NULL)
+		fatal("out of memory");
+	return ptr;
+}
+
+/* xrealloc:
+ *   As xmalloc, this is a simple wrapper around realloc who fail on memory
+ *   error and so never return NULL.
+ */
+static void *xrealloc(void *ptr, size_t size) {
+	void *new = realloc(ptr, size);
+	if (new == NULL)
+		fatal("out of memory");
+	return new;
+}
+
+/*******************************************************************************
+ *
+ ******************************************************************************/
 int main(void) {
 	return EXIT_SUCCESS;
 }
