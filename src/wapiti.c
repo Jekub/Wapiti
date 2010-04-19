@@ -38,6 +38,7 @@
 
 /*******************************************************************************
  * Error handling and memory managment
+ *
  *   Wapiti use a very simple system for error handling: violently fail. Errors
  *   can occurs in two cases, when user feed Wapiti with bad datas or when there
  *   is a problem on the system side. In both cases, there is nothing we can do,
@@ -117,8 +118,130 @@ static void *xrealloc(void *ptr, size_t size) {
 	return new;
 }
 
+/******************************************************************************
+ * A simple regular expression matcher
+ *
+ *   This module implement a simple regular expression matcher, it implement
+ *   just a subset of the classical regexp simple to implement but sufficient
+ *   for most usages and avoid to add a dependency to a full regexp library.
+ *
+ *   The recognized subset is quite simple. First for matching characters :
+ *       .  -> match any characters
+ *       \x -> match a character class (in uppercase, match the complement)
+ *               \d : digit       \a : alpha      \w : alpha + digit
+ *               \l : lowercase   \u : uppercase  \p : punctuation
+ *             or escape a character
+ *       x  -> any other character match itself
+ *   And the constructs :
+ *       ^  -> at the begining of the regexp, anchor it at start of string
+ *       $  -> at the end of regexp, anchor it at end of string
+ *       *  -> match any number of repetition of the previous character
+ *       ?  -> optionally match the previous character
+ *
+ *   This subset is implemented quite efficiently using recursion. All recursive
+ *   calls are tail-call so they should be optimized by the compiler. As we do
+ *   direct interpretation, we have to backtrack so performance can be very poor
+ *   on specialy designed regexp. This is not a problem as the regexp as well as
+ *   the string is expected to be very simple here. If this is not the case, you
+ *   better have to prepare your data better.
+ *
+ ******************************************************************************/
+
+/* rex_matchit:
+ *   Match a single caracter at the start fo the string. The character might be
+ *   a plain char, a dot or char class.
+ */
+static bool rex_matchit(const char *ch, const char *str) {
+	if (str[0] == '\0')
+		return false;
+	if (ch[0] == '.')
+		return true;
+	if (ch[0] == '\\') {
+		switch (ch[1]) {
+			case 'a': return  isalpha(str[0]);
+			case 'd': return  isdigit(str[0]);
+			case 'l': return  islower(str[0]);
+			case 'p': return  ispunct(str[0]);
+			case 'u': return  isupper(str[0]);
+			case 'w': return  isalnum(str[0]);
+			case 'A': return !isalpha(str[0]);
+			case 'D': return !isdigit(str[0]);
+			case 'L': return !islower(str[0]);
+			case 'P': return !ispunct(str[0]);
+			case 'U': return !isupper(str[0]);
+			case 'W': return !isalnum(str[0]);
+		}
+		return ch[1] == str[0];
+	}
+	return ch[0] == str[0];
+}
+
+/* rex_matchme:
+ *   Match a regular expresion at the start of the string. If a match is found,
+ *   is length is returned in len. The mathing is done through tail-recursion
+ *   for good performances.
+ */
+static bool rex_matchme(const char *re, const char *str, int *len) {
+	// Special check for end of regexp
+	if (re[0] == '\0')
+		return true;
+	if (re[0] == '$' && re[1] == '\0')
+		return (str[0] == '\0');
+	// Get first char of regexp
+	const char *ch  = re;
+	const char *nxt = re + 1 + (ch[0] == '\\');
+	// Handle star repetition
+	if (nxt[0] == '*') {
+		nxt++;
+		do {
+			const int save = *len;
+			if (rex_matchme(nxt, str, len))
+				return true;
+			*len = save + 1;
+		} while (rex_matchit(ch, str++));
+		return false;
+	}
+	// Handle optional
+	if (nxt[0] == '?') {
+		nxt++;
+		if (rex_matchit(ch, str))
+			str++, (*len)++;
+		return rex_matchme(nxt, str, len);
+	}
+	// Classical char matching
+	(*len)++;
+	if (rex_matchit(ch, str))
+		return rex_matchme(nxt, str + 1, len);
+	return false;
+}
+
+/* rex_match:
+ *   Match a regular expresion in the given string. If a match is found, the
+ *   position of the start of the match is returned and is len is returned in
+ *   len, else -1 is returned.
+ */
+static int rex_match(const char *re, const char *str, int *len) {
+	// Special case for anchor at start
+	if (*re == '^') {
+		*len = 0;
+		if (rex_matchme(re + 1, str, len))
+			return 0;
+		return -1;
+	}
+	// And general case for any position
+	int pos = 0;
+	do {
+		*len = 0;
+		if (rex_matchme(re, str + pos, len))
+			return pos;
+	} while (str[pos++] != '\0');
+	// Matching failed
+	return -1;
+}
+
 /*******************************************************************************
  * Pattern handling
+ *
  *   Patterns are the heart the data input process, they provide a way to tell
  *   Wapiti how the interesting information can be extracted from the input
  *   data. A pattern is simply a string who embed special commands about tokens
