@@ -27,8 +27,10 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -113,6 +115,143 @@ static void *xrealloc(void *ptr, size_t size) {
 	if (new == NULL)
 		fatal("out of memory");
 	return new;
+}
+
+/*******************************************************************************
+ * Pattern handling
+ *   Patterns are the heart the data input process, they provide a way to tell
+ *   Wapiti how the interesting information can be extracted from the input
+ *   data. A pattern is simply a string who embed special commands about tokens
+ *   to extract from the input sequence. They are compiled to a special form
+ *   used during data loading.
+ *   For training, each position of a sequence hold a list of observation made
+ *   at this position, pattern give a way to specify these observations.
+ *
+ *   During sequence loading, all patterns are applied at each position to
+ *   produce a list of string representing the observations which will be in
+ *   turn transformed to numerical identifiers. This module take care of
+ *   building the string representation.
+ *
+ *   As said, a patern is a string with specific commands in the forms %c[...]
+ *   where 'c' is the command with arguments between the bracket. All commands
+ *   take at least to numerical arguments which define a token in the input
+ *   sequence. The first one is an offset from the current position and the
+ *   second one is a column number. With these two parameters, we get a string
+ *   in the input sequence on which we apply the command.
+ *
+ *   All command are specified with a character and result in a string which
+ *   will replace the command in the pattern string. If the command character is
+ *   lower case, the result is copied verbatim, if it is uppercase, the result
+ *   is copied with casing removed. The following commands are available:
+ *     'x' -- result is the token itself
+ *     't' -- test if a regular expression match the token. Result will be
+ *            either "true" or "false"
+ *     'm' -- match a regular expression on the token. Result is the first
+ *            substring matched.
+ ******************************************************************************/
+
+typedef struct pat_s pat_t;
+typedef struct pat_item_s pat_item_t;
+struct pat_s {
+	char *src;
+	int   nitems;
+	struct pat_item_s {
+		char  type;
+		bool  caps;
+		char *value;
+		int   offset;
+		int   column;
+	} items[];
+};
+
+/* pat_comp:
+ *   Compile the pattern to a form more suitable to easily apply it on tokens
+ *   list during data reading. The given pattern string is interned in the
+ *   compiled pattern and will be freed with it, so you don't have to take care
+ *   of it and must not modify it after the compilation.
+ */
+static pat_t *pat_comp(char *p) {
+	pat_t *pat = NULL;
+	// Allocate memory for the compiled pattern, the allocation is based
+	// on an over-estimation of the number of required item. As compiled
+	// pattern take a neglectible amount of memory, this waste is not
+	// important.
+	int mitems = 0;
+	for (int pos = 0; p[pos] != '\0'; pos++)
+		if (p[pos] == '%')
+			mitems++;
+	mitems = mitems * 2 + 1;
+	pat = xmalloc(sizeof(pat_t) + sizeof(pat->items[0]) * mitems);
+	pat->src = p;
+	// Next, we go through the pattern compiling the items as they are
+	// found. Commands are parsed and put in a corresponding item, and
+	// segment of char not in a command are put in a 's' item.
+	int nitems = 0;
+	int pos = 0;
+	while (p[pos] != '\0') {
+		pat_item_t *item = &(pat->items[nitems++]);
+		if (p[pos] == '%') {
+			// This is a command, so first parse its type and check
+			// its a valid one. Next prepare the item.
+			const char type = tolower(p[pos + 1]);
+			if (type != 'x' && type != 't' && type != 'm')
+				fatal("unknown command type: '%c'", type);
+			item->type = type;
+			item->caps = (p[pos + 1] != type);
+			pos += 2;
+			// Next we parse the offset and column and store them in
+			// the item.
+			int off, col, nch;
+			if (sscanf(p, "[%d,%d%n", &off, &col, &nch) != 2)
+				fatal("invalid pattern: %s", p);
+			if (col < 0)
+				fatal("invalid column number: %d", col);
+			item->offset = off;
+			item->column = col;
+			pos += nch;
+			// And parse the end of the argument list, for 'x' there
+			// is nothing to read but for 't' and 'm' we have to get
+			// read the regexp.
+			if (type == 't' || type == 'm') {
+				if (p[pos] != ',' && p[pos + 1] != '"')
+					fatal("missing arg in pattern: %s", p);
+				const int start = (pos += 2);
+				while (p[pos] != '\0') {
+					if (p[pos] == '"')
+						break;
+					if (p[pos] == '\\' && p[pos+1] != '\0')
+						pos++;
+					pos++;
+				}
+				if (p[pos] != '"')
+					fatal("unended argument: %s", p);
+				const int len = pos - start;
+				item->value = xmalloc(sizeof(char) * (len + 1));
+				memcpy(item->value, p + start, len);
+				item->value[len] = '\0';
+				pos++;
+			}
+			// Just check the end of the arg list and loop.
+			if (p[pos] != ']')
+				fatal("missing end of pattern: %s", p);
+			pos++;
+		} else {
+			// No command here, so build an 's' item with the chars
+			// until end of pattern or next command and put it in
+			// the list.
+			const int start = pos;
+			while (p[pos] != '\0' && p[pos] != '%')
+				pos++;
+			const int len = pos - start;
+			item->type  = 's';
+			item->caps  = false;
+			item->value = xmalloc(sizeof(char) * (len + 1));
+			memcpy(item->value, p + start, len);
+			item->value[len] = '\0';
+		}
+	}
+	pat->nitems = nitems;
+	return pat;
 }
 
 /*******************************************************************************
