@@ -828,6 +828,50 @@ static void rdr_free(rdr_t *rdr) {
 	free(rdr);
 }
 
+/* rdr_readline:
+ *   Read an input line from <file>. The line can be of any size limited only by
+ *   available memory, a buffer large enough is allocated and returned. The
+ *   caller is responsible to free it. On end-of-file, NULL is returned.
+ */
+static char *rdr_readline(FILE *file) {
+	if (feof(file))
+		return NULL;
+	// Initialize the buffer
+	int len = 0, size = 16;
+	char *buffer = xmalloc(size);
+	// We read the line chunk by chunk until end of line, file or error
+	while (!feof(file)) {
+		if (fgets(buffer + len, size - len, file) == NULL) {
+			// On NULL return there is two possible cases, either an
+			// error or the end of file
+			if (ferror(file))
+				pfatal("cannot read from file");
+			// On end of file, we must check if we have already read
+			// some data or not
+			if (len == 0) {
+				free(buffer);
+				return NULL;
+			}
+			break;
+		}
+		// Check for end of line, if this is not the case enlarge the
+		// buffer and go read more data
+		len += strlen(buffer + len);
+		if (len == size - 1 && buffer[len - 1] != '\n') {
+			size = size * 1.4;
+			buffer = xrealloc(buffer, size);
+			continue;
+		}
+		break;
+	}
+	// At this point empty line should have already catched so we just
+	// remove the end of line if present and resize the buffer to fit the
+	// data
+	if (buffer[len - 1] == '\n')
+		buffer[--len] = '\0';
+	return xrealloc(buffer, len + 1);
+}
+
 /*******************************************************************************
  *
  ******************************************************************************/
