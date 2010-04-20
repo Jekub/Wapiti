@@ -125,6 +125,17 @@ static void *xrealloc(void *ptr, size_t size) {
 	return new;
 }
 
+/* xstrdup:
+ *   As the previous one, this is a safe version of xstrdup who fail on
+ *   allocation error.
+ */
+static char *xstrdup(const char *str) {
+	const int len = strlen(str) + 1;
+	char *res = xmalloc(sizeof(char) * len);
+	memcpy(res, str, len);
+	return res;
+}
+
 /*******************************************************************************
  * Sequences and Dataset objects
  *
@@ -791,7 +802,7 @@ static void pat_free(pat_t *pat) {
  *   and convert it to a seq_t object transparently. This is how the training
  *   and development data are loaded.
  *   The second way consist of read a raw sequence with rdr_readraw and next
- *   converting it to a seq_t object with rdr_rawtoseq. This allow the caller to
+ *   converting it to a seq_t object with rdr_raw2seq. This allow the caller to
  *   keep the raw sequence and is used by the tagger to produce a clean output.
  *
  *   There is no public interface to the tok_t object as it is intended only for
@@ -975,6 +986,62 @@ static raw_t *rdr_readraw(rdr_t *rdr, FILE *file) {
 	raw = xrealloc(raw, sizeof(raw_t) + sizeof(char *) * cnt);
 	raw->len = cnt;
 	return raw;
+}
+
+/* rdr_raw2tok:
+ *   Convert a raw sequence to a sequence of token list suitable for pattern
+ *   application. If lbl is true, the last column is assumed to be a label and
+ *   moved to the good place in the returned object.
+ *   As in rdr_readraw, the reader is not used here but requested for
+ *   consisntency.
+ */
+static tok_t *rdr_raw2tok(rdr_t *rdr, const raw_t *raw, bool lbl) {
+	unused(rdr);
+	const int T = raw->len;
+	// Allocate the tok_t object, the label array is allocated only if they
+	// are requested by the user.
+	tok_t *tok = xmalloc(sizeof(tok_t) + T * sizeof(char **));
+	tok->cnts = xmalloc(sizeof(size_t) * T);
+	tok->lbl = NULL;
+	if (lbl == true)
+		tok->lbl = xmalloc(sizeof(char *) * T);
+	// We now take the raw sequence line by line and split them in list of
+	// tokens. To reduce memory fragmentation, the raw line is copied and
+	// his reference is kept by the first tokens, next tokens are pointer to
+	// this copy.
+	for (int t = 0; t < T; t++) {
+		// Get a copy of the raw line skiping leading space characters
+		const char *src = raw->lines[t];
+		while (isspace(*src))
+			src++;
+		char *line = strdup(src);
+		// Split it in tokens
+		const int len = strlen(line);
+		char *toks[len / 2];
+		int cnt = 0;
+		while (*line != '\0') {
+			toks[cnt++] = line;
+			while (*line != '\0' && !isspace(*line))
+				line++;
+			if (*line == '\0')
+				break;
+			*line++ = '\0';
+			while (*line != '\0' && isspace(*line))
+				line++;
+		}
+		// If user specified that data are labelled, move the last token
+		// to the label array.
+		if (lbl == true) {
+			tok->lbl[t] = toks[cnt - 1];
+			cnt--;
+		}
+		// And put the remaining tokens in the tok_t object
+		tok->cnts[t] = cnt;
+		tok->toks[t] = xmalloc(sizeof(char *) * cnt);
+		memcpy(tok->toks[t], toks, sizeof(char *) * cnt);
+	}
+	tok->len = T;
+	return tok;
 }
 
 /*******************************************************************************
