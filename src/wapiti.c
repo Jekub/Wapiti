@@ -275,13 +275,14 @@ struct qrk_node_s {
  *   needed. If <lock> is true, new key will not be added to the quark and
  *   none will be returned as an identifier.
  */
-typedef struct qrk_s {
+typedef struct qrk_s qrk_t;
+struct qrk_s {
 	qrk_node_t  *tree;    //       The tree for direct mapping
 	char       **vector;  // [N']  The array for the reverse mapping
 	size_t       count;   //  N    The number of items in the database
 	size_t       size;    //  N'   The real size of <vector>
 	bool         lock;    //       Are new keys added to the dictionnary ?
-} qrk_t;
+};
 
 /* qrk_newnode:
  *   Create a new qrk_node_t object with given key, value and no childs. The key
@@ -773,6 +774,58 @@ static void pat_free(pat_t *pat) {
 		free(pat->items[it].value);
 	free(pat->src);
 	free(pat);
+}
+
+/*******************************************************************************
+ * Datafile reader
+ *
+ *   And now come the data file reader which use the previous module to parse
+ *   the input data in order to produce seq_t objects representing interned
+ *   sequences.
+ ******************************************************************************/
+
+/* rdr_t:
+ *   The reader object who hold all informations needed to parse the input file:
+ *   the patterns and quark for labels and observations. We keep separate count
+ *   for unigrams and bigrams pattern for simpler allocation of sequences. We
+ *   also store the expected number of column in the input data to check that
+ *   pattern are appliables.
+ */
+typedef struct rdr_s rdr_t;
+struct rdr_s {
+	int     npat;       //  P   Total number of patterns
+	int     nuni, nbi;  //      Number of unigram and bigram patterns
+	int     ntok;       //      Expected number of tokens in input
+	pat_t **pats;       // [P]  List of precompiled patterns
+	qrk_t  *lbl;        //      Labels database
+	qrk_t  *obs;        //      Observation database
+};
+
+/* rdr_new:
+ *   Create a new empty reader object. You mut load patterns in it or a
+ *   previously saved reader if you want to use it for reading sequences.
+ */
+static rdr_t *rdr_new(void) {
+	rdr_t *rdr = xmalloc(sizeof(rdr_t));
+	rdr->npat = rdr->nuni = rdr->nbi = 0;
+	rdr->ntok = 0;
+	rdr->pats = NULL;
+	rdr->lbl = qrk_new();
+	rdr->obs = qrk_new();
+	return rdr;
+}
+
+/* rdr_free:
+ *   Free all memory used by a reader object including the quark database, so
+ *   any string returned by them must not be used after this call.
+ */
+static void rdr_free(rdr_t *rdr) {
+	for (int i = 0; i < rdr->npat; i++)
+		pat_free(rdr->pats[i]);
+	free(rdr->pats);
+	qrk_free(rdr->lbl);
+	qrk_free(rdr->obs);
+	free(rdr);
 }
 
 /*******************************************************************************
