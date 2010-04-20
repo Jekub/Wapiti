@@ -1021,7 +1021,7 @@ static seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl) {
 		const char *src = raw->lines[t];
 		while (isspace(*src))
 			src++;
-		char *line = strdup(src);
+		char *line = xstrdup(src);
 		// Split it in tokens
 		const int len = strlen(line);
 		char *toks[len / 2];
