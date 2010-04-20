@@ -514,6 +514,12 @@ static bool rex_matchme(const char *re, const char *str, int *len) {
 	// Get first char of regexp
 	const char *ch  = re;
 	const char *nxt = re + 1 + (ch[0] == '\\');
+	// Special check for the following construct "x**" where the first star
+	// is consumed normally but lead the second (which is wrong) to be
+	// interpreted as a char to mach as if it was escaped (and same for the
+	// optional construct)
+	if (*ch == '*' || *ch == '?')
+		fatal("unescaped * or ? in regexp: %s", re);
 	// Handle star repetition
 	if (nxt[0] == '*') {
 		nxt++;
@@ -1048,6 +1054,8 @@ static tok_t *rdr_raw2tok(rdr_t *rdr, const raw_t *raw, bool lbl) {
  *
  ******************************************************************************/
 int main(void) {
+	rdr_t *rdr = rdr_new();
+	rdr_loadpat(rdr, stdin);
 	return EXIT_SUCCESS;
 }
 
