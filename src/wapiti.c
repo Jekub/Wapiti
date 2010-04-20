@@ -534,8 +534,12 @@ static bool rex_matchme(const char *re, const char *str, int *len) {
 	// Handle optional
 	if (nxt[0] == '?') {
 		nxt++;
-		if (rex_matchit(ch, str))
-			str++, (*len)++;
+		if (rex_matchit(ch, str)) {
+			(*len)++;
+			if (rex_matchme(nxt, str + 1, len))
+				return true;
+			(*len)--;
+		}
 		return rex_matchme(nxt, str, len);
 	}
 	// Classical char matching
