@@ -36,6 +36,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#define unused(v) ((void)(v))
+
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define max(a, b) ((a) < (b) ? (b) : (a))
 
@@ -782,6 +784,18 @@ static void pat_free(pat_t *pat) {
  *   And now come the data file reader which use the previous module to parse
  *   the input data in order to produce seq_t objects representing interned
  *   sequences.
+ *
+ *   This is where the sequence will go through the tree steps to build seq_t
+ *   objects used internally. There is two way do do this. First the simpler is
+ *   to use the rdr_readseq function which directly read a sequence from a file
+ *   and convert it to a seq_t object transparently. This is how the training
+ *   and development data are loaded.
+ *   The second way consist of read a raw sequence with rdr_readraw and next
+ *   converting it to a seq_t object with rdr_rawtoseq. This allow the caller to
+ *   keep the raw sequence and is used by the tagger to produce a clean output.
+ *
+ *   There is no public interface to the tok_t object as it is intended only for
+ *   internal use in the reader as an intermediate step to apply patterns.
  ******************************************************************************/
 
 /* rdr_t:
@@ -907,6 +921,60 @@ static void rdr_loadpat(rdr_t *rdr, FILE *file) {
 		rdr->pats[rdr->npats - 1] = pat;
 		rdr->ntoks = max(rdr->ntoks, pat->ntoks);
 	}
+}
+
+/* rdr_readraw:
+ *   Read a raw sequence from given file: a set of lines terminated by end of
+ *   file or by an empty line. Return NULL if file end was reached before any
+ *   sequence was read.
+ *   The reader object is not used in this function but is specified as a
+ *   parameter to be more coherent.
+ */
+static raw_t *rdr_readraw(rdr_t *rdr, FILE *file) {
+	unused(rdr);
+	if (feof(file))
+		return NULL;
+	// Prepare the raw sequence object
+	int size = 32, cnt = 0;
+	raw_t *raw = xmalloc(sizeof(raw_t) + sizeof(char *) * size);
+	// And read the next sequence in the file, this will skip any blank line
+	// before reading the sequence stoping at end of file or on a new blank
+	// line.
+	while (!feof(file)) {
+		char *line = rdr_readline(file);
+		if (line == NULL)
+			break;
+		// Check for empty line marking the end of the current sequence
+		int len = strlen(line);
+		while (len != 0 && isspace(line[len - 1]))
+			len--;
+		if (len == 0) {
+			free(line);
+			// Special case when no line was already read, we try
+			// again. This allow multiple blank lines beetwen
+			// sequences.
+			if (cnt == 0)
+				continue;
+			break;
+		}
+		// Next, grow the buffer if needed and add the new line in it
+		if (size == cnt) {
+			size *= 1.4;
+			raw = xrealloc(raw, sizeof(raw_t)
+			                + sizeof(char *) * size);
+		}
+		raw->lines[cnt++] = line;
+	}
+	// If no lines was read, we just free allocated memory and return NULL
+	// to signal the end of file to the caller. Else, we adjust the object
+	// size and return it.
+	if (cnt == 0) {
+		free(raw);
+		return NULL;
+	}
+	raw = xrealloc(raw, sizeof(raw_t) + sizeof(char *) * cnt);
+	raw->len = cnt;
+	return raw;
 }
 
 /*******************************************************************************
