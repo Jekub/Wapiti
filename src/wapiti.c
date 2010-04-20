@@ -36,6 +36,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#define max(a, b) ((a) < (b) ? (b) : (a))
+
 /*******************************************************************************
  * Error handling and memory managment
  *
@@ -157,8 +160,8 @@ static void *xrealloc(void *ptr, size_t size) {
  *   are allocated separatly.
  */
 typedef struct raw_s {
-	size_t    len;     //   T     Sequence length
-	char     *lines[]; //  [T]    Raw lines directly from file
+	int   len;      //   T     Sequence length
+	char *lines[];  //  [T]    Raw lines directly from file
 } raw_t;
 
 /* tok_t:
@@ -175,10 +178,10 @@ typedef struct raw_s {
  *   and the label are pointer in this block. This reduce memory fragmentation.
  */
 typedef struct tok_s {
-	size_t    len;     //   T     Sequence length
-	char    **lbl;     //  [T]    List of labels strings
-	size_t   *cnts;    //  [T]    Length of tokens lists
-	char    **toks[];  //  [T][]  Tokens lists
+	int    len;     //   T     Sequence length
+	char **lbl;     //  [T]    List of labels strings
+	int   *cnts;    //  [T]    Length of tokens lists
+	char **toks[];  //  [T][]  Tokens lists
 } tok_t;
 
 /* seq_t:
@@ -205,7 +208,7 @@ typedef struct tok_s {
 typedef struct pos_s pos_t;
 typedef struct seq_s seq_t;
 struct seq_s {
-	size_t  len;
+	int     len;
 	size_t *raw;
 	struct pos_s {
 		size_t  lbl;
@@ -222,10 +225,10 @@ struct seq_s {
  *   if <lbl> is true.
  */
 typedef struct dat_s {
-	bool      lbl;     //         True iff sequences are labelled
-	size_t    mlen;    //         Length of the longest sequence in the set
-	size_t    nseq;    //   S     Number of sequences in the set
-	seq_t   **seq;     //  [S]    List of sequences
+	bool    lbl;   //         True iff sequences are labelled
+	int     mlen;  //         Length of the longest sequence in the set
+	int     nseq;  //   S     Number of sequences in the set
+	seq_t **seq;   //  [S]    List of sequences
 } dat_t;
 
 /******************************************************************************
@@ -487,14 +490,85 @@ static pat_t *pat_comp(char *p) {
 	return pat;
 }
 
+/* pat_exec:
+ *   Execute a compiled pattern at position 'at' in the given tokens sequences
+ *   in order to produce an observation string. The string is returned as a
+ *   newly allocated memory block and the caller is responsible to free it when
+ *   not needed anymore.
+ */
+static char *pat_exec(pat_t *pat, tok_t *tok, int at) {
+	static char *bval[] = {"_x-1", "_x-2", "_x-3", "_x-4", "_x-#"};
+	static char *eval[] = {"_x+1", "_x+2", "_x+3", "_x+4", "_x+#"};
+	const int T = tok->len;
+	// Prepare the buffer who will hold the result
+	int size = 16, pos = 0;
+	char *buffer = xmalloc(sizeof(char) * size);
+	// And loop over the compiled items
+	for (int it = 0; it < pat->nitems; it++) {
+		const pat_item_t *item = &(pat->items[it]);
+		char *value = NULL;
+		int len = 0;
+		// First, if needed, we retrieve the token at the referenced
+		// position in the sequence. We store it in value and let the
+		// command handler do what it need with it.
+		if (item->type != 's') {
+			int pos = at + item->offset;
+			int col = item->column;
+			if (pos < 0)
+				value = bval[min(-pos - 1, 4)];
+			else if (pos >= T)
+				value = eval[min( pos - T, 4)];
+			else if (col >= tok->cnts[pos])
+				fatal("missing tokens, cannot apply pattern");
+			else
+				value = tok->toks[pos][col];
+		}
+		// Next, we handle the command, 's' and 'x' are very simple but
+		// 't' and 'm' require us to call the regexp matcher.
+		if (item->type == 's') {
+			value = item->value;
+			len = strlen(value);
+		} else if (item->type == 'x') {
+			len = strlen(value);
+		} else if (item->type == 't') {
+			if (rex_match(item->value, value, &len) == -1)
+				value = "false";
+			else
+				value = "true";
+			len = strlen(value);
+		} else if (item->type == 'm') {
+			int pos = rex_match(item->value, value, &len);
+			if (pos == -1)
+				len = 0;
+			value += pos;
+		}
+		// And we add it to the buffer, growing it if needed. If the
+		// user requested it, we also remove caps from the string.
+		if (pos + len >= size - 1) {
+			while (pos + len >= size - 1)
+				size = size * 1.4;
+			buffer = xrealloc(buffer, sizeof(char) * size);
+		}
+		memcpy(buffer + pos, value, len);
+		if (item->caps)
+			for (int i = pos; i < pos + len; i++)
+				buffer[i] = tolower(buffer[i]);
+		pos += len;
+	}
+	// Adjust the result and return it.
+	buffer[pos++] = '\0';
+	buffer = xrealloc(buffer, sizeof(char) * pos);
+	return buffer;
+}
+
 /* pat_free:
  *   Free all memory used by a compiled pattern object. Note that this will free
  *   the pointer to the source string given to pat_comp so you must be sure to
  *   not use this pointer again.
  */
 static void pat_free(pat_t *pat) {
-	for (int nit = 0; nit < pat->nitems; nit++)
-		free(pat->items[nit].value);
+	for (int it = 0; it < pat->nitems; it++)
+		free(pat->items[it].value);
 	free(pat->src);
 	free(pat);
 }
