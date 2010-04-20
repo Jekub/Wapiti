@@ -793,9 +793,9 @@ static void pat_free(pat_t *pat) {
  */
 typedef struct rdr_s rdr_t;
 struct rdr_s {
-	int     npat;       //  P   Total number of patterns
+	int     npats;      //  P   Total number of patterns
 	int     nuni, nbi;  //      Number of unigram and bigram patterns
-	int     ntok;       //      Expected number of tokens in input
+	int     ntoks;      //      Expected number of tokens in input
 	pat_t **pats;       // [P]  List of precompiled patterns
 	qrk_t  *lbl;        //      Labels database
 	qrk_t  *obs;        //      Observation database
@@ -807,8 +807,8 @@ struct rdr_s {
  */
 static rdr_t *rdr_new(void) {
 	rdr_t *rdr = xmalloc(sizeof(rdr_t));
-	rdr->npat = rdr->nuni = rdr->nbi = 0;
-	rdr->ntok = 0;
+	rdr->npats = rdr->nuni = rdr->nbi = 0;
+	rdr->ntoks = 0;
 	rdr->pats = NULL;
 	rdr->lbl = qrk_new();
 	rdr->obs = qrk_new();
@@ -820,7 +820,7 @@ static rdr_t *rdr_new(void) {
  *   any string returned by them must not be used after this call.
  */
 static void rdr_free(rdr_t *rdr) {
-	for (int i = 0; i < rdr->npat; i++)
+	for (int i = 0; i < rdr->npats; i++)
 		pat_free(rdr->pats[i]);
 	free(rdr->pats);
 	qrk_free(rdr->lbl);
@@ -870,6 +870,43 @@ static char *rdr_readline(FILE *file) {
 	if (buffer[len - 1] == '\n')
 		buffer[--len] = '\0';
 	return xrealloc(buffer, len + 1);
+}
+
+/* rdr_loadpat:
+ *   Load and compile patterns from given file and store them in the reader. As
+ *   we compile patterns, syntax errors in them will be raised at this time.
+ */
+static void rdr_loadpat(rdr_t *rdr, FILE *file) {
+	while (!feof(file)) {
+		// Read raw input line
+		char *line = rdr_readline(file);
+		if (line == NULL)
+			break;
+		// Remove comments and trailing spaces
+		int end = strcspn(line, "#");
+		while (end != 0 && isspace(line[end - 1]))
+			end--;
+		if (end == 0) {
+			free(line);
+			continue;
+		}
+		line[end] = '\0';
+		line[0] = tolower(line[0]);
+		// Compile pattern and add it to the list
+		pat_t *pat = pat_comp(line);
+		rdr->npats++;
+		switch (line[0]) {
+			case 'u': rdr->nuni++; break;
+			case 'b': rdr->nbi++; break;
+			case '*': rdr->nuni++;
+			          rdr->nbi++; break;
+			default:
+				fatal("unknown pattern type '%c'", line[0]);
+		}
+		rdr->pats = xrealloc(rdr->pats, sizeof(char *) * rdr->npats);
+		rdr->pats[rdr->npats - 1] = pat;
+		rdr->ntoks = max(rdr->ntoks, pat->ntoks);
+	}
 }
 
 /*******************************************************************************
