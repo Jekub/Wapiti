@@ -15,6 +15,10 @@ wapiti: src/wapiti.c
 	@echo "CC: wapiti.c --> wapiti"
 	@$(CC) -DNDEBUG $(CFLAGS) $(LIBS) -o wapiti src/wapiti.c
 
+debug: src/wapiti.c
+	@echo "CC: wapiti.c --> wapiti"
+	@$(CC) -g $(CFLAGS) $(LIBS) -o wapiti src/wapiti.c
+
 install: wapiti
 	@echo "CP: wapiti   --> $(DESTDIR)$(PREFIX)/bin"
 	@$(INSTALL_EXEC) $(DESTDIR)$(PREFIX)/bin wapiti

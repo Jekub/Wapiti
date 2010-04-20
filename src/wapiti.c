@@ -863,6 +863,23 @@ static void rdr_free(rdr_t *rdr) {
 	free(rdr);
 }
 
+/* rdr_freeraw:
+ *   Free all memory used by a raw_t object.
+ */
+static void rdr_freeraw(raw_t *raw) {
+	for (int t = 0; t < raw->len; t++)
+		free(raw->lines[t]);
+	free(raw);
+}
+
+/* rdr_freeseq:
+ *   Free all memory used by a seq_t object.
+ */
+static void rdr_freeseq(seq_t *seq) {
+	free(seq->raw);
+	free(seq);
+}
+
 /* rdr_readline:
  *   Read an input line from <file>. The line can be of any size limited only by
  *   available memory, a buffer large enough is allocated and returned. The
@@ -1106,7 +1123,6 @@ static seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl) {
 	free(tok);
 	return seq;
 }
-
 
 /*******************************************************************************
  *
