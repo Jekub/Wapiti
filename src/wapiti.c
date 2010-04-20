@@ -994,15 +994,12 @@ static raw_t *rdr_readraw(rdr_t *rdr, FILE *file) {
 	return raw;
 }
 
-/* rdr_raw2tok:
- *   Convert a raw sequence to a sequence of token list suitable for pattern
- *   application. If lbl is true, the last column is assumed to be a label and
- *   moved to the good place in the returned object.
- *   As in rdr_readraw, the reader is not used here but requested for
- *   consisntency.
+/* rdr_raw2seq:
+ *   Convert a raw sequence to a seq_t object suitable for training or
+ *   labelling. If lbl is true, the last column is assumed to be a label and
+ *   interned also.
  */
-static tok_t *rdr_raw2tok(rdr_t *rdr, const raw_t *raw, bool lbl) {
-	unused(rdr);
+static seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl) {
 	const int T = raw->len;
 	// Allocate the tok_t object, the label array is allocated only if they
 	// are requested by the user.
@@ -1047,15 +1044,70 @@ static tok_t *rdr_raw2tok(rdr_t *rdr, const raw_t *raw, bool lbl) {
 		memcpy(tok->toks[t], toks, sizeof(char *) * cnt);
 	}
 	tok->len = T;
-	return tok;
+	// So now the tok object is ready, we can start building the seq_t
+	// object by appling patterns. First we allocate the seq_t object. The
+	// sequence itself as well as the sub array are allocated in one time.
+	seq_t *seq = xmalloc(sizeof(seq_t) + sizeof(pos_t) * T);
+	seq->raw = xmalloc(sizeof(size_t) * (rdr->nuni + rdr->nbi) * T);
+	seq->len = T;
+	size_t *tmp = seq->raw;
+	for (int t = 0; t < T; t++) {
+		seq->pos[t].lbl  = none;
+		seq->pos[t].uobs = tmp; tmp += rdr->nuni;
+		seq->pos[t].bobs = tmp; tmp += rdr->nbi;
+	}
+	// Next, we can build the observations list by applying the patterns on
+	// the tok_t sequence.
+	for (int t = 0; t < T; t++) {
+		pos_t *pos = &seq->pos[t];
+		pos->ucnt = 0;
+		pos->bcnt = 0;
+		for (int x = 0; x < rdr->npats; x++) {
+			// Get the observation and map it to an identifier
+			const char *obs = pat_exec(rdr->pats[x], tok, t);
+			size_t id = qrk_str2id(rdr->obs, obs);
+			if (id == none)
+				continue;
+			// If the observation is ok, add it to the lists
+			int kind = 0;
+			switch (obs[0]) {
+				case 'u': kind = 1; break;
+				case 'b': kind = 2; break;
+				case '*': kind = 3; break;
+			}
+			if (kind & 1)
+				pos->uobs[pos->ucnt++] = id;
+			if (kind & 2)
+				pos->bobs[pos->bcnt++] = id;
+		}
+	}
+	// And finally, if the user specified it, populate the labels
+	if (lbl == true) {
+		for (int t = 0; t < T; t++) {
+			const char *lbl = tok->lbl[t];
+			size_t id = qrk_str2id(rdr->lbl, lbl);
+			seq->pos[t].lbl = id;
+		}
+	}
+	// Before returning the sequence, we have to free the tok_t
+	for (int t = 0; t < T; t++) {
+		if (tok->cnts[t] == 0)
+			continue;
+		free(tok->toks[t][0]);
+		free(tok->toks[t]);
+	}
+	free(tok->cnts);
+	if (lbl == true)
+		free(tok->lbl);
+	free(tok);
+	return seq;
 }
+
 
 /*******************************************************************************
  *
  ******************************************************************************/
 int main(void) {
-	rdr_t *rdr = rdr_new();
-	rdr_loadpat(rdr, stdin);
 	return EXIT_SUCCESS;
 }
 
