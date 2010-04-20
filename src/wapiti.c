@@ -389,6 +389,7 @@ typedef struct pat_s pat_t;
 typedef struct pat_item_s pat_item_t;
 struct pat_s {
 	char *src;
+	int   ntoks;
 	int   nitems;
 	struct pat_item_s {
 		char  type;
@@ -422,6 +423,7 @@ static pat_t *pat_comp(char *p) {
 	// found. Commands are parsed and put in a corresponding item, and
 	// segment of char not in a command are put in a 's' item.
 	int nitems = 0;
+	int ntoks = 0;
 	int pos = 0;
 	while (p[pos] != '\0') {
 		pat_item_t *item = &(pat->items[nitems++]);
@@ -444,6 +446,7 @@ static pat_t *pat_comp(char *p) {
 				fatal("invalid column number: %d", col);
 			item->offset = off;
 			item->column = col;
+			ntoks = max(ntoks, col);
 			pos += nch;
 			// And parse the end of the argument list, for 'x' there
 			// is nothing to read but for 't' and 'm' we have to get
@@ -486,6 +489,7 @@ static pat_t *pat_comp(char *p) {
 			item->value[len] = '\0';
 		}
 	}
+	pat->ntoks = ntoks;
 	pat->nitems = nitems;
 	return pat;
 }
