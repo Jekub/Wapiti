@@ -422,6 +422,7 @@ static pat_t *pat_comp(char *p) {
 	int pos = 0;
 	while (p[pos] != '\0') {
 		pat_item_t *item = &(pat->items[nitems++]);
+		item->value = NULL;
 		if (p[pos] == '%') {
 			// This is a command, so first parse its type and check
 			// its a valid one. Next prepare the item.
@@ -484,6 +485,18 @@ static pat_t *pat_comp(char *p) {
 	}
 	pat->nitems = nitems;
 	return pat;
+}
+
+/* pat_free:
+ *   Free all memory used by a compiled pattern object. Note that this will free
+ *   the pointer to the source string given to pat_comp so you must be sure to
+ *   not use this pointer again.
+ */
+static void pat_free(pat_t *pat) {
+	for (int nit = 0; nit < pat->nitems; nit++)
+		free(pat->items[nit].value);
+	free(pat->src);
+	free(pat);
 }
 
 /*******************************************************************************
