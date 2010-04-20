@@ -438,7 +438,7 @@ static pat_t *pat_comp(char *p) {
 			// Next we parse the offset and column and store them in
 			// the item.
 			int off, col, nch;
-			if (sscanf(p, "[%d,%d%n", &off, &col, &nch) != 2)
+			if (sscanf(p + pos, "[%d,%d%n", &off, &col, &nch) != 2)
 				fatal("invalid pattern: %s", p);
 			if (col < 0)
 				fatal("invalid column number: %d", col);
