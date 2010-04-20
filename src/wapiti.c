@@ -1124,6 +1124,22 @@ static seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl) {
 	return seq;
 }
 
+/* rdr_readseq:
+ *   Simple wrapper around rdr_readraw and rdr_raw2seq to directly read a
+ *   sequence as a seq_t object from file. This take care of all the process
+ *   and correctly free temporary data. If lbl is true the sequence is assumed
+ *   to be labeled.
+ *   Return NULL if end of file occure before anything as been read.
+ */
+static seq_t *rdr_readseq(rdr_t *rdr, FILE *file, bool lbl) {
+	raw_t *raw = rdr_readraw(rdr, file);
+	if (raw == NULL)
+		return NULL;
+	seq_t *seq = rdr_raw2seq(rdr, raw, lbl);
+	rdr_freeraw(raw);
+	return seq;
+}
+
 /*******************************************************************************
  *
  ******************************************************************************/
