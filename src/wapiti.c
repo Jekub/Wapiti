@@ -1153,6 +1153,48 @@ static seq_t *rdr_readseq(rdr_t *rdr, FILE *file, bool lbl) {
 	return seq;
 }
 
+/* rdr_readdat:
+ *   Read a full dataset at once and return it as a dat_t object. This function
+ *   take and interpret his parameters like the single sequence reading
+ *   function.
+ */
+static dat_t *rdr_readdat(rdr_t *rdr, FILE *file, bool lbl) {
+	// Prepare dataset
+	int size = 1000;
+	dat_t *dat = xmalloc(sizeof(dat_t));
+	dat->nseq = 0;
+	dat->mlen = 0;
+	dat->lbl = lbl;
+	dat->seq = xmalloc(sizeof(seq_t *) * size);
+	// Load sequences
+	while (!feof(file)) {
+		// Read the next sequence
+		seq_t *seq = rdr_readseq(rdr, file, lbl);
+		if (seq == NULL)
+			break;
+		// Grow the buffer if needed
+		if (dat->nseq == size) {
+			size *= 1.4;
+			dat->seq = xrealloc(dat->seq, sizeof(seq_t *) * size);
+		}
+		// And store the sequence
+		dat->seq[dat->nseq++] = seq;
+		dat->mlen = max(dat->mlen, seq->len);
+		if (dat->nseq % 1000 == 0)
+			info("%7d sequences loaded\n", dat->nseq);
+	}
+	// If no sequence readed, cleanup and repport
+	if (dat->nseq == 0) {
+		free(dat->seq);
+		free(dat);
+		return NULL;
+	}
+	// Adjust the dataset size and return
+	if (size > dat->nseq)
+		dat->seq = xrealloc(dat->seq, sizeof(seq_t *) * dat->nseq);
+	return dat;
+}
+
 /*******************************************************************************
  *
  ******************************************************************************/
