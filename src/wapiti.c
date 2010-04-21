@@ -103,6 +103,19 @@ static void warning(const char *msg, ...) {
 	fprintf(stderr, "\n");
 }
 
+/* info:
+ *   Function used for all progress reports. This is where an eventual verbose
+ *   level can be implemented later or redirection to a logfile. For now, it is
+ *   just a wrapper for printf to stderr. Note that unlike the previous one,
+ *   this function doesn't automatically append a new line character.
+ */
+static void info(const char *msg, ...) {
+	va_list args;
+	va_start(args, msg);
+	vfprintf(stderr, msg, args);
+	va_end(args);
+}
+
 /* xmalloc:
  *   A simple wrapper around malloc who violently fail if memory cannot be
  *   allocated, so it will never return NULL.
