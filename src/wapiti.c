@@ -1627,6 +1627,134 @@ static void mdl_sync(mdl_t *mdl) {
 	mdl->reader->obs->lock = true;
 }
 
+/******************************************************************************
+ * Sequence tagging
+ *
+ *   This module implement sequence tagging using a trained model and model
+ *   evaluation on devlopment set.
+ *
+ *   The viterbi can be quite intensive on the stack if you push in it long
+ *   sequence and use large labels set. It's less a problem than in gradient
+ *   computations but it can show up in particular cases. The fix is to call it
+ *   through the mth_spawn function and request enough stack space, this will be
+ *   fixed in next version.
+ ******************************************************************************/
+
+/* viterbi:
+ *   This function implement the Viterbi algorithm in order to decode the most
+ *   probable sequence of labels according to the model. Some part of this code
+ *   is very similar to the computation of the gradient as expected.
+ *
+ *   And like for the gradient, the caller is responsible to ensure there is
+ *   enough stack space.
+ */
+static void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[]) {
+	const double *x = mdl->theta;
+	const size_t  Y = mdl->nlbl;
+	const int     T = seq->len;
+	// Like for the gradient, we rely on stack storage and let the caller
+	// ensure there is enough free space there. This function will need
+	//   8 * T * (2 + Y * (1 + Y))
+	// bytes of stack plus a bit more for variables.
+	double psi [T][Y][Y];
+	double back[T][Y];
+	double cur [Y];
+	double old [Y];
+	// We first have to compute the Ψ_t(y',y,x_t) weights defined as
+	//   Ψ_t(y',y,x_t) = \exp( ∑_k θ_k f_k(y',y,x_t) )
+	// So at position 't' in the sequence, for each couple (y',y) we have
+	// to sum weights of all features.
+	// This is the same than what we do for computing the gradient but, as
+	// the viterbi algorithm also work in the logarithmic space, we can
+	// remove the exponential.
+	//
+	// Only the observations present at this position will have a non-nul
+	// weight so we can sum only on thoses.
+	//
+	// As we use only two kind of features: unigram and bigram, we can
+	// rewrite this as
+	//   ∑_k μ_k(y, x_t) f_k(y, x_t) + ∑_k λ_k(y', y, x_t) f_k(y', y, x_t)
+	// Where the first sum is over the unigrams features and the second is
+	// over bigrams ones.
+	//
+	// This allow us to compute Ψ efficiently in two steps
+	//   1/ we sum the unigrams features weights by looping over actives
+	//        unigrams observations. (we compute this sum once and use it
+	//        for each value of y')
+	//   2/ we add the bigrams features weights by looping over actives
+	//        bigrams observations (we don't have to do this for t=0 since
+	//        there is no bigrams here)
+	for (int t = 0; t < T; t++) {
+		const pos_t *pos = &(seq->pos[t]);
+		for (size_t y = 0; y < Y; y++) {
+			double sum = 0.0;
+			for (size_t n = 0; n < pos->ucnt; n++) {
+				const size_t o = pos->uobs[n];
+				sum += x[mdl->uoff[o] + y];
+			}
+			for (size_t yp = 0; yp < Y; yp++)
+				psi[t][yp][y] = sum;
+		}
+	}
+	for (int t = 1; t < T; t++) {
+		const pos_t *pos = &(seq->pos[t]);
+		for (size_t yp = 0, d = 0; yp < Y; yp++) {
+			for (size_t y = 0; y < Y; y++, d++) {
+				double sum = 0.0;
+				for (size_t n = 0; n < pos->bcnt; n++) {
+					const size_t o = pos->bobs[n];
+					sum += x[mdl->boff[o] + d];
+				}
+				psi[t][yp][y] += sum;
+			}
+		}
+	}
+	// Now we can do the Viterbi algorithm. This is very similar to the
+	// forward pass
+	//   | α_1(y) = Ψ_1(y,x_1)
+	//   | α_t(y) = max_{y'} α_{t-1}(y') + Ψ_t(y',y,x_t)
+	// We just replace the sum by a max and as we do the computation in the
+	// logarithmic space the product become a sum. (this also mean that we
+	// don't have to worry about numerical problems)
+	//
+	// Next we have to walk backward over the α in order to find the best
+	// path. In order to do this efficiently, we keep in the 'back' array
+	// the indice of the y value selected by the max. This also mean that
+	// we only need the current and previous value of the α vectors, not
+	// the full matrix.
+	for (size_t y = 0; y < Y; y++)
+		cur[y] = psi[0][0][y];
+	for (int t = 1; t < T; t++) {
+		for (size_t y = 0; y < Y; y++)
+			old[y] = cur[y];
+		for (size_t y = 0; y < Y; y++) {
+			double bst = -1.0;
+			int    idx = 0;
+			for (size_t yp = 0; yp < Y; yp++) {
+				double val = psi[t][yp][y] + old[yp];
+				if (val > bst) {
+					bst = val;
+					idx = yp;
+				}
+			}
+			back[t][y] = idx;
+			cur[y]     = bst;
+		}
+	}
+	// We can now build the sequence of labels predicted by the model. For
+	// this we search in the last α vector the best value. Using this index
+	// as a starting point in the back-pointer array we finally can decode
+	// the best sequence.
+	int bst = 0;
+	for (size_t y = 1; y < Y; y++)
+		if (cur[y] > cur[bst])
+			bst = y;
+	for (int t = T; t > 0; t--) {
+		out[t - 1] = bst;
+		bst = back[t - 1][bst];
+	}
+}
+
 /*******************************************************************************
  *
  ******************************************************************************/
