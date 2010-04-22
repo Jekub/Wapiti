@@ -158,6 +158,26 @@ static char *xstrdup(const char *str) {
 }
 
 /******************************************************************************
+ *                        Command line parsing
+ *
+ *  This module handle command line parsing and put all things defined by the
+ *  user in a special structure in order to make them accessible to the
+ *  remaining of the program.
+ *  
+ ******************************************************************************/
+
+/* opt_t:
+ *   This structure hold all user configurable parameter for Wapiti and is
+ *   filled with parameters from command line.
+ */
+typedef struct opt_s opt_t;
+struct opt_s {
+	int    nthread;
+	bool   sparse;
+	double rho1, rho2;
+};
+
+/******************************************************************************
  * Multi-threading code
  *
  *   This module handle the thread managment code using POSIX pthreads, on
@@ -1498,6 +1518,8 @@ static dat_t *rdr_readdat(rdr_t *rdr, FILE *file, bool lbl) {
  ******************************************************************************/
 typedef struct mdl_s mdl_t;
 struct mdl_s {
+	opt_t   *opt;     //       options for training
+
 	// Size of various model parameters
 	size_t   nlbl;    //   Y   number of labels
 	size_t   nobs;    //   O   number of observations
