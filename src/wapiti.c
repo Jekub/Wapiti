@@ -1244,6 +1244,40 @@ struct mdl_s {
 	rdr_t   *reader;
 };
 
+/* mdl_new:
+ *   Allocate a new empty model object linked with the given reader. The model
+ *   have to be synchronized before starting training or labelling. If you not
+ *   provide a reader (as it will loaded from file for example) you must be sure
+ *   to set one in the model before any attempts to synchronize it.
+ */
+static mdl_t *mdl_new(rdr_t *rdr) {
+	mdl_t *mdl = xmalloc(sizeof(mdl_t));
+	mdl->nlbl   = mdl->nobs  = mdl->nftr = 0;
+	mdl->kind   = NULL;
+	mdl->uoff   = mdl->boff  = NULL;
+	mdl->theta  = NULL;
+	mdl->train  = mdl->devel = NULL;
+	mdl->reader = rdr;
+	return mdl;
+}
+
+/* mdl_free:
+ *   Free all memory used by a model object inculding the reader and datasets
+ *   loaded in the model.
+ */
+static void mdl_free(mdl_t *mdl) {
+	free(mdl->kind);
+	free(mdl->uoff);
+	free(mdl->boff);
+	free(mdl->theta);
+	if (mdl->train != NULL)
+		rdr_freedat(mdl->train);
+	if (mdl->devel != NULL)
+		rdr_freedat(mdl->devel);
+	if (mdl->reader != NULL)
+		rdr_free(mdl->reader);
+}
+
 /*******************************************************************************
  *
  ******************************************************************************/
