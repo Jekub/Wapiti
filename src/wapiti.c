@@ -165,12 +165,12 @@ static char *xstrdup(const char *str) {
  *   size, so ensure that the stack size code is well handled by your system
  *   when you port it.
  ******************************************************************************/
-typedef void (func_t)(size_t id, size_t cnt, void *ud);
+typedef void (func_t)(int id, int cnt, void *ud);
 
 typedef struct mth_s mth_t;
 struct mth_s {
-	size_t  id;
-	size_t  cnt;
+	int     id;
+	int     cnt;
 	func_t *f;
 	void   *ud;
 };
@@ -187,7 +187,7 @@ static void *mth_stub(void *ud) {
  *   The function will get a unique identifier between 0 and W-1 and a user data
  *   from the 'ud' array.
  */
-static void mth_spawn(func_t *f, size_t W, size_t stacksz, void *ud[W]) {
+static void mth_spawn(func_t *f, int W, size_t stacksz, void *ud[W]) {
 	// We first adjust the requested stack size to be sure it is a round
 	// number of system page size as requested by pthread. As there is no
 	// portable to get the system page size and all systems, at my
@@ -210,7 +210,7 @@ static void mth_spawn(func_t *f, size_t W, size_t stacksz, void *ud[W]) {
 	// We prepare the parameters structures that will be send to the threads
 	// with informations for calling the user function.
 	mth_t p[W];
-	for (size_t w = 0; w < W; w++) {
+	for (int w = 0; w < W; w++) {
 		p[w].id  = w;
 		p[w].cnt = W;
 		p[w].f   = f;
@@ -220,10 +220,10 @@ static void mth_spawn(func_t *f, size_t W, size_t stacksz, void *ud[W]) {
 	// their jobs. So we just create all the thread and try to join them
 	// waiting for there return.
 	pthread_t th[W];
-	for (size_t w = 0; w < W; w++)
+	for (int w = 0; w < W; w++)
 		if (pthread_create(&th[w], &attr, &mth_stub, &p[w]) != 0)
 			fatal("failed to create thread");
-	for (size_t w = 0; w < W; w++)
+	for (int w = 0; w < W; w++)
 		if (pthread_join(th[w], NULL) != 0)
 			fatal("failed to join thread");
 	pthread_attr_destroy(&attr);
