@@ -1278,6 +1278,86 @@ static void mdl_free(mdl_t *mdl) {
 		rdr_free(mdl->reader);
 }
 
+/* mdl_sync:
+ *   Synchronize the model with its reader. As the model is just a placeholder
+ *   for features weights and interned sequences, it know very few about the
+ *   labels and observations, all the informations are kept in the reader. A
+ *   sync will get the labels and observations count as well as the observation
+ *   kind from the reader and build internal structures representing the model.
+ *
+ *   If the model was already synchronized before, there is an existing model
+ *   incompatible with the new one to be created. In this case there is two
+ *   possibility :
+ *     - If only new observations was added, the weights of the old ones remain
+ *       valid and are kept as they form a probably good starting point for
+ *       training the new model, the new observation get a 0 weight ;
+ *     - If new labels was added, the old model are trully meaningless so we
+ *       have to fully discard them and build a new empty model.
+ *   In any case, you must never change existing labels or observations, if this
+ *   happen, you need to create a new model and destroy this one.
+ *
+ *   After synchronization, the labels and observations databases are locked to
+ *   prevent new one to be created. You must unlock them explicitly if needed.
+ *   This reduce the risk of mistakes.
+ */
+static void mdl_sync(mdl_t *mdl) {
+	const size_t Y = mdl->reader->lbl->count;
+	const size_t O = mdl->reader->obs->count;
+	// If model is already synchronized, do nothing and just return
+	if (mdl->nlbl == Y && mdl->nobs == O)
+		return;
+	if (Y == 0 || O == 0)
+		fatal("cannot synchronize an empty model");
+	// If new labels was added, we have to discard all the model. In this
+	// case we also display a warning as this is probably not expected by
+	// the user. If only new observations was added, we will try to expand
+	// the model.
+	size_t oldF = mdl->nftr;
+	size_t oldO = mdl->nobs;
+	if (mdl->nlbl != Y && mdl->nlbl != 0) {
+		warning("labels count changed, discarding the model");
+		free(mdl->kind);  mdl->kind  = NULL;
+		free(mdl->uoff);  mdl->uoff  = NULL;
+		free(mdl->boff);  mdl->boff  = NULL;
+		free(mdl->theta); mdl->theta = NULL;
+		oldF = oldO = 0;
+		mdl->nlbl = Y;
+	}
+	mdl->nobs = O;
+	// Allocate the observations datastructure. If the model is empty or
+	// discarded, a new one iscreated, else the old one is expanded.
+	char   *kind = xrealloc(mdl->kind, sizeof(char  ) * O);
+	size_t *uoff = xrealloc(mdl->uoff, sizeof(char  ) * O);
+	size_t *boff = xrealloc(mdl->boff, sizeof(char  ) * O);
+	mdl->kind = kind;
+	mdl->uoff = uoff;
+	mdl->boff = boff;
+	// Now, we can setup the features. For each new observations we fill the
+	// kind and offsets arrays and count total number of features as well.
+	size_t F = oldF;
+	for (size_t o = oldO; o < O; o++) {
+		const char *obs = qrk_id2str(mdl->reader->obs, o);
+		switch (obs[0]) {
+			case 'u': kind[o] = 1; break;
+			case 'b': kind[o] = 2; break;
+			case '*': kind[o] = 3; break;
+		}
+		if (kind[o] & 1)
+			uoff[o] = F, F += Y;
+		if (kind[o] & 2)
+			boff[o] = F, F += Y * Y;
+	}
+	mdl->nftr = F;
+	// We can finally grow the features weights vector itself. We set all
+	// the new features to 0.0 but don't touch the old ones.
+	mdl->theta = xrealloc(mdl->theta, sizeof(double) * F);
+	for (size_t f = oldF; f < F; f++)
+		mdl->theta[f] = 0.0;
+	// And lock the databases
+	mdl->reader->lbl->lock = true;
+	mdl->reader->obs->lock = true;
+}
+
 /*******************************************************************************
  *
  ******************************************************************************/
