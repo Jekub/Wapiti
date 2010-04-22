@@ -36,6 +36,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <pthread.h>
+
 #define unused(v) ((void)(v))
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
@@ -147,6 +149,82 @@ static char *xstrdup(const char *str) {
 	char *res = xmalloc(sizeof(char) * len);
 	memcpy(res, str, len);
 	return res;
+}
+
+/******************************************************************************
+ * Multi-threading code
+ *
+ *   This module handle the thread managment code using POSIX pthreads, on
+ *   non-POSIX systems you will have to rewrite this using your systems threads.
+ *   all code who depend on threads is located here so this process must not be
+ *   too difficult.
+ *
+ *   This code is also used to launch a single thread but with a controled stack
+ *   size, so ensure that the stack size code is well handled by your system
+ *   when you port it.
+ ******************************************************************************/
+typedef void (func_t)(size_t id, size_t cnt, void *ud);
+
+typedef struct mth_s mth_t;
+struct mth_s {
+	size_t  id;
+	size_t  cnt;
+	func_t *f;
+	void   *ud;
+};
+
+static void *mth_stub(void *ud) {
+	mth_t *mth = (mth_t *)ud;
+	mth->f(mth->id, mth->cnt, mth->ud);
+	return NULL;
+}
+
+/* mth_spawn:
+ *   This function spawn W threads for calling the 'f' function. It ensure that
+ *   there is at least 'stacksz' byte of stack space available in each thread.
+ *   The function will get a unique identifier between 0 and W-1 and a user data
+ *   from the 'ud' array.
+ */
+static void mth_spawn(func_t *f, size_t W, size_t stacksz, void *ud[W]) {
+	// We first adjust the requested stack size to be sure it is a round
+	// number of system page size as requested by pthread. As there is no
+	// portable to get the system page size and all systems, at my
+	// knowledge, use power of two lower or equal than 4096, using this
+	// value is safe.
+	if (stacksz % 4096 != 0)
+		stacksz += 4096 - (stacksz % 4096);
+	// Next we prepare the pthreads attributes. We check that the default
+	// stack size is too low before attempting to raise it as if the system
+	// provide a big stack we don't want to insist on getting a smaller one.
+	size_t stackdef = 0;
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+	pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+	pthread_attr_getstacksize(&attr, &stackdef);
+	if (stackdef < stacksz)
+		if (pthread_attr_setstacksize(&attr, stacksz) != 0)
+			fatal("cannot change thread stack size");
+	// We prepare the parameters structures that will be send to the threads
+	// with informations for calling the user function.
+	mth_t p[W];
+	for (size_t w = 0; w < W; w++) {
+		p[w].id  = w;
+		p[w].cnt = W;
+		p[w].f   = f;
+		p[w].ud  = ud[w];
+	}
+	// We are now ready to spawn the threads and wait for them to finish
+	// their jobs. So we just create all the thread and try to join them
+	// waiting for there return.
+	pthread_t th[W];
+	for (size_t w = 0; w < W; w++)
+		if (pthread_create(&th[w], &attr, &mth_stub, &p[w]) != 0)
+			fatal("failed to create thread");
+	for (size_t w = 0; w < W; w++)
+		if (pthread_join(th[w], NULL) != 0)
+			fatal("failed to join thread");
+	pthread_attr_destroy(&attr);
 }
 
 /******************************************************************************
