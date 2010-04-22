@@ -38,14 +38,18 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <unistd.h>
+#include <sys/times.h>
+
 #include <pthread.h>
 
 #define unused(v) ((void)(v))
+#define none ((size_t)-1)
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define max(a, b) ((a) < (b) ? (b) : (a))
 
-#define none ((size_t)-1)
+typedef struct tms tms_t;
 
 /*******************************************************************************
  * Error handling and memory managment
@@ -419,7 +423,7 @@ static void xvm_expma(double r[], const double x[], double a, size_t N) {
 #endif
 
 /******************************************************************************
- *                               Quark database
+ * Quark database
  *
  *   Implement quark database: mapping between strings and identifiers in both
  *   directions.
@@ -1511,6 +1515,10 @@ struct mdl_s {
 	dat_t   *train;   //       training dataset
 	dat_t   *devel;   //       development dataset
 	rdr_t   *reader;
+
+	// Timing
+	tms_t    timer;   //       start time of last iter
+	double   total;   //       total training time
 };
 
 /* mdl_new:
@@ -1527,6 +1535,7 @@ static mdl_t *mdl_new(rdr_t *rdr) {
 	mdl->theta  = NULL;
 	mdl->train  = mdl->devel = NULL;
 	mdl->reader = rdr;
+	mdl->total  = 0.0;
 	return mdl;
 }
 
@@ -1847,6 +1856,124 @@ static void tag_label(const mdl_t *mdl, FILE *fin, FILE *fout, bool check) {
 			info("  F1=%.2f\n", F1);
 		}
 	}
+}
+
+/*******************************************************************************
+ * User interaction during training
+ *
+ *   Handle progress reporting during training and clean early stoping. Trainers
+ *   have to call uit_progress at the end of each iterations, this will display
+ *   various informations for the user.
+ *   Timing is also done here, an iteration is assumed to take all the time
+ *   between to call to the progress function and evualtion on the devel data
+ *   are included.
+ *
+ *   This module setup a signal handler for SIGINT. If this signal is catched,
+ *   the uit_stop global variable to inform the trainer that it have to stop as
+ *   early as possible, discarding the recent computations if they cannot be
+ *   integrated very quickly. They must leave the model in a clean state. Any
+ *   further signal will terminate the program. So it's simple :
+ *     - 1 signal mean "I can wait a little so try to stop as soon as possible
+ *         but leave me a working model"
+ *     - 2 signal mean "Stop immediatly what you are doing, I can't wait and
+ *         don't care about getting a working model"
+ ******************************************************************************/
+
+/* uit_stop:
+ *   This value is set to true when the user request the trainer to stop. In
+ *   this case, the trainer have to stop as soon as possible in a clean state,
+ *   discarding the lasts computations if it cannot integrate them quickly.
+ */
+static bool uit_stop = false;
+
+/* uit_signal:
+ *   Signal handler to catch interupt signal. When a signal is received, the
+ *   trainer is aksed to stop as soon as possible leaving the model in a clean
+ *   state. We don't reinstall the handler so if user send a second interupt
+ *   signal, the program will stop imediatly. (to cope with BSD system, we even
+ *   reinstall explicitly the default handler)
+ */
+static void uit_signal(int sig) {
+	signal(sig, SIG_DFL);
+	uit_stop = true;
+}
+
+/* uit_setup:
+ *   Install the signal handler for clean early stop from the user if possible
+ *   and start the timer.
+ */
+static void uit_setup(mdl_t *mdl) {
+	uit_stop = false;
+	if (signal(SIGINT, uit_signal) == SIG_ERR)
+		warning("failed to set signal handler, no clean early stop");
+	times(&mdl->timer);
+}
+
+/* uit_cleanup:
+ *   Remove the signal handler restoring the defaul behavior in case of
+ *   interrupt.
+ */
+static void uit_cleanup(mdl_t *mdl) {
+	unused(mdl);
+	signal(SIGINT, SIG_DFL);
+}
+
+/* uit_progress:
+ *   Display a progress repport to the user consisting of some informations
+ *   provided by the trainer: iteration count and objective function value, and
+ *   some informations computed here on the current model performances.
+ *   This function return true if the trainer have to keep training the model
+ *   and false if he must stop, so this is were we will implement the trainer
+ *   independant stoping criterion.
+ */
+static bool uit_progress(mdl_t *mdl, int it, double obj) {
+	// We first evaluate the current model performances on the devel dataset
+	// if available, else on the training dataset. We compute tokens and
+	// sequence error rate.
+	dat_t *dat = (mdl->devel == NULL) ? mdl->train : mdl->devel;
+	int tcnt = 0, terr = 0;
+	int scnt = 0, serr = 0;
+	for (int s = 0; s < dat->nseq; s++) {
+		// Tag the sequence with the viterbi
+		const seq_t *seq = dat->seq[s];
+		const int    T   = seq->len;
+		size_t out[T];
+		tag_viterbi(mdl, seq, out);
+		// And check for eventual (probable ?) errors
+		bool err = false;
+		for (int t = 0; t < T; t++)
+			if (seq->pos[t].lbl != out[t])
+				terr++, err = true;
+		tcnt += T, scnt += 1;
+		serr += err;
+	}
+	const double te = (double)terr / tcnt * 100.0;
+	const double se = (double)serr / scnt * 100.0;
+	// Next, we compute the number of active features
+	size_t act = 0;
+	for (size_t f = 0; f < mdl->nftr; f++)
+		if (mdl->theta[f] != 0.0)
+			act++;
+	// Compute timings. As some training algorithms are multi-threaded, we
+	// cannot use ansi/c function and must rely on posix one to sum time
+	// spent in main thread and in child ones.
+	tms_t now; times(&now);
+	double tm = (now.tms_utime  - mdl->timer.tms_utime )
+		  + (now.tms_cutime - mdl->timer.tms_cutime);
+	tm /= sysconf(_SC_CLK_TCK);
+	mdl->total += tm;
+	mdl->timer  = now;
+	// And display progress report
+	info("  [%4d]", it);
+	info(obj >= 0.0 ? " obj=%-10.2f" : " obj=NA", obj);
+	info(" act=%-8zu", act);
+	info(" err=%5.2f%%/%5.2f%%", te, se);
+	info(" time=%.2fs/%.2fs", tm, mdl->total);
+	info("\n");
+	// And return
+	if (uit_stop)
+		return false;
+	return true;
 }
 
 /*******************************************************************************
