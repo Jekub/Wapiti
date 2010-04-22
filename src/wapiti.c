@@ -1755,6 +1755,100 @@ static void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[]) {
 	}
 }
 
+/* tag_label:
+ *   Label a data file using the current model. This output an almost exact copy
+ *   of the input file with an additional column with the predicted label. If
+ *   the check option is specified, the input file must be labelled and the
+ *   predicted labels will be checked against the provided ones. This will
+ *   output error rates during the labelling and detailed statistics per label
+ *   at the end.
+ */
+static void tag_label(const mdl_t *mdl, FILE *fin, FILE *fout, bool check) {
+	qrk_t *lbls = mdl->reader->lbl;
+	const size_t Y = mdl->nlbl;
+	// We start by preparing the statistic collection to be ready if check
+	// option is used. The stat array hold the following for each label
+	//   [0] # of reference with this label
+	//   [1] # of token we have taged with this label
+	//   [2] # of match of the two preceding
+	int tcnt = 0, terr = 0;
+	int scnt = 0, serr = 0;
+	int stat[3][Y];
+	for (size_t y = 0; y < Y; y++)
+		stat[0][y] = stat[1][y] = stat[2][y] = 0;
+	// Next read the input file sequence by sequence and label them, we have
+	// to take care of not discarding the raw input as we want to send it
+	// back to the output with the additional predicted labels.
+	while (!feof(fin)) {
+		// So, first read an input sequence keeping the raw_t object
+		// available, and label it with Viterbi.
+		raw_t *raw = rdr_readraw(mdl->reader, fin);
+		if (raw == NULL)
+			break;
+		seq_t *seq = rdr_raw2seq(mdl->reader, raw, check);
+		size_t out[seq->len];
+		tag_viterbi(mdl, seq, out);
+		// Next we output the raw sequence with an aditional column for
+		// the predicted labels
+		for (int t = 0; t < seq->len; t++) {
+			fprintf(fout, "%s ", raw->lines[t]);
+			fprintf(fout, "\t%s\n", qrk_id2str(lbls, out[t]));
+		}
+		fprintf(fout, "\n");
+		// If user provided reference labels, use them to collect
+		// statistics about how well we have performed here.
+		if (check) {
+			bool err = false;
+			for (int t = 0; t < seq->len; t++) {
+				stat[0][seq->pos[t].lbl]++;
+				stat[1][out[t]]++;
+				if (seq->pos[t].lbl != out[t])
+					terr++, err = true;
+				else
+					stat[2][out[t]]++;
+			}
+			tcnt += seq->len;
+			serr += err;
+		}
+		// Cleanup memory used for this sequence
+		rdr_freeseq(seq);
+		rdr_freeraw(raw);
+		// And report our progress, at regular interval we display how
+		// much sequence are labelled and if possible the current tokens
+		// and sequence error rates.
+		if (++scnt % 1000 == 0) {
+			info("%10zu sequences labeled", scnt);
+			if (check) {
+				const double te = (double)terr  / tcnt * 100.0;
+				const double se = (double)serr  / scnt * 100.0;
+				info("\t%5.2f%%/%5.2f%%", te, se);
+			}
+			info("\n");
+		}
+	}
+	// If user have provided reference labels, we have collected a lot of
+	// statistics and we can repport global token and sequence error rate as
+	// well as precision recall and f-measure for each labels.
+	if (check) {
+		const double te = (double)terr  / tcnt * 100.0;
+		const double se = (double)serr  / scnt * 100.0;
+		info("    Nb sequences  : %zu\n", scnt);
+		info("    Token error   : %5.2f%%\n", te);
+		info("    Sequence error: %5.2f%%\n", se);
+		info("* Per label statistics\n");
+		for (size_t y = 0; y < Y; y++) {
+			const char *lbl = qrk_id2str(lbls, y);
+			const double Rc = (double)stat[2][y] / stat[0][y];
+			const double Pr = (double)stat[2][y] / stat[1][y];
+			const double F1 = 2.0 * (Pr * Rc) / (Pr + Rc);
+			info("    %-6s", lbl);
+			info("  Pr=%.2f", Pr);
+			info("  Rc=%.2f", Rc);
+			info("  F1=%.2f\n", F1);
+		}
+	}
+}
+
 /*******************************************************************************
  *
  ******************************************************************************/
