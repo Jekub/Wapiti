@@ -1206,6 +1206,45 @@ static dat_t *rdr_readdat(rdr_t *rdr, FILE *file, bool lbl) {
 }
 
 /*******************************************************************************
+ * Linear chain CRF model
+ *
+ *   There is three concept that must be well understand here, the labels,
+ *   observations, and features. The labels are the values predicted by the
+ *   model at each point of the sequence and denoted by Y. The observations are
+ *   the values, at each point of the sequence, given to the model in order to
+ *   predict the label and denoted by O. A feature is a test on both labels and
+ *   observations, denoted by F. In linear chain CRF there is two kinds of
+ *   features :
+ *     - unigram feature who represent a test on the observations at the current
+ *       point and the label at current point.
+ *     - bigram feature who represent a test on the observation at the current
+ *       point and two labels : the current one and the previous one.
+ *   So for each observation, there Y possible unigram features and Y*Y possible
+ *   bigram features. The kind of features used by the model for a given
+ *   observation depend on the pattern who generated it.
+ ******************************************************************************/
+typedef struct mdl_s mdl_t;
+struct mdl_s {
+	// Size of various model parameters
+	size_t   nlbl;    //   Y   number of labels
+	size_t   nobs;    //   O   number of observations
+	size_t   nftr;    //   F   number of features
+
+	// Informations about observations
+	char    *kind;    //  [O]  observations type
+	size_t  *uoff;    //  [O]  unigram weights offset
+	size_t  *boff;    //  [O]  bigram weights offset
+
+	// The model itself
+	double  *theta;   //  [F]  features weights
+
+	// Datasets
+	dat_t   *train;   //       training dataset
+	dat_t   *devel;   //       development dataset
+	rdr_t   *reader;
+};
+
+/*******************************************************************************
  *
  ******************************************************************************/
 int main(void) {
