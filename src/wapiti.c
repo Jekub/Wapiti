@@ -2614,6 +2614,141 @@ static double grd_doseq(const mdl_t *mdl, const seq_t *seq, double g[]) {
 		return grd_spdoseq(mdl, seq, g);
 }
 
+/******************************************************************************
+ *                      Dataset gradient computation
+ *
+ * This section is responsible for computing the gradient of the log-likelihood
+ * function to optimize over the full training set.
+ *
+ * The gradient computation is multi-threaded, you first have to call the
+ * function 'grd_setup' to prepare the workers pool, and next you can use
+ * 'grd_gradient' to ask for the full gradient as many time as you want. Each
+ * time the gradient is computed over the full training set, using the curent
+ * value of the parameters and applying the regularization. If need the pseudo-
+ * gradient can also be computed. When you have done, you have to call
+ * 'grd_cleanup' to free the allocated memory.
+ *
+ * This require an additional vector of size <nftr> per thread after the first,
+ * so it can take a lot of memory to compute big models on a lot of threads. It
+ * is strongly discouraged to ask for more threads than you have cores, or to
+ * more thread than you have memory to hold vectors.
+ *
+ ******************************************************************************/
+
+typedef struct wrk_s wrk_t;
+struct wrk_s {
+	mdl_t  *mdl;
+	double *g;
+	double  fx;
+};
+
+/* grd_worker:
+ *   This is a simple function who compute the gradient over a subset of the
+ *   training set. It is mean to be called by the thread spawner in order to
+ *   compute the gradient over the full training set.
+ */
+static void grd_worker(int id, int cnt, wrk_t *wrk) {
+	const mdl_t *mdl = wrk->mdl;
+	const dat_t *dat = mdl->train;
+	const size_t F = mdl->nftr;
+	// We first cleanup the gradient and value as our parent don't do it (it
+	// is better to do this also in parallel)
+	wrk->fx = 0.0;
+	for (size_t f = 0; f < F; f++)
+		wrk->g[f] = 0.0;
+	// Now all is ready, we can process our sequences and accumulate the
+	// gradient and inverse log-likelihood
+	for (int s = id; s < dat->nseq; s += cnt)
+		wrk->fx += grd_doseq(mdl, dat->seq[s], wrk->g);
+}
+
+/* gradient:
+ *   Compute the gradient and value of the negative log-likelihood of the model
+ *   at current point. It will also compute the pseudo gradient for owl-qn if
+ *   the 'pg' vector is not NULL.
+ *   The computation is done in parallel taking profit of the fact that the
+ *   gradient over the full training set is just the sum of the gradient of
+ *   each sequence.
+ */
+static double grd_gradient(mdl_t *mdl, double *g, double *pg) {
+	const double *x = mdl->theta;
+	const size_t  F = mdl->nftr;
+	const size_t  Y = mdl->nlbl;
+	const size_t  W = mdl->opt->nthread;
+	const size_t  T = mdl->train->mlen;
+	// The gradseq function require a lot of stack space so we have to
+	// ensure it have enought of it, we estimate the stack space needed and
+	// add an additional page for all temporary variables and the wrapper.
+	size_t stksz;
+	if (mdl->opt->sparse)
+		stksz = 8 * (T * (4 + Y * (4 + 2 * Y)) + Y * Y) + 4096;
+	else
+		stksz = 8 * T * (3 + Y * (2 + Y)) + 4096;
+	// Now we prepare the workers, allocating a local gradient for each one
+	// except the first which will receive the global one. We allocate all
+	// the gradient as a one big vector for easier memory managment.
+	wrk_t wrk[W], *pwrk[W];
+	double *raw = xmalloc(sizeof(double) * F * W);
+	double *tmp = raw;
+	for (size_t w = 0; w < W; w++) {
+		wrk[w].mdl = mdl;
+		if (w != 0)
+			wrk[w].g = tmp, tmp += F;
+		else
+			wrk[w].g = g;
+		pwrk[w] = &wrk[w];
+	}
+	// All is ready to compute the gradient, we spawn the threads of
+	// workers, each one working on a part of the data. As the gradient and
+	// log-likelihood are additive, computing the final values will be
+	// trivial.
+	mth_spawn((func_t *)grd_worker, W, stksz, (void **)pwrk);
+	// All computations are done, it just remain to add all the gradients
+	// and inverse log-likelihood from all the workers.
+	double fx = wrk[0].fx;
+	for (size_t w = 1; w < W; w++) {
+		for (size_t f = 0; f < F; f++)
+			g[f] += wrk[w].g[f];
+		fx += wrk[w].fx;
+	}
+	free(raw);
+	// Now we can apply the elastic-net penalty. Depending of the values of
+	// rho1 and rho2, this can in fact be a classical L1 or L2 penalty.
+	const double rho1 = mdl->opt->rho1;
+	const double rho2 = mdl->opt->rho2;
+	double nl1 = 0.0, nl2 = 0.0;
+	for (size_t f = 0; f < F; f++) {
+		const double v = x[f];
+		g[f] += rho2 * v;
+		nl1  += fabs(v);
+		nl2  += v * v;
+	}
+	fx += nl1 * rho1 + nl2 * rho2 / 2.0;
+	// And the last step is to compute the pseudo gradient for owl-qn if
+	// requested by the caller. It is define in [3, pp 35(4)]
+	//              | ∂_i^- f(x) if ∂_i^- f(x) > 0
+	//   ◇_i f(x) = | ∂_i^+ f(x) if ∂_i^+ f(x) < 0
+	//              | 0          otherwise
+	// with
+	//   ∂_i^± f(x) = ∂/∂x_i l(x) + | Cσ(x_i) if x_i ≠ 0
+	//                              | ±C      if x_i = 0
+	if (pg != NULL) {
+		for (size_t f = 0; f < F; f++) {
+			if (x[f] < 0.0)
+				pg[f] = g[f] - rho1;
+			else if (x[f] > 0.0)
+				pg[f] = g[f] + rho1;
+			else if (g[f] < -rho1)
+				pg[f] = g[f] + rho1;
+			else if (g[f] > rho1)
+				pg[f] = g[f] - rho1;
+			else
+				pg[f] = 0.0;
+		}
+	}
+	return fx;
+}
+
 /*******************************************************************************
  *
  ******************************************************************************/
