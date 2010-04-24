@@ -2899,6 +2899,12 @@ static double grd_gradient(mdl_t *mdl, double *g, double *pg) {
 		fx += wrk[w].fx;
 	}
 	free(raw);
+	// If needed we clip the gradient: setting to 0.0 all coordinate where
+	// the function is 0.0.
+	if (mdl->opt->lbfgs.clip == true)
+		for (size_t f = 0; f < F; f++)
+			if (x[f] == 0.0)
+				g[f] = 0.0;
 	// Now we can apply the elastic-net penalty. Depending of the values of
 	// rho1 and rho2, this can in fact be a classical L1 or L2 penalty.
 	const double rho1 = mdl->opt->rho1;
