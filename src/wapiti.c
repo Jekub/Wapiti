@@ -31,6 +31,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <math.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -40,6 +41,7 @@
 
 #include <unistd.h>
 #include <sys/times.h>
+#include <sys/resource.h>
 
 #include <pthread.h>
 
