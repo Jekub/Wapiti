@@ -2845,7 +2845,7 @@ static void grd_worker(int id, int cnt, wrk_t *wrk) {
 		wrk->g[f] = 0.0;
 	// Now all is ready, we can process our sequences and accumulate the
 	// gradient and inverse log-likelihood
-	for (int s = id; s < dat->nseq; s += cnt)
+	for (int s = id; !uit_stop && s < dat->nseq; s += cnt)
 		wrk->fx += grd_doseq(mdl, dat->seq[s], wrk->g);
 }
 
@@ -2890,6 +2890,10 @@ static double grd_gradient(mdl_t *mdl, double *g, double *pg) {
 	// log-likelihood are additive, computing the final values will be
 	// trivial.
 	mth_spawn((func_t *)grd_worker, W, stksz, (void **)pwrk);
+	if (uit_stop) {
+		free(raw);
+		return -1.0;
+	}
 	// All computations are done, it just remain to add all the gradients
 	// and inverse log-likelihood from all the workers.
 	double fx = wrk[0].fx;
@@ -2996,7 +3000,7 @@ static void trn_lbfgs(mdl_t *mdl) {
 	//   - the report function return false
 	//   - an error happen somewhere
 	double fx = grd_gradient(mdl, g, pg);
-	for (int k = 0; !uit_stop; k++) {
+	for (int k = 0; !uit_stop && k < K; k++) {
 		// 1st step: We compute the search direction. We search in the
 		// direction who minimize the second order approximation given
 		// by the Taylor series which give
