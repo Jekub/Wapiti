@@ -232,6 +232,19 @@ struct opt_s {
 	bool   check;
 };
 
+/* opt_defaults:
+ *   Default values for all parameters of the model.
+ */
+static const opt_t opt_defaults = {
+	.action  = -1,
+	.algo    = "l-bfgs", .pattern = NULL,  .model   = NULL, .devel   = NULL,
+	.compact = false,    .sparse  = false, .nthread = 1,    .maxiter = 0,
+	.rho1    = 0.5,      .rho2    = 0.0001,
+	.lbfgs = {.clip = false, .histsz = 5, .maxls = 20},
+	.sgdl1 = {.eta0 = 0.8,   .alpha  = 0.85},
+	.label   = false,    .check   = false
+};
+
 /* opt_switch:
  *   Define available switchs for the different modes in a readable way for the
  *   command line argument parser.
