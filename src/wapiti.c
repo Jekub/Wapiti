@@ -30,6 +30,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
+#include <limits.h>
 #include <math.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -360,6 +361,21 @@ static void opt_parse(int argc, char *argv[argc], opt_t *opt) {
 		opt->input = argv[0];
 	if (argc > 1)
 		opt->output = argv[1];
+	// Small trick for the maxiter switch
+	if (opt->maxiter == 0)
+		opt->maxiter = INT_MAX;
+	// Check that all options are valid
+	#define argchecksub(name, test)                      \
+		if (!(test))                                 \
+			fatal("invalid value for <"name">");
+	argchecksub("--thread", opt->nthread      >  0  );
+	argchecksub("--rho1",   opt->rho1         >= 0.0);
+	argchecksub("--rho2",   opt->rho2         >= 0.0);
+	argchecksub("--histsz", opt->lbfgs.histsz >  0  );
+	argchecksub("--maxls",  opt->lbfgs.maxls  >  0  );
+	argchecksub("--eta0",   opt->sgdl1.eta0   >  0.0);
+	argchecksub("--alpha",  opt->sgdl1.alpha  >  0.0);
+	#undef argchecksub
 }
 
 /******************************************************************************
@@ -1860,7 +1876,7 @@ static void mdl_sync(mdl_t *mdl) {
  *   fixed in next version.
  ******************************************************************************/
 
-/* viterbi:
+/* tag_viterbi:
  *   This function implement the Viterbi algorithm in order to decode the most
  *   probable sequence of labels according to the model. Some part of this code
  *   is very similar to the computation of the gradient as expected.
@@ -2849,7 +2865,7 @@ static void grd_worker(int id, int cnt, wrk_t *wrk) {
 		wrk->fx += grd_doseq(mdl, dat->seq[s], wrk->g);
 }
 
-/* gradient:
+/* grd_gradient:
  *   Compute the gradient and value of the negative log-likelihood of the model
  *   at current point. It will also compute the pseudo gradient for owl-qn if
  *   the 'pg' vector is not NULL.
