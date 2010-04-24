@@ -166,6 +166,42 @@ static char *xstrdup(const char *str) {
  *  
  ******************************************************************************/
 
+/* opt_help:
+ *   Just display the help message describing modes and switch.
+ */
+static void opt_help(const char *pname) {
+	static const char msg[] =
+		"Global switchs:\n"
+		"\t-h | --help      display this help message\n"
+		"\t   | --version   display version information\n"
+		"\n"
+		"Training mode:\n"
+		"    %1$s train [options] [input data] [model file]\n"
+		"\t-a | --algo     STRING  training algorithm to use\n"
+		"\t-p | --pattern  FILE    patterns for extracting features\n"
+		"\t-m | --model    FILE    model file to preload\n"
+		"\t-d | --devel    FILE    development dataset\n"
+		"\t-c | --compact          compact model after training\n"
+		"\t-t | --nthread  INT     number of worker threads\n"
+		"\t-s | --sparse           enable sparse forward/backward\n"
+		"\t-i | --maxiter  INT     maximum number of iterations\n"
+		"\t-1 | --rho1     FLOAT   l1 penalty parameter\n"
+		"\t-2 | --rho2     FLOAT   l2 penalty parameter\n"
+		"\t   | --clip             (l-bfgs) clip gradient\n"
+		"\t   | --histsz   INT     (l-bfgs) history size\n"
+		"\t   | --maxls    INT     (l-bfgs) max linesearch iters\n"
+		"\n"
+		"Labelling mode:\n"
+		"    %1$s label [options] [input data] [output data]\n"
+		"\t-m | --model    FILE    model file to load\n"
+		"\t-l | --label            output only labels\n"
+		"\t-c | --check            input is already labeled\n"
+		"\n"
+		"Dumping mode\n"
+		"    %1$s dump [input model] [output text]\n";
+	fprintf(stderr, msg, pname);
+}
+
 /* opt_t:
  *   This structure hold all user configurable parameter for Wapiti and is
  *   filled with parameters from command line.
