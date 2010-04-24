@@ -158,11 +158,11 @@ static char *xstrdup(const char *str) {
 }
 
 /******************************************************************************
- *                        Command line parsing
+ * Command line parsing
  *
- *  This module handle command line parsing and put all things defined by the
- *  user in a special structure in order to make them accessible to the
- *  remaining of the program.
+ *   This module handle command line parsing and put all things defined by the
+ *   user in a special structure in order to make them accessible to the
+ *   remaining of the program.
  *  
  ******************************************************************************/
 
@@ -194,6 +194,7 @@ struct opt_s {
  *   size, so ensure that the stack size code is well handled by your system
  *   when you port it.
  ******************************************************************************/
+
 typedef void (func_t)(int id, int cnt, void *ud);
 
 typedef struct mth_s mth_t;
@@ -279,6 +280,7 @@ static void mth_spawn(func_t *f, int W, size_t stacksz, void *ud[W]) {
  *   As the code is pretty straight forward, there is no need for comments here.
  *
  ******************************************************************************/
+
 static double xvm_norm(const double x[], size_t N) {
 	double res = 0.0;
 	for (size_t n = 0; n < N; n++)
@@ -1521,6 +1523,7 @@ static dat_t *rdr_readdat(rdr_t *rdr, FILE *file, bool lbl) {
  *   bigram features. The kind of features used by the model for a given
  *   observation depend on the pattern who generated it.
  ******************************************************************************/
+
 typedef struct mdl_s mdl_t;
 struct mdl_s {
 	opt_t   *opt;     //       options for training
