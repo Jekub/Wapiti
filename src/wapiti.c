@@ -190,6 +190,8 @@ static void opt_help(const char *pname) {
 		"\t   | --clip             (l-bfgs) clip gradient\n"
 		"\t   | --histsz   INT     (l-bfgs) history size\n"
 		"\t   | --maxls    INT     (l-bfgs) max linesearch iters\n"
+		"\t   | --eta0     FLOAT   (sgd-l1) learning rate\n"
+		"\t   | --alpha    FLOAT   (sgd-l1) exp decay parameter\n"
 		"\n"
 		"Labelling mode:\n"
 		"    %1$s label [options] [input data] [output data]\n"
