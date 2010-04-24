@@ -43,6 +43,8 @@
 
 #include <pthread.h>
 
+#define VERSION "0.9.12"
+
 #define unused(v) ((void)(v))
 #define none ((size_t)-1)
 
@@ -210,7 +212,8 @@ static void opt_help(const char *pname) {
  */
 typedef struct opt_s opt_t;
 struct opt_s {
-	int    action;
+	int    mode;
+	char  *input,  *output;
 	// Options for training
 	char  *algo,   *pattern;
 	char  *model,  *devel;
@@ -238,7 +241,8 @@ struct opt_s {
  *   Default values for all parameters of the model.
  */
 static const opt_t opt_defaults = {
-	.action  = -1,
+	.mode    = -1,
+	.input   = NULL,     .output  = NULL,
 	.algo    = "l-bfgs", .pattern = NULL,  .model   = NULL, .devel   = NULL,
 	.compact = false,    .sparse  = false, .nthread = 1,    .maxiter = 0,
 	.rho1    = 0.5,      .rho2    = 0.0001,
@@ -252,7 +256,7 @@ static const opt_t opt_defaults = {
  *   command line argument parser.
  */
 struct {
-	int     action;
+	int     mode;
 	char   *dshort;
 	char   *dlong;
 	char    kind;
@@ -278,6 +282,84 @@ struct {
 	{1, "-c", "--check",   'B', offsetof(opt_t, check       )},
 	{-1, NULL, NULL, '\0', 0}
 };
+
+/* argparse:
+ *   This is the main function for command line parsing. It use the previous
+ *   table to known how to interpret the switchs and store values in the opt_t
+ *   structure.
+ */
+static void opt_parse(int argc, char *argv[argc], opt_t *opt) {
+	static const char *err_badval = "invalid value for switch '%s'";
+	const char *pname = argv[0];
+	argc--, argv++;
+	if (argc == 0)
+		fatal("no mode specified");
+	// First special handling for help and version
+	if (!strcmp(argv[0], "-h") || !strcmp(argv[0], "--help")) {
+		opt_help(pname);
+		exit(EXIT_FAILURE);
+	} else if (!strcmp(argv[0], "--version")) {
+		fprintf(stderr, "Wapiti v" VERSION "\n");
+		exit(EXIT_SUCCESS);
+	}
+	// Get the mode to use
+	if (!strcmp(argv[0], "t") || !strcmp(argv[0], "train")) {
+		opt->mode = 0;
+	} else if (!strcmp(argv[0], "l") || !strcmp(argv[0], "label")) {
+		opt->mode = 1;
+	} else if (!strcmp(argv[0], "d") || !strcmp(argv[0], "dump")) {
+		opt->mode = 2;
+	} else {
+		fatal("unknown mode <%s>", argv[0]);
+	}
+	argc--, argv++;
+	// Parse remaining arguments
+	while (argc > 0 && argv[0][0] == '-') {
+		const char *arg = argv[0];
+		int idx;
+		// Search the current switch in the table or fail if it cannot
+		// be found.
+		for (idx = 0; opt_switch[idx].mode != -1; idx++) {
+			if (opt_switch[idx].mode != opt->mode)
+				continue;
+			if (!strcmp(arg, opt_switch[idx].dshort))
+				break;
+			if (!strcmp(arg, opt_switch[idx].dlong))
+				break;
+		}
+		if (opt_switch[idx].mode == -1)
+			fatal("unknown option '%s'", arg);
+		// Decode the argument and store it in the structure
+		if (opt_switch[idx].kind != 'B' && argc < 2)
+			fatal("missing argument for switch '%s'", arg);
+		void *ptr = (void *)((char *)opt + opt_switch[idx].offset);
+		switch (opt_switch[idx].kind) {
+			case 'S':
+				*((char **)ptr) = argv[1];
+				argc -= 2, argv += 2;
+				break;
+			case 'I':
+				if (sscanf(argv[1], "%d", (int *)ptr) != 1)
+					fatal(err_badval, arg);
+				argc -= 2, argv += 2;
+				break;
+			case 'F':
+				if (sscanf(argv[1], "%lf", (double *)ptr) != 1)
+					fatal(err_badval, arg);
+				argc -= 2, argv += 2;
+				break;
+			case 'B':
+				*((bool *)ptr) = true;
+				argc--, argv++;
+				break;
+		}
+	}
+	// Remaining arguments are input and output files
+	if (argc > 0)
+		opt->input = argv[0];
+	if (argc > 1)
+		opt->output = argv[1];
+}
 
 /******************************************************************************
  * Multi-threading code
@@ -3070,7 +3152,9 @@ static void trn_lbfgs(mdl_t *mdl) {
 /*******************************************************************************
  *
  ******************************************************************************/
-int main(void) {
+int main(int argc, char *argv[argc]) {
+	opt_t opt = opt_defaults;
+	opt_parse(argc, argv, &opt);
 	return EXIT_SUCCESS;
 }
 
