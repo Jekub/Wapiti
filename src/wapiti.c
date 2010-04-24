@@ -1771,6 +1771,45 @@ static dat_t *rdr_readdat(rdr_t *rdr, FILE *file, bool lbl) {
 	return dat;
 }
 
+/* rdr_load:
+ *   Read from the given file a reader saved previously with rdr_save. The given
+ *   reader must be empty, comming fresh from rdr_new. Be carefull that this
+ *   function performs almost no checks on the input data, so if you modify the
+ *   reader and make a mistake, it will probably result in a crash.
+ */
+static void rdr_load(rdr_t *rdr, FILE *file) {
+	const char *err = "broken file, invalid reader format";
+	if (fscanf(file, "#rdr#%d/%d\n", &rdr->npats, &rdr->ntoks) != 2)
+		fatal(err);
+	rdr->nuni = rdr->nbi = 0;
+	rdr->pats = xmalloc(sizeof(pat_t *) * rdr->npats);
+	for (int p = 0; p < rdr->npats; p++) {
+		char *pat = ns_readstr(file);
+		rdr->pats[p] = pat_comp(pat);
+		switch (tolower(pat[0])) {
+			case 'u': rdr->nuni++; break;
+			case 'b': rdr->nbi++;  break;
+			case '*': rdr->nuni++;
+			          rdr->nbi++;  break;
+		}
+	}
+	qrk_load(rdr->lbl, file);
+	qrk_load(rdr->obs, file);
+}
+
+/* rdr_save:
+ *   Save the reader to the given file so it can be loaded back. The save format
+ *   is plain text and portable accros computers.
+ */
+static void rdr_save(const rdr_t *rdr, FILE *file) {
+	if(fprintf(file, "#rdr#%d/%d\n", rdr->npats, rdr->ntoks) < 0)
+		pfatal("cannot write to file");
+	for (int p = 0; p < rdr->npats; p++)
+		ns_writestr(file, rdr->pats[p]->src);
+	qrk_save(rdr->lbl, file);
+	qrk_save(rdr->obs, file);
+}
+
 /*******************************************************************************
  * Linear chain CRF model
  *
