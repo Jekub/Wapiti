@@ -645,6 +645,44 @@ static void xvm_expma(double r[], const double x[], double a, size_t N) {
 #endif
 
 /******************************************************************************
+ *                   Netstring for persistent storage
+ *
+ *   This follow the format proposed by D.J. Bernstein for safe and portable
+ *   storage of string in persistent file and networks. This used for storing
+ *   strings in saved models.
+ *   We just add an additional end-of-line character to make the output files
+ *   more readable.
+ *
+ ******************************************************************************/
+
+/* ns_readstr:
+ *   Read a string from the given file in netstring format. The string is
+ *   returned as a newly allocated bloc of memory 0-terminated.
+ */
+static char *ns_readstr(FILE *file) {
+	int len;
+	if (fscanf(file, "%d:", &len) != 1)
+		pfatal("cannot read from file");
+	char *buf = xmalloc(len + 1);
+	if (fread(buf, len, 1, file) != 1)
+		pfatal("cannot read from file");
+	if (fgetc(file) != ',')
+		fatal("invalid format");
+	buf[len] = '\0';
+	fgetc(file);
+	return buf;
+}
+
+/* ns_writestr:
+ *   Write a string in the netstring format to the given file.
+ */
+static void ns_writestr(FILE *file, const char *str) {
+	const int len = strlen(str);
+	if (fprintf(file, "%d:%s,\n", len, str) < 0)
+		pfatal("cannot write to file");
+}
+
+/******************************************************************************
  * Quark database
  *
  *   Implement quark database: mapping between strings and identifiers in both
