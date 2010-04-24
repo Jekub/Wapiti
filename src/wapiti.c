@@ -165,7 +165,6 @@ static char *xstrdup(const char *str) {
  *   This module handle command line parsing and put all things defined by the
  *   user in a special structure in order to make them accessible to the
  *   remaining of the program.
- *  
  ******************************************************************************/
 
 /* opt_help:
@@ -457,7 +456,6 @@ static void mth_spawn(func_t *f, int W, size_t stacksz, void *ud[W]) {
  *   quicker than the system one, depending on your processor.
  *
  *   As the code is pretty straight forward, there is no need for comments here.
- *
  ******************************************************************************/
 
 static double xvm_norm(const double x[], size_t N) {
@@ -650,7 +648,6 @@ static void xvm_expma(double r[], const double x[], double a, size_t N) {
  *
  *   This code is copyright 2002-2010 Thomas Lavergne and licenced under the BSD
  *   Licence like the remaining of Wapiti.
- *
  ******************************************************************************/
 
 /* qrk_node_t:
@@ -863,10 +860,11 @@ static size_t qrk_str2id(qrk_t *qrk, const char *key) {
  *   The <lines> array is allocated with data structure, and the different lines
  *   are allocated separatly.
  */
-typedef struct raw_s {
+typedef struct raw_s raw_t;
+struct raw_s {
 	int   len;      //   T     Sequence length
 	char *lines[];  //  [T]    Raw lines directly from file
-} raw_t;
+};
 
 /* tok_t:
  *   Data-structure representing a tokenized sequence. This is the result of the
@@ -881,12 +879,13 @@ typedef struct raw_s {
  *   point to a memory block who hold a copy of the raw line. Each other tokens
  *   and the label are pointer in this block. This reduce memory fragmentation.
  */
-typedef struct tok_s {
+typedef struct tok_s tok_t;
+struct tok_s {
 	int    len;     //   T     Sequence length
 	char **lbl;     //  [T]    List of labels strings
 	int   *cnts;    //  [T]    Length of tokens lists
 	char **toks[];  //  [T][]  Tokens lists
-} tok_t;
+};
 
 /* seq_t:
  *   Data-structure representing a sequence of length <len> in the internal form
@@ -928,12 +927,13 @@ struct seq_s {
  *   contains <nseq> sequence stored in <seq>. These sequences are labeled only
  *   if <lbl> is true.
  */
+typedef struct dat_s dat_t;
 typedef struct dat_s {
 	bool    lbl;   //         True iff sequences are labelled
 	int     mlen;  //         Length of the longest sequence in the set
 	int     nseq;  //   S     Number of sequences in the set
 	seq_t **seq;   //  [S]    List of sequences
-} dat_t;
+};
 
 /******************************************************************************
  * A simple regular expression matcher
@@ -2186,45 +2186,44 @@ static bool uit_progress(mdl_t *mdl, int it, double obj) {
 }
 
 /******************************************************************************
- *                    Single sequence gradient computation
+ * Single sequence gradient computation
  *
- * This section is responsible for computing the gradient of the log-likelihood
- * function to optimize over a single sequence.
+ *   This section is responsible for computing the gradient of the
+ *   log-likelihood function to optimize over a single sequence.
  *
- * There is two version of this code, one using dense matrix and one with sparse
- * matrix. The sparse version use the fact that for L1 regularized trainers, the
- * bigrams scores will be very sparse so there is a way to reduce the amount of
- * computation needed in the forward backward at the price of a more complex
- * implementation. Due to the fact that using a sparse matrix have a cost, this
- * implementation is slower on L2 regularized models and on lighty
- * L1-regularized models, this is why there is also a classical dense version of
- * the algorithm used for example by the L-BFGS trainer.
+ *   There is two version of this code, one using dense matrix and one with
+ *   sparse matrix. The sparse version use the fact that for L1 regularized
+ *   trainers, the bigrams scores will be very sparse so there is a way to
+ *   reduce the amount of computation needed in the forward backward at the
+ *   price of a more complex implementation. Due to the fact that using a sparse
+ *   matrix have a cost, this implementation is slower on L2 regularized models
+ *   and on lighty L1-regularized models, this is why there is also a classical
+ *   dense version of the algorithm used for example by the L-BFGS trainer.
  *
- * The sparse matrix implementation is a bit tricky because we need to store all
- * values in sequences in order to use the vector exponential who gives also a
- * lot of performance improvement on vector able machine.
- * We need four arrays noted <val>, <off>, <idx>, and <yp>. For each positions
- * t, <off>[t] value indicate where the non-zero values for t starts in <val>.
- * The other arrays gives the y and yp indices of these values. The easier one
- * to retrieve is yp, the yp indice for value at <val>[<off>[t] + n] is stored
- * at the same position in <yp>.
- * The y are more difficult: the indice y are stored with n between <idx>[y-1]
- * and <idx>[y]. It may seems inefective but the matrix is indexed in the other
- * way, we go through the idx array, and for each y we get the yp and values, so
- * in practice it's very efficient.
+ *   The sparse matrix implementation is a bit tricky because we need to store
+ *   all values in sequences in order to use the vector exponential who gives
+ *   also a lot of performance improvement on vector able machine.
+ *   We need four arrays noted <val>, <off>, <idx>, and <yp>. For each positions
+ *   t, <off>[t] value indicate where the non-zero values for t starts in <val>.
+ *   The other arrays gives the y and yp indices of these values. The easier one
+ *   to retrieve is yp, the yp indice for value at <val>[<off>[t] + n] is stored
+ *   at the same position in <yp>.
+ *   The y are more difficult: the indice y are stored with n between <idx>[y-1]
+ *   and <idx>[y]. It may seems inefective but the matrix is indexed in the
+ *   other way, we go through the idx array, and for each y we get the yp and
+ *   values, so in practice it's very efficient.
  *
- * This can seem too complex but we have to keep in mind that Y are generally
- * very low and any sparse-matrix have overhead so we have to reduce it to the
- * minimum in order to get a real improvment. Dedicated library are optimized
- * for bigger matrix where the overhead is not a so important problem.
- * Another problem here is cache size. The optimization process will last most
- * of his time in this function so it have to be well optimized and we already
- * need a lot of memory for other data so we have to be carefull here if we
- * don't want to flush the cache all the time. Sparse matrix require less memory
- * than dense one only if we now in advance the number of non-zero entries,
- * which is not the case here, so we have to use a scheme which in the worst
- * case use as less as possible memory.
- *
+ *   This can seem too complex but we have to keep in mind that Y are generally
+ *   very low and any sparse-matrix have overhead so we have to reduce it to the
+ *   minimum in order to get a real improvment. Dedicated library are optimized
+ *   for bigger matrix where the overhead is not a so important problem.
+ *   Another problem here is cache size. The optimization process will last most
+ *   of his time in this function so it have to be well optimized and we already
+ *   need a lot of memory for other data so we have to be carefull here if we
+ *   don't want to flush the cache all the time. Sparse matrix require less
+ *   memory than dense one only if we now in advance the number of non-zero
+ *   entries, which is not the case here, so we have to use a scheme which in
+ *   the worst case use as less as possible memory.
  ******************************************************************************/
 
 /* grd_fldoseq:
@@ -2802,24 +2801,23 @@ static double grd_doseq(const mdl_t *mdl, const seq_t *seq, double g[]) {
 }
 
 /******************************************************************************
- *                      Dataset gradient computation
+ * Dataset gradient computation
  *
- * This section is responsible for computing the gradient of the log-likelihood
- * function to optimize over the full training set.
+ *   This section is responsible for computing the gradient of the
+ *   log-likelihood function to optimize over the full training set.
  *
- * The gradient computation is multi-threaded, you first have to call the
- * function 'grd_setup' to prepare the workers pool, and next you can use
- * 'grd_gradient' to ask for the full gradient as many time as you want. Each
- * time the gradient is computed over the full training set, using the curent
- * value of the parameters and applying the regularization. If need the pseudo-
- * gradient can also be computed. When you have done, you have to call
- * 'grd_cleanup' to free the allocated memory.
+ *   The gradient computation is multi-threaded, you first have to call the
+ *   function 'grd_setup' to prepare the workers pool, and next you can use
+ *   'grd_gradient' to ask for the full gradient as many time as you want. Each
+ *   time the gradient is computed over the full training set, using the curent
+ *   value of the parameters and applying the regularization. If need the
+ *   pseudo- gradient can also be computed. When you have done, you have to call
+ *   'grd_cleanup' to free the allocated memory.
  *
- * This require an additional vector of size <nftr> per thread after the first,
- * so it can take a lot of memory to compute big models on a lot of threads. It
- * is strongly discouraged to ask for more threads than you have cores, or to
- * more thread than you have memory to hold vectors.
- *
+ *   This require an additional vector of size <nftr> per thread after the
+ *   first, so it can take a lot of memory to compute big models on a lot of
+ *   threads. It is strongly discouraged to ask for more threads than you have
+ *   cores, or to more thread than you have memory to hold vectors.
  ******************************************************************************/
 
 typedef struct wrk_s wrk_t;
@@ -2937,12 +2935,12 @@ static double grd_gradient(mdl_t *mdl, double *g, double *pg) {
 }
 
 /******************************************************************************
- *                        Quasi-Newton optimizer
+ * Quasi-Newton optimizer
  *
- * This section implement the quasi-Newton optimizer. We use the L-BFGS
- * algorithm described by Liu and Nocedal in [1] and [2]. If an l1-norm must be
- * applyed we fallback on the OWL-QN variant described in [3] by Galen and
- * Jianfeng which allow to use L-BFGS for function not differentiable in 0.0.
+ *   This section implement the quasi-Newton optimizer. We use the L-BFGS
+ *   algorithm described by Liu and Nocedal in [1] and [2]. If an l1-norm must
+ *   be applyed we fallback on the OWL-QN variant described in [3] by Galen and
+ *   Jianfeng which allow to use L-BFGS for function not differentiable in 0.0.
  *
  *   [1] Updating quasi-Newton matrices with limited storage, Jorge Nocedal, in
  *       Mathematics of Computation, vol. 35(151) 773-782, July 1980.
@@ -2952,7 +2950,6 @@ static double grd_gradient(mdl_t *mdl, double *g, double *pg) {
  *   [3] Scalable Training of L1-Regularized Log-Linear Models, Andrew Galen and
  *       Gao Jianfeng, in Proceedings of the 24th International Conference on
  *       Machine Learning (ICML), Corvallis, OR, 2007.
- *
  ******************************************************************************/
 
 static void trn_lbfgs(mdl_t *mdl) {
