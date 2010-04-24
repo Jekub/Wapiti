@@ -878,6 +878,37 @@ static size_t qrk_str2id(qrk_t *qrk, const char *key) {
 	return id;
 }
 
+/* qrk_load:
+ *   Load a quark object preivously saved with a call to qrk_load. The given
+ *   quark must be empty.
+ */
+static void qrk_load(qrk_t *qrk, FILE *file) {
+	size_t cnt = 0;
+	if (fscanf(file, "#qrk#%zu\n", &cnt) != 1) {
+		if (ferror(file) != 0)
+			pfatal("cannot read from file");
+		pfatal("invalid format");
+	}
+	for (size_t n = 0; n < cnt; ++n) {
+		char *str = ns_readstr(file);
+		qrk_str2id(qrk, str);
+		free(str);
+	}
+}
+
+/* qrk_save:
+ *   Save all the content of a quark object in the given file. The format is
+ *   plain text and portable across platforms.
+ */
+static void qrk_save(const qrk_t *qrk, FILE *file) {
+	if (fprintf(file, "#qrk#%zu\n", qrk->count) < 0)
+		pfatal("cannot write to file");
+	if (qrk->count == 0)
+		return;
+	for (size_t n = 0; n < qrk->count; ++n)
+		ns_writestr(file, qrk->vector[n]);
+}
+
 /*******************************************************************************
  * Sequences and Dataset objects
  *
