@@ -172,14 +172,60 @@ static char *xstrdup(const char *str) {
  */
 typedef struct opt_s opt_t;
 struct opt_s {
-	int    maxiter;
+	int    action;
+	// Options for training
+	char  *algo,   *pattern;
+	char  *model,  *devel;
+	bool   compact, sparse;
 	int    nthread;
-	bool   sparse;
-	double rho1, rho2;
+	int    maxiter;
+	double rho1,    rho2;
+	// Options specific to L-BFGS
 	struct {
-		int histsz;
-		int maxls;
+		bool   clip;
+		int    histsz;
+		int    maxls;
 	} lbfgs;
+	// Options specific to SGD-L1
+	struct {
+		double eta0;
+		double alpha;
+	} sgdl1;
+	// Options for labelling
+	bool   label;
+	bool   check;
+};
+
+/* opt_switch:
+ *   Define available switchs for the different modes in a readable way for the
+ *   command line argument parser.
+ */
+struct {
+	int     action;
+	char   *dshort;
+	char   *dlong;
+	char    kind;
+	size_t  offset;
+} opt_switch[] = {
+	{0, "-a", "--algo",    'S', offsetof(opt_t, algo        )},
+	{0, "-p", "--pattern", 'S', offsetof(opt_t, pattern     )},
+	{0, "-m", "--model",   'S', offsetof(opt_t, model       )},
+	{0, "-d", "--devel",   'S', offsetof(opt_t, devel       )},
+	{0, "-c", "--compact", 'B', offsetof(opt_t, compact     )},
+	{0, "-s", "--sparse",  'B', offsetof(opt_t, sparse      )},
+	{0, "-t", "--nthread", 'I', offsetof(opt_t, nthread     )},
+	{0, "-i", "--maxiter", 'I', offsetof(opt_t, maxiter     )},
+	{0, "-1", "--rho1",    'F', offsetof(opt_t, rho1        )},
+	{0, "-2", "--rho2",    'F', offsetof(opt_t, rho2        )},
+	{0, "##", "--clip",    'B', offsetof(opt_t, lbfgs.clip  )},
+	{0, "##", "--histsz",  'I', offsetof(opt_t, lbfgs.histsz)},
+	{0, "##", "--maxls",   'I', offsetof(opt_t, lbfgs.maxls )},
+	{0, "##", "--eta0",    'F', offsetof(opt_t, sgdl1.eta0  )},
+	{0," ##", "--alpha",   'F', offsetof(opt_t, sgdl1.alpha )},
+	{1, "-m", "--model",   'S', offsetof(opt_t, model       )},
+	{1, "-l", "--label",   'B', offsetof(opt_t, label       )},
+	{1, "-c", "--check",   'B', offsetof(opt_t, check       )},
+	{-1, NULL, NULL, '\0', 0}
 };
 
 /******************************************************************************
