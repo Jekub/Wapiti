@@ -645,7 +645,7 @@ static void xvm_expma(double r[], const double x[], double a, size_t N) {
 #endif
 
 /******************************************************************************
- *                   Netstring for persistent storage
+ * Netstring for persistent storage
  *
  *   This follow the format proposed by D.J. Bernstein for safe and portable
  *   storage of string in persistent file and networks. This used for storing
@@ -1971,6 +1971,42 @@ static void mdl_sync(mdl_t *mdl) {
 	mdl->reader->obs->lock = true;
 }
 
+/* mdl_save:
+ *   Save a model to be restored later in a platform independant way.
+ */
+static void mdl_save(mdl_t *mdl, FILE *file) {
+	size_t nact = 0;
+	for (size_t f = 0; f < mdl->nftr; f++)
+		if (mdl->theta[f] != 0.0)
+			nact++;
+	fprintf(file, "#mdl#%zu\n", nact);
+	rdr_save(mdl->reader, file);
+	for (size_t f = 0; f < mdl->nftr; f++)
+		if (mdl->theta[f] != 0.0)
+			fprintf(file, "%zu=%la\n", f, mdl->theta[f]);
+}
+
+/* mdl_load:
+ *   Read back a previously saved model to continue training or start labeling.
+ *   The returned model is synced and the quarks are locked. You must give to
+ *   this function an empty model fresh from mdl_new.
+ */
+static void mdl_load(mdl_t *mdl, FILE *file) {
+	const char *err = "invalid model format";
+	size_t nact = 0;
+	if (fscanf(file, "#mdl#%zu\n", &nact) != 1)
+		fatal(err);
+	rdr_load(mdl->reader, file);
+	mdl_sync(mdl);
+	for (size_t i = 0; i < nact; i++) {
+		size_t f;
+		double v;
+		if (fscanf(file, "%zu=%la\n", &f, &v) != 2)
+			fatal(err);
+		mdl->theta[f] = v;
+	}
+}
+
 /******************************************************************************
  * Sequence tagging
  *
@@ -3284,6 +3320,7 @@ static void trn_lbfgs(mdl_t *mdl) {
 
 /******************************************************************************
  * The SGD-L1 trainer
+ *
  *   Implementation of the stochatic gradient descend with L1 penalty described
  *   in [1] by Tsurukoa et al. This allow to build really sparse models with the
  *   SGD method.
