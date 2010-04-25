@@ -3612,6 +3612,29 @@ static void dotrain(mdl_t *mdl) {
  * Entry point
  ******************************************************************************/
 int main(int argc, char *argv[argc]) {
+	// vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+	// Wapiti stack usage is quite intensive. This simplify a lot the memory
+	// mangement and code but, if you have long sequences or huge label set,
+	// the stack can overflow. In effect, some OS provide only very small
+	// stacks by default.
+	// For the L-BFGS trainer, this is not a problem as the computations are
+	// done in independant threads and we can adjust their stack easily, but
+	// for SGD-L1 and the tagger, this is not the case.
+	// I don't known a really portable way to increase the main stack so I
+	// will have to move these in workers threads also but this need some
+	// thinking.
+	// As a quick hack this small code will work on all unix of my knowledge
+	// but is not really POSIX compliant and I don't known if it work with
+	// cygwin on windows. This is truly a hack as it just raise the soft
+	// stack limit to match the hard stack limit without any checking than
+	// this will be enough.
+	struct rlimit rlp;
+	if (getrlimit(RLIMIT_STACK, &rlp) != 0)
+		pfatal("cannot get stack size");
+	rlp.rlim_cur = rlp.rlim_max;
+	if (setrlimit(RLIMIT_STACK, &rlp) != 0)
+		pfatal("cannot set stack size");
+	//^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 	// We first parse command line switchs
 	opt_t opt = opt_defaults;
 	opt_parse(argc, argv, &opt);
