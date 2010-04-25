@@ -3496,11 +3496,29 @@ static void trn_sgdl1(mdl_t *mdl) {
 #undef applypenalty
 
 /*******************************************************************************
- *
+ * Entry point
  ******************************************************************************/
 int main(int argc, char *argv[argc]) {
+	// We first parse command line switchs
 	opt_t opt = opt_defaults;
 	opt_parse(argc, argv, &opt);
+	// Next we prepare the model
+	mdl_t *mdl = mdl_new(rdr_new());
+	mdl->opt = &opt;
+	// And switch to requested mode
+	switch (opt.mode) {
+		case 0:
+			fatal("training not implemented");
+			break;
+		case 1:
+			fatal("labeling not implemented");
+			break;
+		case 2:
+			fatal("dumping not implemented");
+			break;
+	}
+	// And cleanup
+	mdl_free(mdl);
 	return EXIT_SUCCESS;
 }
 
