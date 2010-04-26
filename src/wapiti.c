@@ -191,6 +191,8 @@ static void opt_help(const char *pname) {
 		"\t-i | --maxiter  INT     maximum number of iterations\n"
 		"\t-1 | --rho1     FLOAT   l1 penalty parameter\n"
 		"\t-2 | --rho2     FLOAT   l2 penalty parameter\n"
+		"\t-w | --stopwin  INT     stop window size\n"
+		"\t-e | --stopeps  DOUBLE  stop epsilon value\n"
 		"\t   | --clip             (l-bfgs) clip gradient\n"
 		"\t   | --histsz   INT     (l-bfgs) history size\n"
 		"\t   | --maxls    INT     (l-bfgs) max linesearch iters\n"
@@ -223,6 +225,9 @@ struct opt_s {
 	int    nthread;
 	int    maxiter;
 	double rho1,    rho2;
+	// Window size criterion
+	int    stopwin;
+	double stopeps;
 	// Options specific to L-BFGS
 	struct {
 		bool   clip;
@@ -248,6 +253,7 @@ static const opt_t opt_defaults = {
 	.algo    = "l-bfgs", .pattern = NULL,  .model   = NULL, .devel   = NULL,
 	.compact = false,    .sparse  = false, .nthread = 1,    .maxiter = 0,
 	.rho1    = 0.5,      .rho2    = 0.0001,
+	.stopwin = 5,        .stopeps = 0.02,
 	.lbfgs = {.clip = false, .histsz = 5, .maxls = 20},
 	.sgdl1 = {.eta0 = 0.8,   .alpha  = 0.85},
 	.label   = false,    .check   = false
@@ -274,6 +280,8 @@ struct {
 	{0, "-i", "--maxiter", 'I', offsetof(opt_t, maxiter     )},
 	{0, "-1", "--rho1",    'F', offsetof(opt_t, rho1        )},
 	{0, "-2", "--rho2",    'F', offsetof(opt_t, rho2        )},
+	{0, "-w", "--stopwin", 'F', offsetof(opt_t, stopwin     )},
+	{0, "-e", "--stopeps", 'F', offsetof(opt_t, stopeps     )},
 	{0, "##", "--clip",    'B', offsetof(opt_t, lbfgs.clip  )},
 	{0, "##", "--histsz",  'I', offsetof(opt_t, lbfgs.histsz)},
 	{0, "##", "--maxls",   'I', offsetof(opt_t, lbfgs.maxls )},
@@ -1851,6 +1859,11 @@ struct mdl_s {
 	dat_t   *devel;   //       development dataset
 	rdr_t   *reader;
 
+	// Stoping criterion
+	double  *werr;    //       Window of error rate of last iters
+	int      wcnt;    //       Number of iters in the window
+	int      wpos;    //       Position for the next iter
+
 	// Timing
 	tms_t    timer;   //       start time of last iter
 	double   total;   //       total training time
@@ -1870,6 +1883,7 @@ static mdl_t *mdl_new(rdr_t *rdr) {
 	mdl->theta  = NULL;
 	mdl->train  = mdl->devel = NULL;
 	mdl->reader = rdr;
+	mdl->werr   = NULL;
 	mdl->total  = 0.0;
 	return mdl;
 }
@@ -1889,6 +1903,8 @@ static void mdl_free(mdl_t *mdl) {
 		rdr_freedat(mdl->devel);
 	if (mdl->reader != NULL)
 		rdr_free(mdl->reader);
+	if (mdl->werr != NULL)
+		free(mdl->werr);
 }
 
 /* mdl_sync:
@@ -2278,6 +2294,9 @@ static void uit_setup(mdl_t *mdl) {
 	if (signal(SIGINT, uit_signal) == SIG_ERR)
 		warning("failed to set signal handler, no clean early stop");
 	times(&mdl->timer);
+	if (mdl->opt->stopwin != 0)
+		mdl->werr = xmalloc(sizeof(double) * mdl->opt->stopwin);
+	mdl->wcnt = mdl->wpos = 0;
 }
 
 /* uit_cleanup:
@@ -2286,6 +2305,10 @@ static void uit_setup(mdl_t *mdl) {
  */
 static void uit_cleanup(mdl_t *mdl) {
 	unused(mdl);
+	if (mdl->opt->stopwin != 0) {
+		free(mdl->werr);
+		mdl->werr = NULL;
+	}
 	signal(SIGINT, SIG_DFL);
 }
 
@@ -2341,10 +2364,27 @@ static bool uit_progress(mdl_t *mdl, int it, double obj) {
 	info(" err=%5.2f%%/%5.2f%%", te, se);
 	info(" time=%.2fs/%.2fs", tm, mdl->total);
 	info("\n");
+	// If requested, check the error rate stoping criterion. We check if the
+	// error rate is stable enought over a few iterations.
+	bool res = true;
+	if (mdl->opt->stopwin != 0) {
+		mdl->werr[mdl->wpos] = te;
+		mdl->wpos = (mdl->wpos + 1) % mdl->opt->stopwin;
+		mdl->wcnt++;
+		if (mdl->wcnt >= mdl->opt->stopwin) {
+			double emin = 200.0, emax = -100.0;
+			for (int i = 0; i < mdl->opt->stopwin; i++) {
+				emin = min(emin, mdl->werr[i]);
+				emax = max(emax, mdl->werr[i]);
+			}
+			if (emax - emin < mdl->opt->stopeps)
+				res = false;
+		}
+	}
 	// And return
 	if (uit_stop)
 		return false;
-	return true;
+	return res;
 }
 
 /******************************************************************************
