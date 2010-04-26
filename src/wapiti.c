@@ -1837,6 +1837,26 @@ static void rdr_save(const rdr_t *rdr, FILE *file) {
  *   observation depend on the pattern who generated it.
  ******************************************************************************/
 
+/* mdl_t:
+ *   Represent a linear-chain CRF model. The model contain both unigram and
+ *   bigram features. It is caracterized by <nlbl> the number of labels, <nobs>
+ *   the number of observations, and <nftr> the number of features.
+ *
+ *   Each observations have a corresponding entry in <kind> whose first bit is
+ *   set if the observation is unigram and second one if it is bigram. Note that
+ *   an observation can be both. An unigram observation produce Y features and a
+ *   bigram one produce Y * Y features.
+ *   The <theta> array keep all features weights. The <*off> array give for each
+ *   observations the offset in the <theta> array where the features of the
+ *   observation are stored.
+ *
+ *   The <*off> and <theta> array are initialized only when the model is
+ *   synchronized. As you can add new labels and observations after a sync, we
+ *   keep track of the old counts in <olbl> and <oblk> to detect inconsistency
+ *   and resynchronize the model if needed. In this case, if the number of
+ *   labels have not changed, the previously trained weights are kept, else they
+ *   are now meaningless so discarded.
+ */
 typedef struct mdl_s mdl_t;
 struct mdl_s {
 	opt_t   *opt;     //       options for training
