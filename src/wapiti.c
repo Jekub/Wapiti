@@ -2179,7 +2179,7 @@ static void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[]) {
  *   output error rates during the labelling and detailed statistics per label
  *   at the end.
  */
-static void tag_label(const mdl_t *mdl, FILE *fin, FILE *fout, bool check) {
+static void tag_label(const mdl_t *mdl, FILE *fin, FILE *fout) {
 	qrk_t *lbls = mdl->reader->lbl;
 	const size_t Y = mdl->nlbl;
 	// We start by preparing the statistic collection to be ready if check
@@ -2201,19 +2201,20 @@ static void tag_label(const mdl_t *mdl, FILE *fin, FILE *fout, bool check) {
 		raw_t *raw = rdr_readraw(mdl->reader, fin);
 		if (raw == NULL)
 			break;
-		seq_t *seq = rdr_raw2seq(mdl->reader, raw, check);
+		seq_t *seq = rdr_raw2seq(mdl->reader, raw, mdl->opt->check);
 		size_t out[seq->len];
 		tag_viterbi(mdl, seq, out);
 		// Next we output the raw sequence with an aditional column for
 		// the predicted labels
 		for (int t = 0; t < seq->len; t++) {
-			fprintf(fout, "%s ", raw->lines[t]);
-			fprintf(fout, "\t%s\n", qrk_id2str(lbls, out[t]));
+			if (!mdl->opt->label)
+				fprintf(fout, "%s\t", raw->lines[t]);
+			fprintf(fout, "%s\n", qrk_id2str(lbls, out[t]));
 		}
 		fprintf(fout, "\n");
 		// If user provided reference labels, use them to collect
 		// statistics about how well we have performed here.
-		if (check) {
+		if (mdl->opt->check) {
 			bool err = false;
 			for (int t = 0; t < seq->len; t++) {
 				stat[0][seq->pos[t].lbl]++;
@@ -2234,7 +2235,7 @@ static void tag_label(const mdl_t *mdl, FILE *fin, FILE *fout, bool check) {
 		// and sequence error rates.
 		if (++scnt % 1000 == 0) {
 			info("%10zu sequences labeled", scnt);
-			if (check) {
+			if (mdl->opt->check) {
 				const double te = (double)terr  / tcnt * 100.0;
 				const double se = (double)serr  / scnt * 100.0;
 				info("\t%5.2f%%/%5.2f%%", te, se);
@@ -2245,7 +2246,7 @@ static void tag_label(const mdl_t *mdl, FILE *fin, FILE *fout, bool check) {
 	// If user have provided reference labels, we have collected a lot of
 	// statistics and we can repport global token and sequence error rate as
 	// well as precision recall and f-measure for each labels.
-	if (check) {
+	if (mdl->opt->check) {
 		const double te = (double)terr  / tcnt * 100.0;
 		const double se = (double)serr  / scnt * 100.0;
 		info("    Nb sequences  : %zu\n", scnt);
@@ -3669,6 +3670,42 @@ static void dotrain(mdl_t *mdl) {
 }
 
 /*******************************************************************************
+ * Labeling
+ ******************************************************************************/
+static void dolabel(mdl_t *mdl) {
+	// First, load the model provided by the user. This is mandatory to
+	// label new datas ;-)
+	if (mdl->opt->model == NULL)
+		fatal("you must specify a model");
+	info("* Load model\n");
+	FILE *file = fopen(mdl->opt->model, "r");
+	if (file == NULL)
+		pfatal("cannot open input model file");
+	mdl_load(mdl, file);
+	// Open input and output files
+	FILE *fin = stdin, *fout = stdout;
+	if (mdl->opt->input != NULL) {
+		fin = fopen(mdl->opt->input, "r");
+		if (fin == NULL)
+			pfatal("cannot open input data file");
+	}
+	if (mdl->opt->output != NULL) {
+		fout = fopen(mdl->opt->output, "w");
+		if (fout == NULL)
+			pfatal("cannot open output data file");
+	}
+	// Do the labelling
+	info("* Label sequences\n");
+	tag_label(mdl, fin, fout);
+	info("* Done\n");
+	// And close files
+	if (mdl->opt->input != NULL)
+		fclose(fin);
+	if (mdl->opt->output != NULL)
+		fclose(fout);
+}
+
+/*******************************************************************************
  * Entry point
  ******************************************************************************/
 int main(int argc, char *argv[argc]) {
@@ -3703,15 +3740,9 @@ int main(int argc, char *argv[argc]) {
 	mdl->opt = &opt;
 	// And switch to requested mode
 	switch (opt.mode) {
-		case 0:
-			dotrain(mdl);
-			break;
-		case 1:
-			fatal("labeling not implemented");
-			break;
-		case 2:
-			fatal("dumping not implemented");
-			break;
+		case 0: dotrain(mdl); break;
+		case 1: dolabel(mdl); break;
+		case 2: fatal("dumping not implemented"); break;
 	}
 	// And cleanup
 	mdl_free(mdl);
