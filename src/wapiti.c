@@ -3643,6 +3643,9 @@ static void dotrain(mdl_t *mdl) {
 	mdl_sync(mdl);
 	// Display some statistics as we all love this.
 	info("* Summary\n");
+	info("    nb train:    %d\n", mdl->train->nseq);
+	if (mdl->devel != NULL)
+		info("    nb devel:    %d\n", mdl->devel->nseq);
 	info("    nb labels:   %zu\n", mdl->nlbl);
 	info("    nb blocks:   %zu\n", mdl->nobs);
 	info("    nb features: %zu\n", mdl->nftr);
