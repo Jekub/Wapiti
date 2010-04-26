@@ -3622,7 +3622,7 @@ static void dotrain(mdl_t *mdl) {
 		fclose(file);
 	mdl->reader->lbl->lock = true;
 	mdl->reader->obs->lock = true;
-	if (mdl->train->nseq == 0)
+	if (mdl->train == NULL || mdl->train->nseq == 0)
 		fatal("no train data loaded");
 	// If present, load the development set in the model. If not specified,
 	// the training dataset will be used instead.
