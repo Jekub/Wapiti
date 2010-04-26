@@ -3706,6 +3706,66 @@ static void dolabel(mdl_t *mdl) {
 }
 
 /*******************************************************************************
+ * Dumping
+ ******************************************************************************/
+static void dodump(mdl_t *mdl) {
+	// Load input model file
+	info("* Load model\n");
+	FILE *fin = stdin;
+	if (mdl->opt->input != NULL) {
+		fin = fopen(mdl->opt->input, "r");
+		if (fin == NULL)
+			pfatal("cannot open input data file");
+	}
+	mdl_load(mdl, fin);
+	if (mdl->opt->input != NULL)
+		fclose(fin);
+	// Open output file
+	FILE *fout = stdout;
+	if (mdl->opt->output != NULL) {
+		fout = fopen(mdl->opt->output, "w");
+		if (fout == NULL)
+			pfatal("cannot open output data file");
+	}
+	// Dump model
+	info("* Dump model\n"); 
+	const size_t Y = mdl->nlbl;
+	const size_t O = mdl->nobs;
+	const qrk_t *Qlbl = mdl->reader->lbl;
+	const qrk_t *Qobs = mdl->reader->obs;
+	for (size_t o = 0; o < O; o++) {
+		const char *obs = qrk_id2str(Qobs, o);
+		bool empty = true;
+		if (mdl->kind[o] & 1) {
+			const double *w = mdl->theta + mdl->uoff[o];
+			for (size_t y = 0; y < Y; y++) {
+				if (w[y] == 0.0)
+					continue;
+				const char *ly = qrk_id2str(Qlbl, y);
+				fprintf(fout, "%s\t%s\t%f\n", obs, ly, w[y]);
+				empty = false;
+			}
+		}
+		if (mdl->kind[o] & 2) {
+			const double *w = mdl->theta + mdl->boff[o];
+			for (size_t d = 0; d < Y * Y; d++) {
+				if (w[d] == 0.0)
+					continue;
+				const char *ly  = qrk_id2str(Qlbl, d % Y);
+				const char *lyp = qrk_id2str(Qlbl, d / Y);
+				fprintf(fout, "%s\t%s\t%s\t%f\n", obs, lyp, ly,
+				       w[d]);
+				empty = false;
+			}
+		}
+		if (!empty)
+			fprintf(fout, "\n");
+	}
+	if (mdl->opt->output != NULL)
+		fclose(fout);
+}
+
+/*******************************************************************************
  * Entry point
  ******************************************************************************/
 int main(int argc, char *argv[argc]) {
@@ -3742,7 +3802,7 @@ int main(int argc, char *argv[argc]) {
 	switch (opt.mode) {
 		case 0: dotrain(mdl); break;
 		case 1: dolabel(mdl); break;
-		case 2: fatal("dumping not implemented"); break;
+		case 2: dodump(mdl); break;
 	}
 	// And cleanup
 	mdl_free(mdl);
