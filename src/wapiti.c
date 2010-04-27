@@ -2007,6 +2007,74 @@ static void mdl_sync(mdl_t *mdl) {
 	mdl->reader->obs->lock = true;
 }
 
+/* mdl_compact:
+ *   Comapct the given model by removing from it all observation who lead to
+ *   zero actives features. On model trained with l1 regularization this can
+ *   lead to a drastic model size reduction and so to faster loading, training
+ *   and labeling.
+ */
+static void mdl_compact(mdl_t *mdl) {
+	const size_t Y = mdl->nlbl;
+	// We first build the new observation list with only observations which
+	// lead to at least one active feature. At the same time we build the
+	// translation table which map the new observations index to the old
+	// ones.
+	info("    - Scan the model\n");
+	qrk_t *old_obs = mdl->reader->obs;
+	qrk_t *new_obs = qrk_new();
+	size_t *trans = xmalloc(sizeof(size_t) * mdl->nobs);
+	for (size_t oldo = 0; oldo < mdl->nobs; oldo++) {
+		bool active = false;
+		if (mdl->kind[oldo] & 1)
+			for (size_t y = 0; y < Y; y++)
+				if (mdl->theta[mdl->uoff[oldo] + y] != 0.0)
+					active = true;
+		if (mdl->kind[oldo] & 2)
+			for (size_t d = 0; d < Y * Y; d++)
+				if (mdl->theta[mdl->boff[oldo] + d] != 0.0)
+					active = true;
+		if (!active)
+			continue;
+		const char   *str  = qrk_id2str(old_obs, oldo);
+		const size_t  newo = qrk_str2id(new_obs, str);
+		trans[newo] = oldo;
+	}
+	mdl->reader->obs = new_obs;
+	// Now we save the old model features informations and build a new one
+	// corresponding to the compacted model.
+	size_t *old_uoff  = mdl->uoff;  mdl->uoff  = NULL;
+	size_t *old_boff  = mdl->boff;  mdl->boff  = NULL;
+	double *old_theta = mdl->theta; mdl->theta = NULL;
+	free(mdl->kind);
+	mdl->kind = NULL;
+	mdl->nlbl = mdl->nobs = mdl->nftr = 0;
+	mdl_sync(mdl);
+	// The model is now ready, so we copy in it the features weights from
+	// the old model for observations we have kept.
+	info("    - Compact it\n");
+	for (size_t newo = 0; newo < mdl->nobs; newo++) {
+		const size_t oldo = trans[newo];
+		if (mdl->kind[newo] & 1) {
+			double *src = old_theta  + old_uoff[oldo];
+			double *dst = mdl->theta + mdl->uoff[newo];
+			for (size_t y = 0; y < Y; y++)
+				dst[y] = src[y];
+		}
+		if (mdl->kind[newo] & 2) {
+			double *src = old_theta  + old_boff[oldo];
+			double *dst = mdl->theta + mdl->boff[newo];
+			for (size_t d = 0; d < Y * Y; d++)
+				dst[d] = src[d];
+		}
+	}
+	// And cleanup
+	free(trans);
+	qrk_free(old_obs);
+	free(old_uoff);
+	free(old_boff);
+	free(old_theta);
+}
+
 /* mdl_save:
  *   Save a model to be restored later in a platform independant way.
  */
@@ -3656,7 +3724,12 @@ static void dotrain(mdl_t *mdl) {
 	uit_cleanup(mdl);
 	// If requested compact the model.
 	if (mdl->opt->compact) {
-		warning("compacting not implemented");
+		const size_t O = mdl->nobs;
+		const size_t F = mdl->nftr;
+		info("* Compacting the model\n");
+		mdl_compact(mdl);
+		info("    %8zu observations removed\n", O - mdl->nobs);
+		info("    %8zu features removed\n", F - mdl->nftr);
 	}
 	// And save the trained model
 	info("* Save the model\n");
@@ -3745,7 +3818,7 @@ static void dodump(mdl_t *mdl) {
 				if (w[y] == 0.0)
 					continue;
 				const char *ly = qrk_id2str(Qlbl, y);
-				fprintf(fout, "%s\t%s\t%f\n", obs, ly, w[y]);
+				fprintf(fout, "%s\t#\t%s\t%f\n", obs, ly, w[y]);
 				empty = false;
 			}
 		}
