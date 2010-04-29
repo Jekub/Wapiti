@@ -3153,13 +3153,15 @@ static double grd_gradient(mdl_t *mdl, double *g, double *pg) {
 	const size_t  W = mdl->opt->nthread;
 	const size_t  T = mdl->train->mlen;
 	// The gradseq function require a lot of stack space so we have to
-	// ensure it have enought of it, we estimate the stack space needed and
-	// add an additional page for all temporary variables and the wrapper.
+	// ensure it have enought of it, we estimate the stack space needed
+	// and add a few additional pages for all temporary variables,
+	// alignment and the wrapper.
 	size_t stksz;
 	if (mdl->opt->sparse)
-		stksz = 8 * (T * (4 + Y * (4 + 2 * Y)) + Y * Y) + 4096;
+		stksz = T * (4 + Y * (4 + 2 * Y)) + Y * Y;
 	else
-		stksz = 8 * T * (3 + Y * (2 + Y)) + 4096;
+		stksz = T * (3 + Y * (2 + Y));
+	stksz = 8 * stksz + 4096 * 32;
 	// Now we prepare the workers, allocating a local gradient for each one
 	// except the first which will receive the global one. We allocate all
 	// the gradient as a one big vector for easier memory managment.
