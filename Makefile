@@ -7,7 +7,7 @@ ARCH   =-march=native
 DESTDIR=
 PREFIX =/usr/local
 
-INSTALL= install -d
+INSTALL= install -p
 INSTALL_EXEC= $(INSTALL) -m 0755
 INSTALL_DATA= $(INSTALL) -m 0644
 
@@ -21,7 +21,10 @@ debug: src/wapiti.c
 
 install: wapiti
 	@echo "CP: wapiti   --> $(DESTDIR)$(PREFIX)/bin"
-	@$(INSTALL_EXEC) $(DESTDIR)$(PREFIX)/bin wapiti
+	@mkdir -p $(DESTDIR)$(PREFIX)/bin
+	@mkdir -p $(DESTDIR)$(PREFIX)/man/man1
+	@$(INSTALL_EXEC) wapiti       $(DESTDIR)$(PREFIX)/bin
+	@$(INSTALL_DATA) doc/wapiti.1 $(DESTDIR)$(PREFIX)/share/man/man1
 
 clean:
 	@echo "RM: wapiti"
