@@ -13,11 +13,11 @@ INSTALL_DATA= $(INSTALL) -m 0644
 
 wapiti: src/wapiti.c
 	@echo "CC: wapiti.c --> wapiti"
-	@$(CC) -DNDEBUG $(CFLAGS) $(LIBS) -o wapiti src/wapiti.c
+	@$(CC) -DNDEBUG $(CFLAGS) $(ARCH) $(LIBS) -o wapiti src/wapiti.c
 
 debug: src/wapiti.c
 	@echo "CC: wapiti.c --> wapiti"
-	@$(CC) -g $(CFLAGS) $(LIBS) -o wapiti src/wapiti.c
+	@$(CC) -g $(CFLAGS) $(ARCH) $(LIBS) -o wapiti src/wapiti.c
 
 install: wapiti
 	@echo "CP: wapiti   --> $(DESTDIR)$(PREFIX)/bin"
