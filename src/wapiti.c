@@ -416,31 +416,15 @@ static void *mth_stub(void *ud) {
 }
 
 /* mth_spawn:
- *   This function spawn W threads for calling the 'f' function. It ensure that
- *   there is at least 'stacksz' byte of stack space available in each thread.
- *   The function will get a unique identifier between 0 and W-1 and a user data
- *   from the 'ud' array.
+ *   This function spawn W threads for calling the 'f' function. The function
+ *   will get a unique identifier between 0 and W-1 and a user data from the
+ *   'ud' array.
  */
-static void mth_spawn(func_t *f, int W, size_t stacksz, void *ud[W]) {
-	// We first adjust the requested stack size to be sure it is a round
-	// number of system page size as requested by pthread. As there is no
-	// portable to get the system page size and all systems, at my
-	// knowledge, use power of two lower or equal than 4096, using this
-	// value is safe.
-	if (stacksz % 4096 != 0)
-		stacksz += 4096 - (stacksz % 4096);
-	// Next we prepare the pthreads attributes. We check that the default
-	// stack size is too low before attempting to raise it as if the system
-	// provide a big stack we don't want to insist on getting a smaller one.
-	size_t stackdef = 0;
+static void mth_spawn(func_t *f, int W, void *ud[W]) {
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
 	pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
-	pthread_attr_getstacksize(&attr, &stackdef);
-	if (stackdef < stacksz)
-		if (pthread_attr_setstacksize(&attr, stacksz) != 0)
-			fatal("cannot change thread stack size");
 	// We prepare the parameters structures that will be send to the threads
 	// with informations for calling the user function.
 	mth_t p[W];
@@ -2594,25 +2578,12 @@ static void grd_free(grd_t *grd) {
  *   This function will not clear the gradient before computation, but instead
  *   just accumulate the values for the given sequence in it. This allow to
  *   easily compute the gradient over a set of sequences.
- *
- *   Beware that this function is quite stack intensive and it is the caller
- *   responsibility to ensure that there will be no problems. See the note below
- *   for more details.
  */
 static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
 	const mdl_t *mdl = grd->mdl;
 	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
-	// In order to simplify the code as well as the memory managment we
-	// allocate all the temporary array on the stack instead of the heap.
-	// This imply that for long sequence or huge labels set we will need a
-	// large amount of stack memory. We let the caller ensure there is
-	// enough free space there. This function will need
-	//   8 * T * (3 + Y * (2 + Y))
-	// bytes of stack (assuming that sizeof(double) is eight bytes) for the
-	// arrays and a bit more for the other variables and temporary created
-	// by the compiler.
 	double (*psi  )[T][Y][Y] = (void *)grd->psi;
 	double (*alpha)[T][Y]    = (void *)grd->alpha;
 	double (*beta )[T][Y]    = (void *)grd->beta;
@@ -2834,7 +2805,7 @@ static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
  *   This function compute the gradient and value of the negative log-likelihood
  *   of the model over a single training sequence as grd_fldoseq but using
  *   sparse-matrix computation. This can speed-up training on sparse models but
- *   come at the price of stack memory usage.
+ *   come at the price of memory usage.
  *
  *   This function is, as expected, extremely similar to the dense version but
  *   the difference are big enough that making a single one will extremly
@@ -2847,15 +2818,6 @@ static double grd_spdoseq(grd_t *grd, const seq_t *seq, double *g) {
 	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
-	// In order to simplify the code as well as the memory managment we
-	// allocate all the temporary array on the stack instead of the heap.
-	// This imply that for long sequence or huge labels set we will need a
-	// large amount of stack memory. We let the caller ensure there is
-	// enough free space there. This function will need
-	//   8 * T * (4 + Y * (4 + 2 * Y)) + Y * Y
-	// bytes of stack (assuming that sizeof(double) is eight bytes) for the
-	// arrays and a bit more for the other variables and temporary created
-	// by the compiler.
 	double (*psiuni)[T][Y] = (void *)grd->psiuni;
 	double  *psival        =         grd->psi;
 	size_t  *psiyp         =         grd->psiyp;
@@ -3172,7 +3134,7 @@ static double grd_doseq(grd_t *grd, const seq_t *seq, double g[]) {
  *   'grd_gradient' to ask for the full gradient as many time as you want. Each
  *   time the gradient is computed over the full training set, using the curent
  *   value of the parameters and applying the regularization. If need the
- *   pseudo- gradient can also be computed. When you have done, you have to call
+ *   pseudo-gradient can also be computed. When you have done, you have to call
  *   'grd_cleanup' to free the allocated memory.
  *
  *   This require an additional vector of size <nftr> per thread after the
@@ -3221,19 +3183,7 @@ static void grd_worker(int id, int cnt, wrk_t *wrk) {
 static double grd_gradient(mdl_t *mdl, double *g, double *pg) {
 	const double *x = mdl->theta;
 	const size_t  F = mdl->nftr;
-	const size_t  Y = mdl->nlbl;
 	const size_t  W = mdl->opt->nthread;
-	const size_t  T = mdl->train->mlen;
-	// The gradseq function require a lot of stack space so we have to
-	// ensure it have enought of it, we estimate the stack space needed
-	// and add a few additional pages for all temporary variables,
-	// alignment and the wrapper.
-	size_t stksz;
-	if (mdl->opt->sparse)
-		stksz = T * (4 + Y * (4 + 2 * Y)) + Y * Y;
-	else
-		stksz = T * (3 + Y * (2 + Y));
-	stksz = 8 * stksz + 4096 * 32;
 	// Now we prepare the workers, allocating a local gradient for each one
 	// except the first which will receive the global one. We allocate all
 	// the gradient as a one big vector for easier memory managment.
@@ -3252,7 +3202,7 @@ static double grd_gradient(mdl_t *mdl, double *g, double *pg) {
 	// workers, each one working on a part of the data. As the gradient and
 	// log-likelihood are additive, computing the final values will be
 	// trivial.
-	mth_spawn((func_t *)grd_worker, W, stksz, (void **)pwrk);
+	mth_spawn((func_t *)grd_worker, W, (void **)pwrk);
 	if (uit_stop) {
 		free(raw);
 		return -1.0;
