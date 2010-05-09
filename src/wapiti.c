@@ -3036,55 +3036,27 @@ static void grd_logloss(grd_t *grd, const seq_t *seq) {
 	grd->lloss = lloss;
 }
 
-/* grd_fldoseq:
+/* grd_doseq:
  *   This function compute the gradient and value of the negative log-likelihood
  *   of the model over a single training sequence.
- *   The computation is organised to make the best compromise between efficiency
- *   and readability. Some things can be optimised a bit but the gain is not
- *   really noticeable so I prefer keep thing like this.
  *
  *   This function will not clear the gradient before computation, but instead
  *   just accumulate the values for the given sequence in it. This allow to
  *   easily compute the gradient over a set of sequences.
  */
-static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
-	grd_fldopsi(grd, seq);
-	grd_flfwdbwd(grd, seq);
-	grd_flupgrad(grd, seq, g);
-	grd_logloss(grd, seq);
-	return grd->lloss;
-}
-
-/* grd_spdoseq:
- *   This function compute the gradient and value of the negative log-likelihood
- *   of the model over a single training sequence as grd_fldoseq but using
- *   sparse-matrix computation. This can speed-up training on sparse models but
- *   come at the price of memory usage.
- *
- *   This function is, as expected, extremely similar to the dense version but
- *   the difference are big enough that making a single one will extremly
- *   complex. I prefer to keep some code duplicated here than making them
- *   unreadable, but keep in mind that bugfix to one of these will probably
- *   apply to the other.
- */
-static double grd_spdoseq(grd_t *grd, const seq_t *seq, double *g) {
-	grd_spdopsi(grd, seq);
-	grd_spfwdbwd(grd, seq);
-	grd_spupgrad(grd, seq, g);
-	grd_logloss(grd, seq);
-	return grd->lloss;
-}
-
-/* grd_doseq:
- *   This function is just a wrapper arround the two previous ones, selecting
- *   which one to call depending of the user setting.
- */
 static double grd_doseq(grd_t *grd, const seq_t *seq, double g[]) {
 	const mdl_t *mdl = grd->mdl;
-	if (!mdl->opt->sparse)
-		return grd_fldoseq(grd, seq, g);
-	else
-		return grd_spdoseq(grd, seq, g);
+	if (!mdl->opt->sparse) {
+		grd_fldopsi(grd, seq);
+		grd_flfwdbwd(grd, seq);
+		grd_flupgrad(grd, seq, g);
+	} else {
+		grd_spdopsi(grd, seq);
+		grd_spfwdbwd(grd, seq);
+		grd_spupgrad(grd, seq, g);
+	}
+	grd_logloss(grd, seq);
+	return grd->lloss;
 }
 
 /******************************************************************************
