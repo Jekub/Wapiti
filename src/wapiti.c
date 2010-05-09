@@ -2523,6 +2523,7 @@ struct grd_s {
 	double *scale;
 	double *unorm;
 	double *bnorm;
+	double  lloss;
 };
 
 /* grd_new:
@@ -2646,8 +2647,8 @@ static void grd_fldopsi(grd_t *grd, const seq_t *seq) {
  */
 static void grd_flfwdbwd(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
-	const size_t  Y = mdl->nlbl;
-	const int     T = seq->len;
+	const size_t Y = mdl->nlbl;
+	const int    T = seq->len;
 	double (*psi  )[T][Y][Y] = (void *)grd->psi;
 	double (*alpha)[T][Y]    = (void *)grd->alpha;
 	double (*beta )[T][Y]    = (void *)grd->beta;
@@ -2686,57 +2687,41 @@ static void grd_flfwdbwd(grd_t *grd, const seq_t *seq) {
 	}
 }
 
-/* grd_fldoseq:
- *   This function compute the gradient and value of the negative log-likelihood
- *   of the model over a single training sequence.
- *   The computation is organised to make the best compromise between efficiency
- *   and readability. Some things can be optimised a bit but the gain is not
- *   really noticeable so I prefer keep thing like this.
+/* grd_flupgrad:
+ *  Now, we have all we need to compute the gradient of the negative log-
+ *  likelihood
+ *      ∂-L(θ)
+ *      ------ =    ∑_t ∑_{(y',y)} f_k(y',y,x_t) p_θ(y_{t-1}=y',y_t=y|x)
+ *       ∂θ_k     - ∑_t f_k(y_{t-1},y_t,x_t)
  *
- *   This function will not clear the gradient before computation, but instead
- *   just accumulate the values for the given sequence in it. This allow to
- *   easily compute the gradient over a set of sequences.
+ *  The first term is the expectation of f_k under the model distribution and
+ *  the second one is the expectation of f_k under the empirical distribution.
+ *
+ *  The second is very simple to compute as we just have to sum over the actives
+ *  observations in the sequence.  The first one is more tricky as it involve
+ *  computing the probability p_θ. This is where we use all the previous
+ *  computations. Again we separate the computations for unigrams and bigrams
+ *  here.
+ *
+ *  These probabilities are given by
+ *      p_θ(y_t=y|x)            = α_t(y)β_t(y) / Z_θ
+ *      p_θ(y_{t-1}=y',y_t=y|x) = α_{t-1}(y') Ψ_t(y',y,x) β_t(y) / Z_θ
+ *  but we have to remember that, since we have scaled the α and β, we have to
+ *  use the local normalization constants.
+ *
+ *  We must also take care of not clearing previous value of the gradient vector
+ *  but just adding the contribution of this sequence. This allow to compute it
+ *  easily the gradient over more than one sequence.
  */
-static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
+static void grd_flupgrad(grd_t *grd, const seq_t *seq, double *g) {
 	const mdl_t *mdl = grd->mdl;
-	const double *x = mdl->theta;
-	const size_t  Y = mdl->nlbl;
-	const int     T = seq->len;
+	const size_t Y = mdl->nlbl;
+	const int    T = seq->len;
 	double (*psi  )[T][Y][Y] = (void *)grd->psi;
 	double (*alpha)[T][Y]    = (void *)grd->alpha;
 	double (*beta )[T][Y]    = (void *)grd->beta;
-	double *scale = grd->scale;
-	double *unorm = grd->unorm;
-	double *bnorm = grd->bnorm;
-
-	grd_fldopsi(grd, seq);
-	grd_flfwdbwd(grd, seq);
-
-	// Now, we have all we need to compute the gradient of the negative log-
-	// likelihood
-	//  ∂-L(θ)
-	//  ------ =    ∑_t ∑_{(y',y)} f_k(y',y,x_t) p_θ(y_{t-1}=y',y_t=y|x)
-	//   ∂θ_k     - ∑_t f_k(y_{t-1},y_t,x_t)
-	//
-	// The first term is the expectation of f_k under the model distribution
-	// and the second one is the expectation of f_k under the empirical
-	// distribution.
-	//
-	// The second is very simple to compute as we just have to sum over the
-	// actives observations in the sequence.
-	// The first one is more tricky as it involve computing the probability
-	// p_θ. This is where we use all the previous computations. Again we
-	// separate the computations for unigrams and bigrams here.
-	//
-	// These probabilities are given by
-	//   p_θ(y_t=y|x)            = α_t(y)β_t(y) / Z_θ
-	//   p_θ(y_{t-1}=y',y_t=y|x) = α_{t-1}(y') Ψ_t(y',y,x) β_t(y) / Z_θ
-	// but we have to remember that, since we have scaled the α and β, we
-	// have to use the local normalization constants.
-	//
-	// We must also take care of not clearing previous value of the gradient
-	// vector but just adding the contribution of this sequence. This allow
-	// to compute it easily the gradient over more than one sequence.
+	double  *unorm           =         grd->unorm;
+	double  *bnorm           =         grd->bnorm;
 	for (int t = 0; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
 		// Add the expectation over the model distribution
@@ -2772,6 +2757,31 @@ static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
 		for (size_t n = 0; n < pos->bcnt; n++)
 			g[mdl->boff[pos->bobs[n]] + d] -= 1.0;
 	}
+}
+
+/* grd_fldoseq:
+ *   This function compute the gradient and value of the negative log-likelihood
+ *   of the model over a single training sequence.
+ *   The computation is organised to make the best compromise between efficiency
+ *   and readability. Some things can be optimised a bit but the gain is not
+ *   really noticeable so I prefer keep thing like this.
+ *
+ *   This function will not clear the gradient before computation, but instead
+ *   just accumulate the values for the given sequence in it. This allow to
+ *   easily compute the gradient over a set of sequences.
+ */
+static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
+	const mdl_t *mdl = grd->mdl;
+	const double *x = mdl->theta;
+	const size_t  Y = mdl->nlbl;
+	const int     T = seq->len;
+	double (*alpha)[T][Y]    = (void *)grd->alpha;
+	double *scale = grd->scale;
+
+	grd_fldopsi(grd, seq);
+	grd_flfwdbwd(grd, seq);
+	grd_flupgrad(grd, seq, g);
+
 	// And the final touch, the computation of the negative log-likelihood
 	//   -L(θ) = log(Z_θ) - ∑_t ∑_k θ_k f_k(y_{t-1}, y_t, x_t)
 	//
