@@ -106,6 +106,9 @@ Set the learning rate for SGD trainer.
 .TP
 .B \-\-alpha <float>
 Set the alpha value of the exponential decay in SGD trainer.
+.TP
+.B \-\-kappa <float>
+Set the kappa parameter for BCD trainer. Default is 1.5, increasing this value make the algorithm more stable but also slower. Try to increase it if you have numerical instability.
 
 .SS Label mode
 .TP
@@ -218,6 +221,13 @@ will find it.
 The memory requirement are lighter than quasi-Newton methods as it require only
 3 vectors whoses sizes are the number of features.
 
+.B bcd
+This is the blockwise coordinate descent with elastic-net penalty. This algorithm is best suited for very large labels set and sparse feature set. It optimize the model one observation at a time, going through all observation at each iterations. It usually converge in only a few dozen of iterations (rarely more than 30).
+
+This the more memory economical algorithm as it only require to keep the feature weight vector in memory. In this algorithm, using complexe bigram feature come almost for free.
+
+This flexibility have a price, don't use it if you have features active in almost all your dataset as it will be very slow in this case.
+
 .SH DATAFILES
 Data files are plain text files containing sequence separated by empty lines.
 Each sequence is a set of non-empty lines where each of these represent one
@@ -241,12 +251,9 @@ of the kind "%x[col,off]" is replaced by the token in the column "col" from the
 data file at current position plus the offset "off".
 
 For example, if your data is
-.br
-	a1	b1	c1
-.br
-	a2	b2	c2
-.br
-	a3	b3	c3
+    a1    b1    c1
+    a2    b2    c2
+    a3    b3    c3
 .br
 The pattern "u:%x[0,-1]/%x[1,+1]" applied at position 2 in the sequence will
 produce the observation "u:a1/c3".
