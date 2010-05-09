@@ -2624,6 +2624,72 @@ static void grd_fldopsi(grd_t *grd, const seq_t *seq) {
 	xvm_expma((double *)psi, (double *)psi, 0.0, (size_t)T * Y * Y);
 }
 
+/* grd_spdopsi:
+ *  For the sparse version, we keep the two sum separate so we will have
+ *  separate Ψ_t(y,x) and Ψ_t(y',y,x). The first one define a vector for unigram
+ *  at each position, and the second one a matrix for bigrams.  This is where
+ *  the trick is as we will store Ψ_t(y',y,x) - 1. If the sum is nul, his
+ *  exponential will be 1.0 and so we have to store 0.0.  As most of the sum are
+ *  expected to be nul the resulting matrix will be very sparse and we will save
+ *  computation in the forward-backward.
+ *
+ *  So we compute Ψ differently here
+ *    1/ we sum the unigrams features weights by looping over actives
+ *         unigrams observations and store them in |psiuni|.
+ *    2/ we sum the bigrams features weights by looping over actives
+ *         bigrams observations (we don't have to do this for t=0 since
+ *         there is no bigrams here) and we store the non-nul one in the
+ *         sparse matrix.
+ *    3/ we take the component-wise exponential of the unigrams vectors,
+ *         and the component-wise exponential of the sparse matrix minus
+ *         one. (here also this can be done efficiently with vector
+ *         maths)
+ */
+static void grd_spdopsi(grd_t *grd, const seq_t *seq) {
+	const mdl_t *mdl = grd->mdl;
+	const double *x = mdl->theta;
+	const size_t  Y = mdl->nlbl;
+	const int     T = seq->len;
+	double (*psiuni)[T][Y] = (void *)grd->psiuni;
+	double  *psival        =         grd->psi;
+	size_t  *psiyp         =         grd->psiyp;
+	size_t (*psiidx)[T][Y] = (void *)grd->psiidx;
+	size_t  *psioff        =         grd->psioff;
+	for (int t = 0; t < T; t++) {
+		const pos_t *pos = &(seq->pos[t]);
+		for (size_t y = 0; y < Y; y++) {
+			double sum = 0.0;
+			for (size_t n = 0; n < pos->ucnt; n++) {
+				const size_t o = pos->uobs[n];
+				sum += x[mdl->uoff[o] + y];
+			}
+			(*psiuni)[t][y] = sum;
+		}
+	}
+	size_t off = 0;
+	for (int t = 1; t < T; t++) {
+		const pos_t *pos = &(seq->pos[t]);
+		psioff[t] = off;
+		for (size_t y = 0, nnz = 0; y < Y; y++) {
+			for (size_t yp = 0; yp < Y; yp++) {
+				double sum = 0.0;
+				for (size_t n = 0; n < pos->bcnt; n++) {
+					const size_t o = pos->bobs[n];
+					sum += x[mdl->boff[o] + yp * Y + y];
+				}
+				if (sum == 0.0)
+					continue;
+				psiyp [off] = yp;
+				psival[off] = sum;
+				nnz++, off++;
+			}
+			(*psiidx)[t][y] = nnz;
+		}
+	}
+	xvm_expma((double *)psiuni, (double *)psiuni, 0.0, (size_t)T * Y);
+	xvm_expma((double *)psival, (double *)psival, 1.0, off);
+}
+
 /* grd_flfwdbwd:
  *  Now, we go to the forward-backward algorithm. As this part of the code rely
  *  on a lot of recursive sums and products of exponentials, we have to take
@@ -2848,83 +2914,19 @@ static double grd_spdoseq(grd_t *grd, const seq_t *seq, double *g) {
 	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
-	double (*psiuni)[T][Y] = (void *)grd->psiuni;
-	double  *psival        =         grd->psi;
-	size_t  *psiyp         =         grd->psiyp;
-	size_t (*psiidx)[T][Y] = (void *)grd->psiidx;
-	size_t  *psioff        =         grd->psioff;
-	double (*alpha)[T][Y]  = (void *)grd->alpha;
-	double (*beta )[T][Y]  = (void *)grd->beta;
-	double  *scale         =         grd->scale;
-	double  *uz            =         grd->unorm;
-	double  *bz            =         grd->bnorm;
-	// We first have to compute the Ψ_t(y',y,x) weights defined as
-	//   Ψ_t(y',y,x) = \exp( ∑_k θ_k f_k(y',y,x_t) )
-	// So at position 't' in the sequence, for each couple (y',y) we have
-	// to sum weights of all features.
-	//
-	// Only the observations present at this position will have a non-nul
-	// weight so we can sum only on thoses.
-	//
-	// As we use only two kind of features: unigram and bigram, we can
-	// rewrite this as
-	//   \exp (  ∑_k μ_k(y, x_t)     f_k(y, x_t)
-	//         + ∑_k λ_k(y', y, x_t) f_k(y', y, x_t) )
-	// Where the first sum is over the unigrams features and the second is
-	// over bigrams ones.
-	//
-	// For the sparse version, we keep the two sum separate so we will have
-	// separate Ψ_t(y,x) and Ψ_t(y',y,x). The first one define a vector for
-	// unigram at each position, and the second one a matrix for bigrams.
-	// This is where the trick is as we will store Ψ_t(y',y,x) - 1. If the
-	// sum is nul, his exponential will be 1.0 and so we have to store 0.0.
-	// As most of the sum are expected to be nul the resulting matrix will
-	// be very sparse and we will save computation in the forward-backward.
-	//
-	// So we compute Ψ differently here
-	//   1/ we sum the unigrams features weights by looping over actives
-	//        unigrams observations and store them in |psiuni|.
-	//   2/ we sum the bigrams features weights by looping over actives
-	//        bigrams observations (we don't have to do this for t=0 since
-	//        there is no bigrams here) and we store the non-nul one in the
-	//        sparse matrix.
-	//   3/ we take the component-wise exponential of the unigrams vectors,
-	//        and the component-wise exponential of the sparse matrix minus
-	//        one. (here also this can be done efficiently with vector
-	//        maths)
-	for (int t = 0; t < T; t++) {
-		const pos_t *pos = &(seq->pos[t]);
-		for (size_t y = 0; y < Y; y++) {
-			double sum = 0.0;
-			for (size_t n = 0; n < pos->ucnt; n++) {
-				const size_t o = pos->uobs[n];
-				sum += x[mdl->uoff[o] + y];
-			}
-			(*psiuni)[t][y] = sum;
-		}
-	}
-	size_t off = 0;
-	for (int t = 1; t < T; t++) {
-		const pos_t *pos = &(seq->pos[t]);
-		psioff[t] = off;
-		for (size_t y = 0, nnz = 0; y < Y; y++) {
-			for (size_t yp = 0; yp < Y; yp++) {
-				double sum = 0.0;
-				for (size_t n = 0; n < pos->bcnt; n++) {
-					const size_t o = pos->bobs[n];
-					sum += x[mdl->boff[o] + yp * Y + y];
-				}
-				if (sum == 0.0)
-					continue;
-				psiyp [off] = yp;
-				psival[off] = sum;
-				nnz++, off++;
-			}
-			(*psiidx)[t][y] = nnz;
-		}
-	}
-	xvm_expma((double *)psiuni, (double *)psiuni, 0.0, (size_t)T * Y);
-	xvm_expma((double *)psival, (double *)psival, 1.0, off);
+	const double (*psiuni)[T][Y] = (void *)grd->psiuni;
+	const double  *psival        =         grd->psi;
+	const size_t  *psiyp         =         grd->psiyp;
+	const size_t (*psiidx)[T][Y] = (void *)grd->psiidx;
+	const size_t  *psioff        =         grd->psioff;
+	double (*alpha)[T][Y] = (void *)grd->alpha;
+	double (*beta )[T][Y] = (void *)grd->beta;
+	double  *scale        =         grd->scale;
+	double  *uz           =         grd->unorm;
+	double  *bz           =         grd->bnorm;
+
+	grd_spdopsi(grd, seq);
+
 	// Now, we go to the forward-backward algorithm. The numerical problems
 	// are solved with scaling as explained in the dense gradient
 	// computation.
