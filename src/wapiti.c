@@ -2517,6 +2517,21 @@ static bool uit_progress(mdl_t *mdl, int it, double obj) {
  *   the worst case use as less as possible memory.
  ******************************************************************************/
 
+typedef struct grd_s grd_t;
+struct grd_s {
+	mdl_t  *mdl;
+};
+
+static grd_t *grd_new(mdl_t *mdl) {
+	grd_t *grd = xmalloc(sizeof(grd_t));
+	grd->mdl = mdl;
+	return grd;
+}
+
+static void grd_free(grd_t *grd) {
+	free(grd);
+}
+
 /* grd_fldoseq:
  *   This function compute the gradient and value of the negative log-likelihood
  *   of the model over a single training sequence.
@@ -2532,7 +2547,8 @@ static bool uit_progress(mdl_t *mdl, int it, double obj) {
  *   responsibility to ensure that there will be no problems. See the note below
  *   for more details.
  */
-static double grd_fldoseq(const mdl_t *mdl, const seq_t *seq, double *g) {
+static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
+	const mdl_t *mdl = grd->mdl;
 	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
@@ -2774,7 +2790,8 @@ static double grd_fldoseq(const mdl_t *mdl, const seq_t *seq, double *g) {
  *   unreadable, but keep in mind that bugfix to one of these will probably
  *   apply to the other.
  */
-static double grd_spdoseq(const mdl_t *mdl, const seq_t *seq, double *g) {
+static double grd_spdoseq(grd_t *grd, const seq_t *seq, double *g) {
+	const mdl_t *mdl = grd->mdl;
 	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
@@ -3084,11 +3101,12 @@ static double grd_spdoseq(const mdl_t *mdl, const seq_t *seq, double *g) {
  *   This function is just a wrapper arround the two previous ones, selecting
  *   which one to call depending of the user setting.
  */
-static double grd_doseq(const mdl_t *mdl, const seq_t *seq, double g[]) {
+static double grd_doseq(grd_t *grd, const seq_t *seq, double g[]) {
+	const mdl_t *mdl = grd->mdl;
 	if (!mdl->opt->sparse)
-		return grd_fldoseq(mdl, seq, g);
+		return grd_fldoseq(grd, seq, g);
 	else
-		return grd_spdoseq(mdl, seq, g);
+		return grd_spdoseq(grd, seq, g);
 }
 
 /******************************************************************************
@@ -3124,7 +3142,7 @@ struct wrk_s {
  *   compute the gradient over the full training set.
  */
 static void grd_worker(int id, int cnt, wrk_t *wrk) {
-	const mdl_t *mdl = wrk->mdl;
+	mdl_t *mdl = wrk->mdl;
 	const dat_t *dat = mdl->train;
 	const size_t F = mdl->nftr;
 	// We first cleanup the gradient and value as our parent don't do it (it
@@ -3134,8 +3152,10 @@ static void grd_worker(int id, int cnt, wrk_t *wrk) {
 		wrk->g[f] = 0.0;
 	// Now all is ready, we can process our sequences and accumulate the
 	// gradient and inverse log-likelihood
+	grd_t *grd = grd_new(mdl);
 	for (int s = id; !uit_stop && s < dat->nseq; s += cnt)
-		wrk->fx += grd_doseq(mdl, dat->seq[s], wrk->g);
+		wrk->fx += grd_doseq(grd, dat->seq[s], wrk->g);
+	grd_free(grd);
 }
 
 /* grd_gradient:
@@ -3562,6 +3582,7 @@ static void trn_sgdl1(mdl_t *mdl) {
 	// computing the decay, we will need to keep track of the number of
 	// already processed sequences, this is tracked by the <i> variable.
 	double u = 0.0;
+	grd_t *grd = grd_new(mdl);
 	for (int k = 0, i = 0; k < K && !uit_stop; k++) {
 		// First we shuffle the sequence by making a lot of random swap
 		// of entry in the permutation index.
@@ -3576,7 +3597,7 @@ static void trn_sgdl1(mdl_t *mdl) {
 		for (int sp = 0; sp < S && !uit_stop; sp++, i++) {
 			const int s = perm[sp];
 			const seq_t *seq = mdl->train->seq[s];
-			grd_doseq(mdl, seq, g);
+			grd_doseq(grd, seq, g);
 			// Before applying the gradient, we have to compute the
 			// learning rate to apply to this sequence. For this we
 			// use an exponential decay [1, pp 481(5)]
@@ -3615,6 +3636,7 @@ static void trn_sgdl1(mdl_t *mdl) {
 		if (!uit_progress(mdl, k + 1, -1.0))
 			break;
 	}
+	grd_free(grd);
 	// Cleanup allocated memory before returning
 	for (int s = 0; s < S; s++) {
 		free(idx[s].uobs);
