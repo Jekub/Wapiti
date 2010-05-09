@@ -2649,12 +2649,12 @@ static void grd_flfwdbwd(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
 	const size_t Y = mdl->nlbl;
 	const int    T = seq->len;
-	double (*psi  )[T][Y][Y] = (void *)grd->psi;
-	double (*alpha)[T][Y]    = (void *)grd->alpha;
-	double (*beta )[T][Y]    = (void *)grd->beta;
-	double  *scale           =         grd->scale;
-	double  *unorm           =         grd->unorm;
-	double  *bnorm           =         grd->bnorm;
+	const double (*psi)[T][Y][Y] = (void *)grd->psi;
+	double (*alpha)[T][Y] = (void *)grd->alpha;
+	double (*beta )[T][Y] = (void *)grd->beta;
+	double  *scale        =         grd->scale;
+	double  *unorm        =         grd->unorm;
+	double  *bnorm        =         grd->bnorm;
 	for (size_t y = 0; y < Y; y++)
 		(*alpha)[0][y] = (*psi)[0][0][y];
 	scale[0] = xvm_unit((*alpha)[0], (*alpha)[0], Y);
@@ -2717,11 +2717,11 @@ static void grd_flupgrad(grd_t *grd, const seq_t *seq, double *g) {
 	const mdl_t *mdl = grd->mdl;
 	const size_t Y = mdl->nlbl;
 	const int    T = seq->len;
-	double (*psi  )[T][Y][Y] = (void *)grd->psi;
-	double (*alpha)[T][Y]    = (void *)grd->alpha;
-	double (*beta )[T][Y]    = (void *)grd->beta;
-	double  *unorm           =         grd->unorm;
-	double  *bnorm           =         grd->bnorm;
+	const double (*psi  )[T][Y][Y] = (void *)grd->psi;
+	const double (*alpha)[T][Y]    = (void *)grd->alpha;
+	const double (*beta )[T][Y]    = (void *)grd->beta;
+	const double  *unorm           =         grd->unorm;
+	const double  *bnorm           =         grd->bnorm;
 	for (int t = 0; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
 		// Add the expectation over the model distribution
@@ -2759,54 +2759,41 @@ static void grd_flupgrad(grd_t *grd, const seq_t *seq, double *g) {
 	}
 }
 
-/* grd_fldoseq:
- *   This function compute the gradient and value of the negative log-likelihood
- *   of the model over a single training sequence.
- *   The computation is organised to make the best compromise between efficiency
- *   and readability. Some things can be optimised a bit but the gain is not
- *   really noticeable so I prefer keep thing like this.
+/* grd_logloss:
+ *  And the final touch, the computation of the negative log-likelihood
+ *      -L(θ) = log(Z_θ) - ∑_t ∑_k θ_k f_k(y_{t-1}, y_t, x_t)
  *
- *   This function will not clear the gradient before computation, but instead
- *   just accumulate the values for the given sequence in it. This allow to
- *   easily compute the gradient over a set of sequences.
+ *  The numerical problems show again here as we cannot compute the Z_θ directly
+ *  for the same reason we have done scaling. Fortunately, there is a way to
+ *  directly compute his logarithm
+ *      log(Z_θ) = log( ∑_y α_t(y) β_t(y) )
+ *               - ∑_{i=1..t} log(α-scale_i)
+ *               - ∑_{i=t..T} log(β-scale_i)
+ *  for any value of t.
+ * 
+ *  So we can compute it at any position in the sequence but the last one is
+ *  easier as the value of β_T(y) and β-scale_T are constant and cancel out.
+ *  This is why we have just keep the α-scale_t values.
+ *
+ *  Now, we have the first term of -L(θ). We have now to substract the second
+ *  one. As we have done for the computation of Ψ, we separate the sum over K in
+ *  two sums, one for unigrams and one for bigrams. And, as here also the
+ *  weights will be non-nul only for observations present in the sequence, we
+ *  sum only over these ones.
  */
-static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
+static void grd_logloss(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
 	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
-	double (*alpha)[T][Y]    = (void *)grd->alpha;
-	double *scale = grd->scale;
-
-	grd_fldopsi(grd, seq);
-	grd_flfwdbwd(grd, seq);
-	grd_flupgrad(grd, seq, g);
-
-	// And the final touch, the computation of the negative log-likelihood
-	//   -L(θ) = log(Z_θ) - ∑_t ∑_k θ_k f_k(y_{t-1}, y_t, x_t)
-	//
-	// The numerical problems show again here as we cannot compute the Z_θ
-	// directly for the same reason we have done scaling. Fortunately, there
-	// is a way to directly compute his logarithm
-	//   log(Z_θ) = log( ∑_y α_t(y) β_t(y) )
-	//            - ∑_{i=1..t} log(α-scale_i)
-	//            - ∑_{i=t..T} log(β-scale_i)
-	// for any value of t.
-	//
-	// So we can compute it at any position in the sequence but the last one
-	// is easier as the value of β_T(y) and β-scale_T are constant and
-	// cancel out. This is why we have just keep the α-scale_t values.
+	const double (*alpha)[T][Y] = (void *)grd->alpha;
+	const double  *scale        =         grd->scale;
 	double logz = 0.0;
 	for (size_t y = 0; y < Y; y++)
 		logz += (*alpha)[T - 1][y];
 	logz = log(logz);
 	for (int t = 0; t < T; t++)
 		logz -= log(scale[t]);
-	// Now, we have the first term of -L(θ). We have now to substract the
-	// second one. As we have done for the computation of Ψ, we separate the
-	// sum over K in two sums, one for unigrams and one for bigrams. And, as
-	// here also the weights will be non-nul only for observations present
-	// in the sequence, we sum only over these ones.
 	double lloss = logz;
 	for (int t = 0; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
@@ -2822,7 +2809,26 @@ static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
 		for (size_t n = 0; n < pos->bcnt; n++)
 			lloss -= x[mdl->boff[pos->bobs[n]] + d];
 	}
-	return lloss;
+	grd->lloss = lloss;
+}
+
+/* grd_fldoseq:
+ *   This function compute the gradient and value of the negative log-likelihood
+ *   of the model over a single training sequence.
+ *   The computation is organised to make the best compromise between efficiency
+ *   and readability. Some things can be optimised a bit but the gain is not
+ *   really noticeable so I prefer keep thing like this.
+ *
+ *   This function will not clear the gradient before computation, but instead
+ *   just accumulate the values for the given sequence in it. This allow to
+ *   easily compute the gradient over a set of sequences.
+ */
+static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
+	grd_fldopsi(grd, seq);
+	grd_flfwdbwd(grd, seq);
+	grd_flupgrad(grd, seq, g);
+	grd_logloss(grd, seq);
+	return grd->lloss;
 }
 
 /* grd_spdoseq:
