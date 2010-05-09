@@ -2530,6 +2530,10 @@ typedef struct grd_s grd_t;
 struct grd_s {
 	mdl_t  *mdl;
 	double *psi;
+	double *psiuni;
+	size_t *psiyp;
+	size_t *psiidx;
+	size_t *psioff;
 	double *alpha;
 	double *beta;
 	double *scale;
@@ -2537,6 +2541,10 @@ struct grd_s {
 	double *bnorm;
 };
 
+/* grd_new:
+ *   Allocation memory for gradient computation state. This allocate memory for
+ *   the longest sequence present in the data set.
+ */
 static grd_t *grd_new(mdl_t *mdl) {
 	const size_t Y = mdl->nlbl;
 	const int    T = mdl->train->mlen;
@@ -2548,10 +2556,25 @@ static grd_t *grd_new(mdl_t *mdl) {
 	grd->scale = xmalloc(sizeof(double) * T);
 	grd->unorm = xmalloc(sizeof(double) * T);
 	grd->bnorm = xmalloc(sizeof(double) * T);
+	if (mdl->opt->sparse) {
+		grd->psiuni = xvm_alloc(sizeof(double) * T * Y);
+		grd->psiyp  = xmalloc(sizeof(double) * T * Y * Y);
+		grd->psiidx = xmalloc(sizeof(double) * T * Y);
+		grd->psioff = xmalloc(sizeof(double) * T);
+	}
 	return grd;
 }
 
+/* grd_free:
+ *   Free all memory used by gradient computation.
+ */
 static void grd_free(grd_t *grd) {
+	if (grd->mdl->opt->sparse) {
+		xvm_free(grd->psiuni);
+		free(grd->psiyp);
+		free(grd->psiidx);
+		free(grd->psioff);
+	}
 	xvm_free(grd->psi);
 	free(grd->bnorm);
 	free(grd->unorm);
@@ -2833,16 +2856,16 @@ static double grd_spdoseq(grd_t *grd, const seq_t *seq, double *g) {
 	// bytes of stack (assuming that sizeof(double) is eight bytes) for the
 	// arrays and a bit more for the other variables and temporary created
 	// by the compiler.
-	double psiuni[T][Y]      xvm_align;
-	double psival[T * Y * Y] xvm_align;
-	size_t psiyp [T * Y * Y];
-	size_t psiidx[T][Y];
-	size_t psioff[T];
-	double alpha [T][Y];
-	double beta  [T][Y];
-	double scale [T];
-	double uz    [T];
-	double bz    [T];
+	double (*psiuni)[T][Y] = (void *)grd->psiuni;
+	double  *psival        =         grd->psi;
+	size_t  *psiyp         =         grd->psiyp;
+	size_t (*psiidx)[T][Y] = (void *)grd->psiidx;
+	size_t  *psioff        =         grd->psioff;
+	double (*alpha)[T][Y]  = (void *)grd->alpha;
+	double (*beta )[T][Y]  = (void *)grd->beta;
+	double  *scale         =         grd->scale;
+	double  *uz            =         grd->unorm;
+	double  *bz            =         grd->bnorm;
 	// We first have to compute the Ψ_t(y',y,x) weights defined as
 	//   Ψ_t(y',y,x) = \exp( ∑_k θ_k f_k(y',y,x_t) )
 	// So at position 't' in the sequence, for each couple (y',y) we have
@@ -2885,7 +2908,7 @@ static double grd_spdoseq(grd_t *grd, const seq_t *seq, double *g) {
 				const size_t o = pos->uobs[n];
 				sum += x[mdl->uoff[o] + y];
 			}
-			psiuni[t][y] = sum;
+			(*psiuni)[t][y] = sum;
 		}
 	}
 	size_t off = 0;
@@ -2905,7 +2928,7 @@ static double grd_spdoseq(grd_t *grd, const seq_t *seq, double *g) {
 				psival[off] = sum;
 				nnz++, off++;
 			}
-			psiidx[t][y] = nnz;
+			(*psiidx)[t][y] = nnz;
 		}
 	}
 	xvm_expma((double *)psiuni, (double *)psiuni, 0.0, (size_t)T * Y);
@@ -2927,25 +2950,25 @@ static double grd_spdoseq(grd_t *grd, const seq_t *seq, double *g) {
 	// who need less than |Y|x|Y| multiplication if the matrix is really
 	// sparse, so we will gain here.
 	for (size_t y = 0; y < Y; y++)
-		alpha[0][y] = psiuni[0][y];
-	scale[0] = xvm_unit(alpha[0], alpha[0], Y);
+		(*alpha)[0][y] = (*psiuni)[0][y];
+	scale[0] = xvm_unit((*alpha)[0], (*alpha)[0], Y);
 	for (int t = 1; t < T; t++) {
 		for (size_t y = 0; y < Y; y++)
-			alpha[t][y] = 1.0;
+			(*alpha)[t][y] = 1.0;
 		const size_t off = psioff[t];
-		for (size_t n = 0, y = 0; n < psiidx[t][Y - 1]; ) {
-			while (n >= psiidx[t][y])
+		for (size_t n = 0, y = 0; n < (*psiidx)[t][Y - 1]; ) {
+			while (n >= (*psiidx)[t][y])
 				y++;
-			while (n < psiidx[t][y]) {
+			while (n < (*psiidx)[t][y]) {
 				const size_t yp = psiyp [off + n];
 				const double v  = psival[off + n];
-				alpha[t][y] += alpha[t - 1][yp] * v;
+				(*alpha)[t][y] += (*alpha)[t - 1][yp] * v;
 				n++;
 			}
 		}
 		for (size_t y = 0; y < Y; y++)
-			alpha[t][y] *= psiuni[t][y];
-		scale[t] = xvm_unit(alpha[t], alpha[t], Y);
+			(*alpha)[t][y] *= (*psiuni)[t][y];
+		scale[t] = xvm_unit((*alpha)[t], (*alpha)[t], Y);
 	}
 	// Next come the backward recursion which is very similar
 	//   | β_T(y') = 1
@@ -2961,27 +2984,27 @@ static double grd_spdoseq(grd_t *grd, const seq_t *seq, double *g) {
 	// And here also we reduce the number of multiplication if the matrix is
 	// really sparse.
 	for (size_t yp = 0; yp < Y; yp++)
-		beta[T - 1][yp] = 1.0 / Y;
+		(*beta)[T - 1][yp] = 1.0 / Y;
 	for (int t = T - 1; t > 0; t--) {
 		double sum = 0.0, tmp[Y];
 		for (size_t y = 0; y < Y; y++) {
-			tmp[y] = beta[t][y] * psiuni[t][y];
+			tmp[y] = (*beta)[t][y] * (*psiuni)[t][y];
 			sum += tmp[y];
 		}
 		for (size_t y = 0; y < Y; y++)
-			beta[t - 1][y] = sum;
+			(*beta)[t - 1][y] = sum;
 		const size_t off = psioff[t];
-		for (size_t n = 0, y = 0; n < psiidx[t][Y - 1]; ) {
-			while (n >= psiidx[t][y])
+		for (size_t n = 0, y = 0; n < (*psiidx)[t][Y - 1]; ) {
+			while (n >= (*psiidx)[t][y])
 				y++;
-			while (n < psiidx[t][y]) {
+			while (n < (*psiidx)[t][y]) {
 				const size_t yp = psiyp [off + n];
 				const double v  = psival[off + n];
-				beta[t - 1][yp] += v * tmp[y];
+				(*beta)[t - 1][yp] += v * tmp[y];
 				n++;
 			}
 		}
-		xvm_unit(beta[t - 1], beta[t - 1], Y);
+		xvm_unit((*beta)[t - 1], (*beta)[t - 1], Y);
 	}
 	// Now, we have to compute the nomalization factor. But, due to the
 	// scaling performed during the forward-backward recursions, we have to
@@ -2997,7 +3020,7 @@ static double grd_spdoseq(grd_t *grd, const seq_t *seq, double *g) {
 	for (int t = 0; t < T; t++) {
 		double z = 0.0;
 		for (size_t y = 0; y < Y; y++)
-			z += alpha[t][y] * beta[t][y];
+			z += (*alpha)[t][y] * (*beta)[t][y];
 		uz[t] = 1.0 / z;
 		bz[t] = scale[t] / z;
 	}
@@ -3037,7 +3060,7 @@ static double grd_spdoseq(grd_t *grd, const seq_t *seq, double *g) {
 		const pos_t *pos = &(seq->pos[t]);
 		// Add the expectation over the model distribution
 		for (size_t y = 0; y < Y; y++) {
-			const double e = alpha[t][y] * beta[t][y] * uz[t];
+			const double e = (*alpha)[t][y] * (*beta)[t][y] * uz[t];
 			for (size_t n = 0; n < pos->ucnt; n++) {
 				const size_t o = pos->uobs[n];
 				g[mdl->uoff[o] + y] += e;
@@ -3054,13 +3077,13 @@ static double grd_spdoseq(grd_t *grd, const seq_t *seq, double *g) {
 		double e[Y][Y];
 		for (size_t yp = 0; yp < Y; yp++)
 			for (size_t y = 0; y < Y; y++)
-				e[yp][y] = alpha[t - 1][yp] * beta[t][y]
-				         * psiuni[t][y] * bz[t];
+				e[yp][y] = (*alpha)[t - 1][yp] * (*beta)[t][y]
+				         * (*psiuni)[t][y] * bz[t];
 		const size_t off = psioff[t];
-		for (size_t n = 0, y = 0; n < psiidx[t][Y - 1]; ) {
-			while (n >= psiidx[t][y])
+		for (size_t n = 0, y = 0; n < (*psiidx)[t][Y - 1]; ) {
+			while (n >= (*psiidx)[t][y])
 				y++;
-			while (n < psiidx[t][y]) {
+			while (n < (*psiidx)[t][y]) {
 				const size_t yp = psiyp [off + n];
 				const double v  = psival[off + n];
 				e[yp][y] += e[yp][y] * v;
@@ -3099,7 +3122,7 @@ static double grd_spdoseq(grd_t *grd, const seq_t *seq, double *g) {
 	// cancel out. This is why we have just keep the α-scale_t values.
 	double logz = 0.0;
 	for (size_t y = 0; y < Y; y++)
-		logz += alpha[T - 1][y];
+		logz += (*alpha)[T - 1][y];
 	logz = log(logz);
 	for (int t = 0; t < T; t++)
 		logz -= log(scale[t]);
