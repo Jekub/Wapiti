@@ -2570,20 +2570,15 @@ static void grd_free(grd_t *grd) {
 
 /* grd_fldopsi:
  *  We first have to compute the Ψ_t(y',y,x) weights defined as
- *    Ψ_t(y',y,x) = \exp( ∑_k θ_k f_k(y',y,x_t) )
- *  So at position 't' in the sequence, for each couple (y',y) we have
- *  to sum weights of all features.
- *
- *  Only the observations present at this position will have a non-nul
- *  weight so we can sum only on thoses.
- *
- *  As we use only two kind of features: unigram and bigram, we can
- *  rewrite this as
- *    \exp (  ∑_k μ_k(y, x_t)     f_k(y, x_t)
- *          + ∑_k λ_k(y', y, x_t) f_k(y', y, x_t) )
- *  Where the first sum is over the unigrams features and the second is
- *  over bigrams ones.
- *
+ *      Ψ_t(y',y,x) = \exp( ∑_k θ_k f_k(y',y,x_t) )
+ *  So at position 't' in the sequence, for each couple (y',y) we have to sum
+ *  weights of all features. Only the observations present at this position
+ *  will have a non-nul weight so we can sum only on thoses. As we use only two
+ *  kind of features: unigram and bigram, we can rewrite this as
+ *      \exp (  ∑_k μ_k(y, x_t)     f_k(y, x_t)
+ *            + ∑_k λ_k(y', y, x_t) f_k(y', y, x_t) )
+ *  Where the first sum is over the unigrams features and the second is over
+ *  bigrams ones.
  *  This allow us to compute Ψ efficiently in three steps
  *    1/ we sum the unigrams features weights by looping over actives
  *         unigrams observations. (we compute this sum once and use it
@@ -2599,7 +2594,7 @@ static void grd_fldopsi(grd_t *grd, const seq_t *seq) {
 	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
-	double (*psi  )[T][Y][Y] = (void *)grd->psi;
+	double (*psi)[T][Y][Y] = (void *)grd->psi;
 	for (int t = 0; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
 		for (size_t y = 0; y < Y; y++) {
@@ -2628,6 +2623,69 @@ static void grd_fldopsi(grd_t *grd, const seq_t *seq) {
 	xvm_expma((double *)psi, (double *)psi, 0.0, (size_t)T * Y * Y);
 }
 
+/* grd_flfwdbwd:
+ *  Now, we go to the forward-backward algorithm. As this part of the code rely
+ *  on a lot of recursive sums and products of exponentials, we have to take
+ *  care of numerical problems.
+ *  First the forward recursion
+ *      | α_1(y) = Ψ_1(y,x)
+ *      | α_t(y) = ∑_{y'} α_{t-1}(y') * Ψ_t(y',y,x)
+ *  Next come the backward recursion which is very similar
+ *      | β_T(y') = 1
+ *      | β_t(y') = ∑_y β_{t+1}(y) * Ψ_{t+1}(y',y,x)
+ *  The numerical problems can appear here. To solve them we will scale the α_t
+ *  and β_t vectors so they sum to 1 but we have to keep the scaling coeficient
+ *  as we will need them later.
+ *  Now, we have to compute the nomalization factor. But, due to the scaling
+ *  performed during the forward-backward recursions, we have to compute it at
+ *  each positions and separately for unigrams and bigrams using
+ *      for unigrams: Z_θ(t) = ∑_y α_t(y) β_t(y)
+ *      for bigrams:  Z_θ(t) = ∑_y α_t(y) β_t(y) / α-scale_t
+ *  with α-scale_t the scaling factor used for the α vector at position t
+ *  in the forward recursion.
+ */
+static void grd_flfwdbwd(grd_t *grd, const seq_t *seq) {
+	const mdl_t *mdl = grd->mdl;
+	const size_t  Y = mdl->nlbl;
+	const int     T = seq->len;
+	double (*psi  )[T][Y][Y] = (void *)grd->psi;
+	double (*alpha)[T][Y]    = (void *)grd->alpha;
+	double (*beta )[T][Y]    = (void *)grd->beta;
+	double  *scale           =         grd->scale;
+	double  *unorm           =         grd->unorm;
+	double  *bnorm           =         grd->bnorm;
+	for (size_t y = 0; y < Y; y++)
+		(*alpha)[0][y] = (*psi)[0][0][y];
+	scale[0] = xvm_unit((*alpha)[0], (*alpha)[0], Y);
+	for (int t = 1; t < T; t++) {
+		for (size_t y = 0; y < Y; y++) {
+			double sum = 0.0;
+			for (size_t yp = 0; yp < Y; yp++)
+				sum += (*alpha)[t - 1][yp] * (*psi)[t][yp][y];
+			(*alpha)[t][y] = sum;
+		}
+		scale[t] = xvm_unit((*alpha)[t], (*alpha)[t], Y);
+	}
+	for (size_t yp = 0; yp < Y; yp++)
+		(*beta)[T - 1][yp] = 1.0 / Y;
+	for (int t = T - 1; t > 0; t--) {
+		for (size_t yp = 0; yp < Y; yp++) {
+			double sum = 0.0;
+			for (size_t y = 0; y < Y; y++)
+				sum += (*beta)[t][y] * (*psi)[t][yp][y];
+			(*beta)[t - 1][yp] = sum;
+		}
+		xvm_unit((*beta)[t - 1], (*beta)[t - 1], Y);
+	}
+	for (int t = 0; t < T; t++) {
+		double z = 0.0;
+		for (size_t y = 0; y < Y; y++)
+			z += (*alpha)[t][y] * (*beta)[t][y];
+		unorm[t] = 1.0 / z;
+		bnorm[t] = scale[t] / z;
+	}
+}
+
 /* grd_fldoseq:
  *   This function compute the gradient and value of the negative log-likelihood
  *   of the model over a single training sequence.
@@ -2652,65 +2710,8 @@ static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
 	double *bnorm = grd->bnorm;
 
 	grd_fldopsi(grd, seq);
+	grd_flfwdbwd(grd, seq);
 
-	// Now, we go to the forward-backward algorithm. As this part of the
-	// code rely on a lot of recursive sums and products of exponentials,
-	// we have to take care of numerical problems.
-	//
-	// First the forward recursion
-	//   | α_1(y) = Ψ_1(y,x)
-	//   | α_t(y) = ∑_{y'} α_{t-1}(y') * Ψ_t(y',y,x)
-	//
-	// The numerical problems can appear here. To solve them we will scale
-	// the α_t vectors so they sum to 1 but we have to keep the scaling
-	// coeficient as we will need them later.
-	for (size_t y = 0; y < Y; y++)
-		(*alpha)[0][y] = (*psi)[0][0][y];
-	scale[0] = xvm_unit((*alpha)[0], (*alpha)[0], Y);
-	for (int t = 1; t < T; t++) {
-		for (size_t y = 0; y < Y; y++) {
-			double sum = 0.0;
-			for (size_t yp = 0; yp < Y; yp++)
-				sum += (*alpha)[t - 1][yp] * (*psi)[t][yp][y];
-			(*alpha)[t][y] = sum;
-		}
-		scale[t] = xvm_unit((*alpha)[t], (*alpha)[t], Y);
-	}
-	// Next come the backward recursion which is very similar
-	//   | β_T(y') = 1
-	//   | β_t(y') = ∑_y β_{t+1}(y) * Ψ_{t+1}(y',y,x)
-	//
-	// We also do scaling here as the same problems can happen be we don't
-	// have to keep the scaling factor as we will see later.
-	for (size_t yp = 0; yp < Y; yp++)
-		(*beta)[T - 1][yp] = 1.0 / Y;
-	for (int t = T - 1; t > 0; t--) {
-		for (size_t yp = 0; yp < Y; yp++) {
-			double sum = 0.0;
-			for (size_t y = 0; y < Y; y++)
-				sum += (*beta)[t][y] * (*psi)[t][yp][y];
-			(*beta)[t - 1][yp] = sum;
-		}
-		xvm_unit((*beta)[t - 1], (*beta)[t - 1], Y);
-	}
-	// Now, we have to compute the nomalization factor. But, due to the
-	// scaling performed during the forward-backward recursions, we have to
-	// compute it at each positions and separately for unigrams and bigrams
-	// using
-	//   for unigrams: Z_θ(t) = ∑_y α_t(y) β_t(y)
-	//   for bigrams:  Z_θ(t) = ∑_y α_t(y) β_t(y) / α-scale_t
-	// with α-scale_t the scaling factor used for the α vector at position t
-	// in the forward recursion.
-	//
-	// In order to speedup a bit the computations, we directly compute the
-	// inverse of these values.
-	for (int t = 0; t < T; t++) {
-		double z = 0.0;
-		for (size_t y = 0; y < Y; y++)
-			z += (*alpha)[t][y] * (*beta)[t][y];
-		unorm[t] = 1.0 / z;
-		bnorm[t] = scale[t] / z;
-	}
 	// Now, we have all we need to compute the gradient of the negative log-
 	// likelihood
 	//  ∂-L(θ)
