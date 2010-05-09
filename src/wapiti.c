@@ -2753,6 +2753,91 @@ static void grd_flfwdbwd(grd_t *grd, const seq_t *seq) {
 	}
 }
 
+/* grd_spfwdbwd:
+ *   And the sparse version which is a bit more cmoplicated but follow the same
+ *   general path. First the forward recursion
+ *      | α_1(y) = Ψ_1(y,x)
+ *      | α_t(y) = Ψ_t(y,x) * (   ∑_{y'} α_{t-1}(y')
+ *                              + ∑_{y'} α_{t-1}(y') * (Ψ_t(y',y,x) - 1) )
+ *  The inner part contains two sums, the first one will be 1.0 as we scale the
+ *  α vectors, and the second is a sparse matrix multiplication who need less
+ *  than |Y|x|Y| multiplication if the matrix is really sparse, so we will gain
+ *  here.
+ *  Next come the backward recursion which is very similar
+ *      | β_T(y') = 1
+ *      | β_t(y') = ∑_y v_{t+1}(y) + ∑_y v_{t+1}(y) * (Ψ_{t+1}(y',y,x) - 1)
+ *  with
+ *      v_{t+1}(y) = β_{t+1}(y) * Ψ_{t+1}(y,x)
+ *  And here also we reduce the number of multiplication if the matrix is
+ *  really sparse.
+ */
+static void grd_spfwdbwd(grd_t *grd, const seq_t *seq) {
+	const mdl_t *mdl = grd->mdl;
+	const size_t Y = mdl->nlbl;
+	const int    T = seq->len;
+	const double (*psiuni)[T][Y] = (void *)grd->psiuni;
+	const double  *psival        =         grd->psi;
+	const size_t  *psiyp         =         grd->psiyp;
+	const size_t (*psiidx)[T][Y] = (void *)grd->psiidx;
+	const size_t  *psioff        =         grd->psioff;
+	double (*alpha)[T][Y] = (void *)grd->alpha;
+	double (*beta )[T][Y] = (void *)grd->beta;
+	double  *scale        =         grd->scale;
+	double  *unorm        =         grd->unorm;
+	double  *bnorm        =         grd->bnorm;
+	for (size_t y = 0; y < Y; y++)
+		(*alpha)[0][y] = (*psiuni)[0][y];
+	scale[0] = xvm_unit((*alpha)[0], (*alpha)[0], Y);
+	for (int t = 1; t < T; t++) {
+		for (size_t y = 0; y < Y; y++)
+			(*alpha)[t][y] = 1.0;
+		const size_t off = psioff[t];
+		for (size_t n = 0, y = 0; n < (*psiidx)[t][Y - 1]; ) {
+			while (n >= (*psiidx)[t][y])
+				y++;
+			while (n < (*psiidx)[t][y]) {
+				const size_t yp = psiyp [off + n];
+				const double v  = psival[off + n];
+				(*alpha)[t][y] += (*alpha)[t - 1][yp] * v;
+				n++;
+			}
+		}
+		for (size_t y = 0; y < Y; y++)
+			(*alpha)[t][y] *= (*psiuni)[t][y];
+		scale[t] = xvm_unit((*alpha)[t], (*alpha)[t], Y);
+	}
+	for (size_t yp = 0; yp < Y; yp++)
+		(*beta)[T - 1][yp] = 1.0 / Y;
+	for (int t = T - 1; t > 0; t--) {
+		double sum = 0.0, tmp[Y];
+		for (size_t y = 0; y < Y; y++) {
+			tmp[y] = (*beta)[t][y] * (*psiuni)[t][y];
+			sum += tmp[y];
+		}
+		for (size_t y = 0; y < Y; y++)
+			(*beta)[t - 1][y] = sum;
+		const size_t off = psioff[t];
+		for (size_t n = 0, y = 0; n < (*psiidx)[t][Y - 1]; ) {
+			while (n >= (*psiidx)[t][y])
+				y++;
+			while (n < (*psiidx)[t][y]) {
+				const size_t yp = psiyp [off + n];
+				const double v  = psival[off + n];
+				(*beta)[t - 1][yp] += v * tmp[y];
+				n++;
+			}
+		}
+		xvm_unit((*beta)[t - 1], (*beta)[t - 1], Y);
+	}
+	for (int t = 0; t < T; t++) {
+		double z = 0.0;
+		for (size_t y = 0; y < Y; y++)
+			z += (*alpha)[t][y] * (*beta)[t][y];
+		unorm[t] = 1.0 / z;
+		bnorm[t] = scale[t] / z;
+	}
+}
+
 /* grd_flupgrad:
  *  Now, we have all we need to compute the gradient of the negative log-
  *  likelihood
@@ -2926,98 +3011,8 @@ static double grd_spdoseq(grd_t *grd, const seq_t *seq, double *g) {
 	double  *bz           =         grd->bnorm;
 
 	grd_spdopsi(grd, seq);
+	grd_spfwdbwd(grd, seq);
 
-	// Now, we go to the forward-backward algorithm. The numerical problems
-	// are solved with scaling as explained in the dense gradient
-	// computation.
-	//
-	// First the forward recursion
-	//   | α_1(y) = Ψ_1(y,x)
-	//   | α_t(y) = Ψ_t(y,x) * ∑_{y'} α_{t-1}(y') * Ψ_t(y',y,x)
-	//
-	// To work with the sparse matrix, this can be rewriten as
-	//   | α_1(y) = Ψ_1(y,x)
-	//   | α_t(y) = Ψ_t(y,x) * (   ∑_{y'} α_{t-1}(y')
-	//                           + ∑_{y'} α_{t-1}(y') * (Ψ_t(y',y,x) - 1) )
-	// The inner part contains two sums, the first one will be 1.0 as we
-	// scale the α vectors, and the second is a sparse matrix multiplication
-	// who need less than |Y|x|Y| multiplication if the matrix is really
-	// sparse, so we will gain here.
-	for (size_t y = 0; y < Y; y++)
-		(*alpha)[0][y] = (*psiuni)[0][y];
-	scale[0] = xvm_unit((*alpha)[0], (*alpha)[0], Y);
-	for (int t = 1; t < T; t++) {
-		for (size_t y = 0; y < Y; y++)
-			(*alpha)[t][y] = 1.0;
-		const size_t off = psioff[t];
-		for (size_t n = 0, y = 0; n < (*psiidx)[t][Y - 1]; ) {
-			while (n >= (*psiidx)[t][y])
-				y++;
-			while (n < (*psiidx)[t][y]) {
-				const size_t yp = psiyp [off + n];
-				const double v  = psival[off + n];
-				(*alpha)[t][y] += (*alpha)[t - 1][yp] * v;
-				n++;
-			}
-		}
-		for (size_t y = 0; y < Y; y++)
-			(*alpha)[t][y] *= (*psiuni)[t][y];
-		scale[t] = xvm_unit((*alpha)[t], (*alpha)[t], Y);
-	}
-	// Next come the backward recursion which is very similar
-	//   | β_T(y') = 1
-	//   | β_t(y') = ∑_y β_{t+1}(y) * Ψ_{t+1}(y,x) * Ψ_{t+1}(y',y,x)
-	//
-	// Here also we have to rework a bit the formula to use the sparse
-	// matrix
-	//   | β_T(y') = 1
-	//   | β_t(y') = ∑_y v_{t+1}(y) + ∑_y v_{t+1}(y) * (Ψ_{t+1}(y',y,x) - 1)
-	// with
-	//   v_{t+1}(y) = β_{t+1}(y) * Ψ_{t+1}(y,x)
-	//
-	// And here also we reduce the number of multiplication if the matrix is
-	// really sparse.
-	for (size_t yp = 0; yp < Y; yp++)
-		(*beta)[T - 1][yp] = 1.0 / Y;
-	for (int t = T - 1; t > 0; t--) {
-		double sum = 0.0, tmp[Y];
-		for (size_t y = 0; y < Y; y++) {
-			tmp[y] = (*beta)[t][y] * (*psiuni)[t][y];
-			sum += tmp[y];
-		}
-		for (size_t y = 0; y < Y; y++)
-			(*beta)[t - 1][y] = sum;
-		const size_t off = psioff[t];
-		for (size_t n = 0, y = 0; n < (*psiidx)[t][Y - 1]; ) {
-			while (n >= (*psiidx)[t][y])
-				y++;
-			while (n < (*psiidx)[t][y]) {
-				const size_t yp = psiyp [off + n];
-				const double v  = psival[off + n];
-				(*beta)[t - 1][yp] += v * tmp[y];
-				n++;
-			}
-		}
-		xvm_unit((*beta)[t - 1], (*beta)[t - 1], Y);
-	}
-	// Now, we have to compute the nomalization factor. But, due to the
-	// scaling performed during the forward-backward recursions, we have to
-	// compute it at each positions and separately for unigrams and bigrams
-	// using
-	//   for unigrams: Z_θ(t) = ∑_y α_t(y) β_t(y)
-	//   for bigrams:  Z_θ(t) = ∑_y α_t(y) β_t(y) / α-scale_t
-	// with α-scale_t the scaling factor used for the α vector at position t
-	// in the forward recursion.
-	//
-	// In order to speedup a bit the computations, we directly compute the
-	// inverse of these values.
-	for (int t = 0; t < T; t++) {
-		double z = 0.0;
-		for (size_t y = 0; y < Y; y++)
-			z += (*alpha)[t][y] * (*beta)[t][y];
-		uz[t] = 1.0 / z;
-		bz[t] = scale[t] / z;
-	}
 	// Now, we have all we need to compute the gradient of the negative log-
 	// likelihood
 	//  ∂-L(θ)
