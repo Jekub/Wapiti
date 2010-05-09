@@ -2581,25 +2581,25 @@ static void grd_free(grd_t *grd) {
 }
 
 /* grd_fldopsi:
- *  We first have to compute the Ψ_t(y',y,x) weights defined as
- *      Ψ_t(y',y,x) = \exp( ∑_k θ_k f_k(y',y,x_t) )
- *  So at position 't' in the sequence, for each couple (y',y) we have to sum
- *  weights of all features. Only the observations present at this position
- *  will have a non-nul weight so we can sum only on thoses. As we use only two
- *  kind of features: unigram and bigram, we can rewrite this as
- *      \exp (  ∑_k μ_k(y, x_t)     f_k(y, x_t)
- *            + ∑_k λ_k(y', y, x_t) f_k(y', y, x_t) )
- *  Where the first sum is over the unigrams features and the second is over
- *  bigrams ones.
- *  This allow us to compute Ψ efficiently in three steps
- *    1/ we sum the unigrams features weights by looping over actives
- *         unigrams observations. (we compute this sum once and use it
- *         for each value of y')
- *    2/ we add the bigrams features weights by looping over actives
- *         bigrams observations (we don't have to do this for t=0 since
- *         there is no bigrams here)
- *    3/ we take the component-wise exponential of the resulting matrix
- *         (this can be done efficiently with vector maths)
+ *   We first have to compute the Ψ_t(y',y,x) weights defined as
+ *       Ψ_t(y',y,x) = \exp( ∑_k θ_k f_k(y',y,x_t) )
+ *   So at position 't' in the sequence, for each couple (y',y) we have to sum
+ *   weights of all features. Only the observations present at this position
+ *   will have a non-nul weight so we can sum only on thoses. As we use only two
+ *   kind of features: unigram and bigram, we can rewrite this as
+ *       \exp (  ∑_k μ_k(y, x_t)     f_k(y, x_t)
+ *             + ∑_k λ_k(y', y, x_t) f_k(y', y, x_t) )
+ *   Where the first sum is over the unigrams features and the second is over
+ *   bigrams ones.
+ *   This allow us to compute Ψ efficiently in three steps
+ *     1/ we sum the unigrams features weights by looping over actives
+ *          unigrams observations. (we compute this sum once and use it
+ *          for each value of y')
+ *     2/ we add the bigrams features weights by looping over actives
+ *          bigrams observations (we don't have to do this for t=0 since
+ *          there is no bigrams here)
+ *     3/ we take the component-wise exponential of the resulting matrix
+ *          (this can be done efficiently with vector maths)
  */
 static void grd_fldopsi(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
@@ -2636,25 +2636,25 @@ static void grd_fldopsi(grd_t *grd, const seq_t *seq) {
 }
 
 /* grd_spdopsi:
- *  For the sparse version, we keep the two sum separate so we will have
- *  separate Ψ_t(y,x) and Ψ_t(y',y,x). The first one define a vector for unigram
- *  at each position, and the second one a matrix for bigrams.  This is where
- *  the trick is as we will store Ψ_t(y',y,x) - 1. If the sum is nul, his
- *  exponential will be 1.0 and so we have to store 0.0.  As most of the sum are
- *  expected to be nul the resulting matrix will be very sparse and we will save
- *  computation in the forward-backward.
+ *   For the sparse version, we keep the two sum separate so we will have
+ *   separate Ψ_t(y,x) and Ψ_t(y',y,x). The first one define a vector for
+ *   unigram at each position, and the second one a matrix for bigrams.  This is
+ *   where the trick is as we will store Ψ_t(y',y,x) - 1. If the sum is nul, his
+ *   exponential will be 1.0 and so we have to store 0.0.  As most of the sum
+ *   are expected to be nul the resulting matrix will be very sparse and we will
+ *   save computation in the forward-backward.
  *
- *  So we compute Ψ differently here
- *    1/ we sum the unigrams features weights by looping over actives
- *         unigrams observations and store them in |psiuni|.
- *    2/ we sum the bigrams features weights by looping over actives
- *         bigrams observations (we don't have to do this for t=0 since
- *         there is no bigrams here) and we store the non-nul one in the
- *         sparse matrix.
- *    3/ we take the component-wise exponential of the unigrams vectors,
- *         and the component-wise exponential of the sparse matrix minus
- *         one. (here also this can be done efficiently with vector
- *         maths)
+ *   So we compute Ψ differently here
+ *     1/ we sum the unigrams features weights by looping over actives
+ *          unigrams observations and store them in |psiuni|.
+ *     2/ we sum the bigrams features weights by looping over actives
+ *          bigrams observations (we don't have to do this for t=0 since
+ *          there is no bigrams here) and we store the non-nul one in the
+ *          sparse matrix.
+ *     3/ we take the component-wise exponential of the unigrams vectors,
+ *          and the component-wise exponential of the sparse matrix minus
+ *          one. (here also this can be done efficiently with vector
+ *          maths)
  */
 static void grd_spdopsi(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
@@ -2702,25 +2702,25 @@ static void grd_spdopsi(grd_t *grd, const seq_t *seq) {
 }
 
 /* grd_flfwdbwd:
- *  Now, we go to the forward-backward algorithm. As this part of the code rely
- *  on a lot of recursive sums and products of exponentials, we have to take
- *  care of numerical problems.
- *  First the forward recursion
- *      | α_1(y) = Ψ_1(y,x)
- *      | α_t(y) = ∑_{y'} α_{t-1}(y') * Ψ_t(y',y,x)
- *  Next come the backward recursion which is very similar
- *      | β_T(y') = 1
- *      | β_t(y') = ∑_y β_{t+1}(y) * Ψ_{t+1}(y',y,x)
- *  The numerical problems can appear here. To solve them we will scale the α_t
- *  and β_t vectors so they sum to 1 but we have to keep the scaling coeficient
- *  as we will need them later.
- *  Now, we have to compute the nomalization factor. But, due to the scaling
- *  performed during the forward-backward recursions, we have to compute it at
- *  each positions and separately for unigrams and bigrams using
- *      for unigrams: Z_θ(t) = ∑_y α_t(y) β_t(y)
- *      for bigrams:  Z_θ(t) = ∑_y α_t(y) β_t(y) / α-scale_t
- *  with α-scale_t the scaling factor used for the α vector at position t
- *  in the forward recursion.
+ *   Now, we go to the forward-backward algorithm. As this part of the code rely
+ *   on a lot of recursive sums and products of exponentials, we have to take
+ *   care of numerical problems.
+ *   First the forward recursion
+ *       | α_1(y) = Ψ_1(y,x)
+ *       | α_t(y) = ∑_{y'} α_{t-1}(y') * Ψ_t(y',y,x)
+ *   Next come the backward recursion which is very similar
+ *       | β_T(y') = 1
+ *       | β_t(y') = ∑_y β_{t+1}(y) * Ψ_{t+1}(y',y,x)
+ *   The numerical problems can appear here. To solve them we will scale the α_t
+ *   and β_t vectors so they sum to 1 but we have to keep the scaling coeficient
+ *   as we will need them later.
+ *   Now, we have to compute the nomalization factor. But, due to the scaling
+ *   performed during the forward-backward recursions, we have to compute it at
+ *   each positions and separately for unigrams and bigrams using
+ *       for unigrams: Z_θ(t) = ∑_y α_t(y) β_t(y)
+ *       for bigrams:  Z_θ(t) = ∑_y α_t(y) β_t(y) / α-scale_t
+ *   with α-scale_t the scaling factor used for the α vector at position t
+ *   in the forward recursion.
  */
 static void grd_flfwdbwd(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
@@ -2767,20 +2767,20 @@ static void grd_flfwdbwd(grd_t *grd, const seq_t *seq) {
 /* grd_spfwdbwd:
  *   And the sparse version which is a bit more cmoplicated but follow the same
  *   general path. First the forward recursion
- *      | α_1(y) = Ψ_1(y,x)
- *      | α_t(y) = Ψ_t(y,x) * (   ∑_{y'} α_{t-1}(y')
- *                              + ∑_{y'} α_{t-1}(y') * (Ψ_t(y',y,x) - 1) )
- *  The inner part contains two sums, the first one will be 1.0 as we scale the
- *  α vectors, and the second is a sparse matrix multiplication who need less
- *  than |Y|x|Y| multiplication if the matrix is really sparse, so we will gain
- *  here.
- *  Next come the backward recursion which is very similar
- *      | β_T(y') = 1
- *      | β_t(y') = ∑_y v_{t+1}(y) + ∑_y v_{t+1}(y) * (Ψ_{t+1}(y',y,x) - 1)
- *  with
- *      v_{t+1}(y) = β_{t+1}(y) * Ψ_{t+1}(y,x)
- *  And here also we reduce the number of multiplication if the matrix is
- *  really sparse.
+ *       | α_1(y) = Ψ_1(y,x)
+ *       | α_t(y) = Ψ_t(y,x) * (   ∑_{y'} α_{t-1}(y')
+ *                               + ∑_{y'} α_{t-1}(y') * (Ψ_t(y',y,x) - 1) )
+ *   The inner part contains two sums, the first one will be 1.0 as we scale the
+ *   α vectors, and the second is a sparse matrix multiplication who need less
+ *   than |Y|x|Y| multiplication if the matrix is really sparse, so we will gain
+ *   here.
+ *   Next come the backward recursion which is very similar
+ *       | β_T(y') = 1
+ *       | β_t(y') = ∑_y v_{t+1}(y) + ∑_y v_{t+1}(y) * (Ψ_{t+1}(y',y,x) - 1)
+ *   with
+ *       v_{t+1}(y) = β_{t+1}(y) * Ψ_{t+1}(y,x)
+ *   And here also we reduce the number of multiplication if the matrix is
+ *   really sparse.
  */
 static void grd_spfwdbwd(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
@@ -2850,30 +2850,30 @@ static void grd_spfwdbwd(grd_t *grd, const seq_t *seq) {
 }
 
 /* grd_flupgrad:
- *  Now, we have all we need to compute the gradient of the negative log-
- *  likelihood
- *      ∂-L(θ)
- *      ------ =    ∑_t ∑_{(y',y)} f_k(y',y,x_t) p_θ(y_{t-1}=y',y_t=y|x)
- *       ∂θ_k     - ∑_t f_k(y_{t-1},y_t,x_t)
+ *   Now, we have all we need to compute the gradient of the negative log-
+ *   likelihood
+ *       ∂-L(θ)
+ *       ------ =    ∑_t ∑_{(y',y)} f_k(y',y,x_t) p_θ(y_{t-1}=y',y_t=y|x)
+ *        ∂θ_k     - ∑_t f_k(y_{t-1},y_t,x_t)
  *
- *  The first term is the expectation of f_k under the model distribution and
- *  the second one is the expectation of f_k under the empirical distribution.
+ *   The first term is the expectation of f_k under the model distribution and
+ *   the second one is the expectation of f_k under the empirical distribution.
  *
- *  The second is very simple to compute as we just have to sum over the actives
- *  observations in the sequence.  The first one is more tricky as it involve
- *  computing the probability p_θ. This is where we use all the previous
- *  computations. Again we separate the computations for unigrams and bigrams
- *  here.
+ *   The second is very simple to compute as we just have to sum over the
+ *   actives observations in the sequence. The first one is more tricky as it
+ *   involve computing the probability p_θ. This is where we use all the
+ *   previous computations. Again we separate the computations for unigrams and
+ *   bigrams here.
  *
- *  These probabilities are given by
- *      p_θ(y_t=y|x)            = α_t(y)β_t(y) / Z_θ
- *      p_θ(y_{t-1}=y',y_t=y|x) = α_{t-1}(y') Ψ_t(y',y,x) β_t(y) / Z_θ
- *  but we have to remember that, since we have scaled the α and β, we have to
- *  use the local normalization constants.
+ *   These probabilities are given by
+ *       p_θ(y_t=y|x)            = α_t(y)β_t(y) / Z_θ
+ *       p_θ(y_{t-1}=y',y_t=y|x) = α_{t-1}(y') Ψ_t(y',y,x) β_t(y) / Z_θ
+ *   but we have to remember that, since we have scaled the α and β, we have to
+ *   use the local normalization constants.
  *
- *  We must also take care of not clearing previous value of the gradient vector
- *  but just adding the contribution of this sequence. This allow to compute it
- *  easily the gradient over more than one sequence.
+ *   We must also take care of not clearing previous value of the gradient
+ *   vector but just adding the contribution of this sequence. This allow to
+ *   compute it easily the gradient over more than one sequence.
  */
 static void grd_flupgrad(grd_t *grd, const seq_t *seq, double *g) {
 	const mdl_t *mdl = grd->mdl;
@@ -2922,12 +2922,12 @@ static void grd_flupgrad(grd_t *grd, const seq_t *seq, double *g) {
 }
 
 /* grd_flupgrad:
- *  The sparse matrix make things a bit more complicated here as we cannot
- *  directly multiply with the original Ψ_t(y',y,x) because we have split it two
- *  components and the second one is sparse, so we have to make a quite complex
- *  workaround to fix that. We have to explicitly build the expectation matrix.
- *  We first fill it with the unigram component and next multiply it with the
- *  bigram one.
+ *   The sparse matrix make things a bit more complicated here as we cannot
+ *   directly multiply with the original Ψ_t(y',y,x) because we have split it
+ *   two components and the second one is sparse, so we have to make a quite
+ *   complex workaround to fix that. We have to explicitly build the expectation
+ *   matrix. We first fill it with the unigram component and next multiply it
+ *   with the bigram one.
  */
 static void grd_spupgrad(grd_t *grd, const seq_t *seq, double *g) {
 	const mdl_t *mdl = grd->mdl;
@@ -2995,26 +2995,26 @@ static void grd_spupgrad(grd_t *grd, const seq_t *seq, double *g) {
 }
 
 /* grd_logloss:
- *  And the final touch, the computation of the negative log-likelihood
- *      -L(θ) = log(Z_θ) - ∑_t ∑_k θ_k f_k(y_{t-1}, y_t, x_t)
+ *   And the final touch, the computation of the negative log-likelihood
+ *       -L(θ) = log(Z_θ) - ∑_t ∑_k θ_k f_k(y_{t-1}, y_t, x_t)
  *
- *  The numerical problems show again here as we cannot compute the Z_θ directly
- *  for the same reason we have done scaling. Fortunately, there is a way to
- *  directly compute his logarithm
- *      log(Z_θ) = log( ∑_y α_t(y) β_t(y) )
- *               - ∑_{i=1..t} log(α-scale_i)
- *               - ∑_{i=t..T} log(β-scale_i)
- *  for any value of t.
+ *   The numerical problems show again here as we cannot compute the Z_θ
+ *   directly for the same reason we have done scaling. Fortunately, there is a
+ *   way to directly compute his logarithm
+ *       log(Z_θ) = log( ∑_y α_t(y) β_t(y) )
+ *                - ∑_{i=1..t} log(α-scale_i)
+ *                - ∑_{i=t..T} log(β-scale_i)
+ *   for any value of t.
  * 
- *  So we can compute it at any position in the sequence but the last one is
- *  easier as the value of β_T(y) and β-scale_T are constant and cancel out.
- *  This is why we have just keep the α-scale_t values.
+ *   So we can compute it at any position in the sequence but the last one is
+ *   easier as the value of β_T(y) and β-scale_T are constant and cancel out.
+ *   This is why we have just keep the α-scale_t values.
  *
- *  Now, we have the first term of -L(θ). We have now to substract the second
- *  one. As we have done for the computation of Ψ, we separate the sum over K in
- *  two sums, one for unigrams and one for bigrams. And, as here also the
- *  weights will be non-nul only for observations present in the sequence, we
- *  sum only over these ones.
+ *   Now, we have the first term of -L(θ). We have now to substract the second
+ *   one. As we have done for the computation of Ψ, we separate the sum over K
+ *   in two sums, one for unigrams and one for bigrams. And, as here also the
+ *   weights will be non-nul only for observations present in the sequence, we
+ *   sum only over these ones.
  */
 static void grd_logloss(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
