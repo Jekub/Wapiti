@@ -548,6 +548,8 @@ static void xvm_axpy(double r[], double a, const double x[], const double y[],
  */
 #ifndef __SSE2__
 #define xvm_align
+#define xvm_alloc xmalloc
+#define xvm_free  free
 static void xvm_expma(double r[], const double x[], double a, size_t N) {
 	for (size_t n = 0; n < N; n++)
 		r[n] = exp(x[n]) - a;
@@ -555,6 +557,13 @@ static void xvm_expma(double r[], const double x[], double a, size_t N) {
 #else
 #include <emmintrin.h>
 #define xvm_align __attribute__((aligned(16)))
+#define xvm_free _mm_free
+static void *xvm_alloc(size_t sz) {
+	void *ptr = _mm_malloc(sz, 16);
+	if (ptr == NULL)
+		fatal("out of memory");
+	return ptr;
+}
 #define xvm_vconst(v) (_mm_castsi128_pd(_mm_set1_epi64x((v))))
 static void xvm_expma(double r[], const double x[], double a, size_t N) {
 	assert(r != NULL && ((size_t)r % 16) == 0);
@@ -2520,15 +2529,35 @@ static bool uit_progress(mdl_t *mdl, int it, double obj) {
 typedef struct grd_s grd_t;
 struct grd_s {
 	mdl_t  *mdl;
+	double *psi;
+	double *alpha;
+	double *beta;
+	double *scale;
+	double *unorm;
+	double *bnorm;
 };
 
 static grd_t *grd_new(mdl_t *mdl) {
+	const size_t Y = mdl->nlbl;
+	const int    T = mdl->train->mlen;
 	grd_t *grd = xmalloc(sizeof(grd_t));
-	grd->mdl = mdl;
+	grd->mdl   = mdl;
+	grd->psi   = xvm_alloc(sizeof(double) * T * Y * Y);
+	grd->alpha = xmalloc(sizeof(double) * T * Y);
+	grd->beta  = xmalloc(sizeof(double) * T * Y);
+	grd->scale = xmalloc(sizeof(double) * T);
+	grd->unorm = xmalloc(sizeof(double) * T);
+	grd->bnorm = xmalloc(sizeof(double) * T);
 	return grd;
 }
 
 static void grd_free(grd_t *grd) {
+	xvm_free(grd->psi);
+	free(grd->bnorm);
+	free(grd->unorm);
+	free(grd->scale);
+	free(grd->beta);
+	free(grd->alpha);
 	free(grd);
 }
 
@@ -2561,12 +2590,12 @@ static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
 	// bytes of stack (assuming that sizeof(double) is eight bytes) for the
 	// arrays and a bit more for the other variables and temporary created
 	// by the compiler.
-	double psi  [T][Y][Y] xvm_align;
-	double alpha[T][Y];
-	double beta [T][Y];
-	double scale[T];
-	double uz   [T];
-	double bz   [T];
+	double (*psi  )[T][Y][Y] = (void *)grd->psi;
+	double (*alpha)[T][Y]    = (void *)grd->alpha;
+	double (*beta )[T][Y]    = (void *)grd->beta;
+	double *scale = grd->scale;
+	double *unorm = grd->unorm;
+	double *bnorm = grd->bnorm;
 	// We first have to compute the Ψ_t(y',y,x) weights defined as
 	//   Ψ_t(y',y,x) = \exp( ∑_k θ_k f_k(y',y,x_t) )
 	// So at position 't' in the sequence, for each couple (y',y) we have
@@ -2600,7 +2629,7 @@ static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
 				sum += x[mdl->uoff[o] + y];
 			}
 			for (size_t yp = 0; yp < Y; yp++)
-				psi[t][yp][y] = sum;
+				(*psi)[t][yp][y] = sum;
 		}
 	}
 	for (int t = 1; t < T; t++) {
@@ -2612,7 +2641,7 @@ static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
 					const size_t o = pos->bobs[n];
 					sum += x[mdl->boff[o] + d];
 				}
-				psi[t][yp][y] += sum;
+				(*psi)[t][yp][y] += sum;
 			}
 		}
 	}
@@ -2629,16 +2658,16 @@ static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
 	// the α_t vectors so they sum to 1 but we have to keep the scaling
 	// coeficient as we will need them later.
 	for (size_t y = 0; y < Y; y++)
-		alpha[0][y] = psi[0][0][y];
-	scale[0] = xvm_unit(alpha[0], alpha[0], Y);
+		(*alpha)[0][y] = (*psi)[0][0][y];
+	scale[0] = xvm_unit((*alpha)[0], (*alpha)[0], Y);
 	for (int t = 1; t < T; t++) {
 		for (size_t y = 0; y < Y; y++) {
 			double sum = 0.0;
 			for (size_t yp = 0; yp < Y; yp++)
-				sum += alpha[t - 1][yp] * psi[t][yp][y];
-			alpha[t][y] = sum;
+				sum += (*alpha)[t - 1][yp] * (*psi)[t][yp][y];
+			(*alpha)[t][y] = sum;
 		}
-		scale[t] = xvm_unit(alpha[t], alpha[t], Y);
+		scale[t] = xvm_unit((*alpha)[t], (*alpha)[t], Y);
 	}
 	// Next come the backward recursion which is very similar
 	//   | β_T(y') = 1
@@ -2647,15 +2676,15 @@ static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
 	// We also do scaling here as the same problems can happen be we don't
 	// have to keep the scaling factor as we will see later.
 	for (size_t yp = 0; yp < Y; yp++)
-		beta[T - 1][yp] = 1.0 / Y;
+		(*beta)[T - 1][yp] = 1.0 / Y;
 	for (int t = T - 1; t > 0; t--) {
 		for (size_t yp = 0; yp < Y; yp++) {
 			double sum = 0.0;
 			for (size_t y = 0; y < Y; y++)
-				sum += beta[t][y] * psi[t][yp][y];
-			beta[t - 1][yp] = sum;
+				sum += (*beta)[t][y] * (*psi)[t][yp][y];
+			(*beta)[t - 1][yp] = sum;
 		}
-		xvm_unit(beta[t - 1], beta[t - 1], Y);
+		xvm_unit((*beta)[t - 1], (*beta)[t - 1], Y);
 	}
 	// Now, we have to compute the nomalization factor. But, due to the
 	// scaling performed during the forward-backward recursions, we have to
@@ -2671,9 +2700,9 @@ static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
 	for (int t = 0; t < T; t++) {
 		double z = 0.0;
 		for (size_t y = 0; y < Y; y++)
-			z += alpha[t][y] * beta[t][y];
-		uz[t] = 1.0 / z;
-		bz[t] = scale[t] / z;
+			z += (*alpha)[t][y] * (*beta)[t][y];
+		unorm[t] = 1.0 / z;
+		bnorm[t] = scale[t] / z;
 	}
 	// Now, we have all we need to compute the gradient of the negative log-
 	// likelihood
@@ -2704,7 +2733,7 @@ static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
 		const pos_t *pos = &(seq->pos[t]);
 		// Add the expectation over the model distribution
 		for (size_t y = 0; y < Y; y++) {
-			const double e = alpha[t][y] * beta[t][y] * uz[t];
+			double e = (*alpha)[t][y] * (*beta)[t][y] * unorm[t];
 			for (size_t n = 0; n < pos->ucnt; n++) {
 				const size_t o = pos->uobs[n];
 				g[mdl->uoff[o] + y] += e;
@@ -2720,8 +2749,8 @@ static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
 		// Add the expectation over the model distribution
 		for (size_t yp = 0, d = 0; yp < Y; yp++) {
 			for (size_t y = 0; y < Y; y++, d++) {
-				const double e = alpha[t - 1][yp] * beta[t][y]
-				               * psi[t][yp][y] * bz[t];
+				double e = (*alpha)[t - 1][yp] * (*beta)[t][y]
+				         * (*psi)[t][yp][y] * bnorm[t];
 				for (size_t n = 0; n < pos->bcnt; n++) {
 					const size_t o = pos->bobs[n];
 					g[mdl->boff[o] + d] += e;
@@ -2751,7 +2780,7 @@ static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
 	// cancel out. This is why we have just keep the α-scale_t values.
 	double logz = 0.0;
 	for (size_t y = 0; y < Y; y++)
-		logz += alpha[T - 1][y];
+		logz += (*alpha)[T - 1][y];
 	logz = log(logz);
 	for (int t = 0; t < T; t++)
 		logz -= log(scale[t]);
