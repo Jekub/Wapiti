@@ -2910,6 +2910,79 @@ static void grd_flupgrad(grd_t *grd, const seq_t *seq, double *g) {
 	}
 }
 
+/* grd_flupgrad:
+ *  The sparse matrix make things a bit more complicated here as we cannot
+ *  directly multiply with the original Ψ_t(y',y,x) because we have split it two
+ *  components and the second one is sparse, so we have to make a quite complex
+ *  workaround to fix that. We have to explicitly build the expectation matrix.
+ *  We first fill it with the unigram component and next multiply it with the
+ *  bigram one.
+ */
+static void grd_spupgrad(grd_t *grd, const seq_t *seq, double *g) {
+	const mdl_t *mdl = grd->mdl;
+	const size_t  Y = mdl->nlbl;
+	const int     T = seq->len;
+	const double (*psiuni)[T][Y] = (void *)grd->psiuni;
+	const double  *psival        =         grd->psi;
+	const size_t  *psiyp         =         grd->psiyp;
+	const size_t (*psiidx)[T][Y] = (void *)grd->psiidx;
+	const size_t  *psioff        =         grd->psioff;
+	const double (*alpha)[T][Y]  = (void *)grd->alpha;
+	const double (*beta )[T][Y]  = (void *)grd->beta;
+	const double  *unorm         =         grd->unorm;
+	const double  *bnorm         =         grd->bnorm;
+	for (int t = 0; t < T; t++) {
+		const pos_t *pos = &(seq->pos[t]);
+		// Add the expectation over the model distribution
+		for (size_t y = 0; y < Y; y++) {
+			double e = (*alpha)[t][y] * (*beta)[t][y] * unorm[t];
+			for (size_t n = 0; n < pos->ucnt; n++) {
+				const size_t o = pos->uobs[n];
+				g[mdl->uoff[o] + y] += e;
+			}
+		}
+		// And substract the expectation over the empirical one.
+		const size_t y = seq->pos[t].lbl;
+		for (size_t n = 0; n < pos->ucnt; n++)
+			g[mdl->uoff[pos->uobs[n]] + y] -= 1.0;
+	}
+	for (int t = 1; t < T; t++) {
+		const pos_t *pos = &(seq->pos[t]);
+		// We build the expectation matrix
+		double e[Y][Y];
+		for (size_t yp = 0; yp < Y; yp++)
+			for (size_t y = 0; y < Y; y++)
+				e[yp][y] = (*alpha)[t - 1][yp] * (*beta)[t][y]
+				         * (*psiuni)[t][y] * bnorm[t];
+		const size_t off = psioff[t];
+		for (size_t n = 0, y = 0; n < (*psiidx)[t][Y - 1]; ) {
+			while (n >= (*psiidx)[t][y])
+				y++;
+			while (n < (*psiidx)[t][y]) {
+				const size_t yp = psiyp [off + n];
+				const double v  = psival[off + n];
+				e[yp][y] += e[yp][y] * v;
+				n++;
+			}
+		}
+		// Add the expectation over the model distribution
+		for (size_t yp = 0, d = 0; yp < Y; yp++) {
+			for (size_t y = 0; y < Y; y++, d++) {
+				for (size_t n = 0; n < pos->bcnt; n++) {
+					const size_t o = pos->bobs[n];
+					g[mdl->boff[o] + d] += e[yp][y];
+				}
+			}
+		}
+		// And substract the expectation over the empirical one.
+		const size_t yp = seq->pos[t - 1].lbl;
+		const size_t y  = seq->pos[t    ].lbl;
+		const size_t d  = yp * Y + y;
+		for (size_t n = 0; n < pos->bcnt; n++)
+			g[mdl->boff[pos->bobs[n]] + d] -= 1.0;
+	}
+}
+
 /* grd_logloss:
  *  And the final touch, the computation of the negative log-likelihood
  *      -L(θ) = log(Z_θ) - ∑_t ∑_k θ_k f_k(y_{t-1}, y_t, x_t)
@@ -2995,147 +3068,11 @@ static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
  *   apply to the other.
  */
 static double grd_spdoseq(grd_t *grd, const seq_t *seq, double *g) {
-	const mdl_t *mdl = grd->mdl;
-	const double *x = mdl->theta;
-	const size_t  Y = mdl->nlbl;
-	const int     T = seq->len;
-	const double (*psiuni)[T][Y] = (void *)grd->psiuni;
-	const double  *psival        =         grd->psi;
-	const size_t  *psiyp         =         grd->psiyp;
-	const size_t (*psiidx)[T][Y] = (void *)grd->psiidx;
-	const size_t  *psioff        =         grd->psioff;
-	double (*alpha)[T][Y] = (void *)grd->alpha;
-	double (*beta )[T][Y] = (void *)grd->beta;
-	double  *scale        =         grd->scale;
-	double  *uz           =         grd->unorm;
-	double  *bz           =         grd->bnorm;
-
 	grd_spdopsi(grd, seq);
 	grd_spfwdbwd(grd, seq);
-
-	// Now, we have all we need to compute the gradient of the negative log-
-	// likelihood
-	//  ∂-L(θ)
-	//  ------ =    ∑_t ∑_{(y',y)} f_k(y',y,x_t) p_θ(y_{t-1}=y',y_t=y|x)
-	//   ∂θ_k     - ∑_t f_k(y_{t-1},y_t,x_t)
-	//
-	// The first term is the expectation of f_k under the model distribution
-	// and the second one is the expectation of f_k under the empirical
-	// distribution.
-	//
-	// The second is very simple to compute as we just have to sum over the
-	// actives observations in the sequence.
-	// The first one is more tricky as it involve computing the probability
-	// p_θ. This is where we use all the previous computations. Again we
-	// separate the computations for unigrams and bigrams here.
-	//
-	// These probabilities are given by
-	//   p_θ(y_t=y|x)            = α_t(y)β_t(y) / Z_θ
-	//   p_θ(y_{t-1}=y',y_t=y|x) = α_{t-1}(y') Ψ_t(y',y,x_t) β_t(y) / Z_θ
-	// but we have to remember that, since we have scaled the α and β, we
-	// have to use the local normalization constants.
-	//
-	// The sparse matrix make things a bit more complicated here as we
-	// cannot directly multiply with the original Ψ_t(y',y,x) because we
-	// have split it two components and the second one is sparse, so we
-	// have to make a quite complex workaround to fix that. We have to
-	// explicitly build the expectation matrix. We first fill it with the
-	// unigram component and next multiply it with the bigram one.
-	//
-	// We must also take care of not clearing previous value of the gradient
-	// vector but just adding the contribution of this sequence. This allow
-	// to compute it easily the gradient over more than one sequence.
-	for (int t = 0; t < T; t++) {
-		const pos_t *pos = &(seq->pos[t]);
-		// Add the expectation over the model distribution
-		for (size_t y = 0; y < Y; y++) {
-			const double e = (*alpha)[t][y] * (*beta)[t][y] * uz[t];
-			for (size_t n = 0; n < pos->ucnt; n++) {
-				const size_t o = pos->uobs[n];
-				g[mdl->uoff[o] + y] += e;
-			}
-		}
-		// And substract the expectation over the empirical one.
-		const size_t y = seq->pos[t].lbl;
-		for (size_t n = 0; n < pos->ucnt; n++)
-			g[mdl->uoff[pos->uobs[n]] + y] -= 1.0;
-	}
-	for (int t = 1; t < T; t++) {
-		const pos_t *pos = &(seq->pos[t]);
-		// We build the expectation matrix
-		double e[Y][Y];
-		for (size_t yp = 0; yp < Y; yp++)
-			for (size_t y = 0; y < Y; y++)
-				e[yp][y] = (*alpha)[t - 1][yp] * (*beta)[t][y]
-				         * (*psiuni)[t][y] * bz[t];
-		const size_t off = psioff[t];
-		for (size_t n = 0, y = 0; n < (*psiidx)[t][Y - 1]; ) {
-			while (n >= (*psiidx)[t][y])
-				y++;
-			while (n < (*psiidx)[t][y]) {
-				const size_t yp = psiyp [off + n];
-				const double v  = psival[off + n];
-				e[yp][y] += e[yp][y] * v;
-				n++;
-			}
-		}
-		// Add the expectation over the model distribution
-		for (size_t yp = 0, d = 0; yp < Y; yp++) {
-			for (size_t y = 0; y < Y; y++, d++) {
-				for (size_t n = 0; n < pos->bcnt; n++) {
-					const size_t o = pos->bobs[n];
-					g[mdl->boff[o] + d] += e[yp][y];
-				}
-			}
-		}
-		// And substract the expectation over the empirical one.
-		const size_t yp = seq->pos[t - 1].lbl;
-		const size_t y  = seq->pos[t    ].lbl;
-		const size_t d  = yp * Y + y;
-		for (size_t n = 0; n < pos->bcnt; n++)
-			g[mdl->boff[pos->bobs[n]] + d] -= 1.0;
-	}
-	// And the final touch, the computation of the negative log-likelihood
-	//   -L(θ) = log(Z_θ) - ∑_t ∑_k θ_k f_k(y_{t-1}, y_t, x_t)
-	//
-	// The numerical problems show again here as we cannot compute the Z_θ
-	// directly for the same reason we have done scaling. Fortunately, there
-	// is a way to directly compute his logarithm
-	//   log(Z_θ) = log( ∑_y α_t(y) β_t(y) )
-	//            - ∑_{i=1..t} log(α-scale_i)
-	//            - ∑_{i=t..T} log(β-scale_i)
-	// for any value of t.
-	//
-	// So we can compute it at any position in the sequence but the last one
-	// is easier as the value of β_T(y) and β-scale_T are constant and
-	// cancel out. This is why we have just keep the α-scale_t values.
-	double logz = 0.0;
-	for (size_t y = 0; y < Y; y++)
-		logz += (*alpha)[T - 1][y];
-	logz = log(logz);
-	for (int t = 0; t < T; t++)
-		logz -= log(scale[t]);
-	// Now, we have the first term of -L(θ). We have now to substract the
-	// second one. As we have done for the computation of Ψ, we separate the
-	// sum over K in two sums, one for unigrams and one for bigrams. And, as
-	// here also the weights will be non-nul only for observations present
-	// in the sequence, we sum only over these ones.
-	double lloss = logz;
-	for (int t = 0; t < T; t++) {
-		const pos_t *pos = &(seq->pos[t]);
-		const size_t y   = seq->pos[t].lbl;
-		for (size_t n = 0; n < pos->ucnt; n++)
-			lloss -= x[mdl->uoff[pos->uobs[n]] + y];
-	}
-	for (int t = 1; t < T; t++) {
-		const pos_t *pos = &(seq->pos[t]);
-		const size_t yp  = seq->pos[t - 1].lbl;
-		const size_t y   = seq->pos[t    ].lbl;
-		const size_t d   = yp * Y + y;
-		for (size_t n = 0; n < pos->bcnt; n++)
-			lloss -= x[mdl->boff[pos->bobs[n]] + d];
-	}
-	return lloss;
+	grd_spupgrad(grd, seq, g);
+	grd_logloss(grd, seq);
+	return grd->lloss;
 }
 
 /* grd_doseq:
