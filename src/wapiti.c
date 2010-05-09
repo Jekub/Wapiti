@@ -2568,52 +2568,38 @@ static void grd_free(grd_t *grd) {
 	free(grd);
 }
 
-/* grd_fldoseq:
- *   This function compute the gradient and value of the negative log-likelihood
- *   of the model over a single training sequence.
- *   The computation is organised to make the best compromise between efficiency
- *   and readability. Some things can be optimised a bit but the gain is not
- *   really noticeable so I prefer keep thing like this.
+/* grd_fldopsi:
+ *  We first have to compute the Ψ_t(y',y,x) weights defined as
+ *    Ψ_t(y',y,x) = \exp( ∑_k θ_k f_k(y',y,x_t) )
+ *  So at position 't' in the sequence, for each couple (y',y) we have
+ *  to sum weights of all features.
  *
- *   This function will not clear the gradient before computation, but instead
- *   just accumulate the values for the given sequence in it. This allow to
- *   easily compute the gradient over a set of sequences.
+ *  Only the observations present at this position will have a non-nul
+ *  weight so we can sum only on thoses.
+ *
+ *  As we use only two kind of features: unigram and bigram, we can
+ *  rewrite this as
+ *    \exp (  ∑_k μ_k(y, x_t)     f_k(y, x_t)
+ *          + ∑_k λ_k(y', y, x_t) f_k(y', y, x_t) )
+ *  Where the first sum is over the unigrams features and the second is
+ *  over bigrams ones.
+ *
+ *  This allow us to compute Ψ efficiently in three steps
+ *    1/ we sum the unigrams features weights by looping over actives
+ *         unigrams observations. (we compute this sum once and use it
+ *         for each value of y')
+ *    2/ we add the bigrams features weights by looping over actives
+ *         bigrams observations (we don't have to do this for t=0 since
+ *         there is no bigrams here)
+ *    3/ we take the component-wise exponential of the resulting matrix
+ *         (this can be done efficiently with vector maths)
  */
-static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
+static void grd_fldopsi(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
 	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
 	double (*psi  )[T][Y][Y] = (void *)grd->psi;
-	double (*alpha)[T][Y]    = (void *)grd->alpha;
-	double (*beta )[T][Y]    = (void *)grd->beta;
-	double *scale = grd->scale;
-	double *unorm = grd->unorm;
-	double *bnorm = grd->bnorm;
-	// We first have to compute the Ψ_t(y',y,x) weights defined as
-	//   Ψ_t(y',y,x) = \exp( ∑_k θ_k f_k(y',y,x_t) )
-	// So at position 't' in the sequence, for each couple (y',y) we have
-	// to sum weights of all features.
-	//
-	// Only the observations present at this position will have a non-nul
-	// weight so we can sum only on thoses.
-	//
-	// As we use only two kind of features: unigram and bigram, we can
-	// rewrite this as
-	//   \exp (  ∑_k μ_k(y, x_t)     f_k(y, x_t)
-	//         + ∑_k λ_k(y', y, x_t) f_k(y', y, x_t) )
-	// Where the first sum is over the unigrams features and the second is
-	// over bigrams ones.
-	//
-	// This allow us to compute Ψ efficiently in three steps
-	//   1/ we sum the unigrams features weights by looping over actives
-	//        unigrams observations. (we compute this sum once and use it
-	//        for each value of y')
-	//   2/ we add the bigrams features weights by looping over actives
-	//        bigrams observations (we don't have to do this for t=0 since
-	//        there is no bigrams here)
-	//   3/ we take the component-wise exponential of the resulting matrix
-	//        (this can be done efficiently with vector maths)
 	for (int t = 0; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
 		for (size_t y = 0; y < Y; y++) {
@@ -2640,6 +2626,33 @@ static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
 		}
 	}
 	xvm_expma((double *)psi, (double *)psi, 0.0, (size_t)T * Y * Y);
+}
+
+/* grd_fldoseq:
+ *   This function compute the gradient and value of the negative log-likelihood
+ *   of the model over a single training sequence.
+ *   The computation is organised to make the best compromise between efficiency
+ *   and readability. Some things can be optimised a bit but the gain is not
+ *   really noticeable so I prefer keep thing like this.
+ *
+ *   This function will not clear the gradient before computation, but instead
+ *   just accumulate the values for the given sequence in it. This allow to
+ *   easily compute the gradient over a set of sequences.
+ */
+static double grd_fldoseq(grd_t *grd, const seq_t *seq, double *g) {
+	const mdl_t *mdl = grd->mdl;
+	const double *x = mdl->theta;
+	const size_t  Y = mdl->nlbl;
+	const int     T = seq->len;
+	double (*psi  )[T][Y][Y] = (void *)grd->psi;
+	double (*alpha)[T][Y]    = (void *)grd->alpha;
+	double (*beta )[T][Y]    = (void *)grd->beta;
+	double *scale = grd->scale;
+	double *unorm = grd->unorm;
+	double *bnorm = grd->bnorm;
+
+	grd_fldopsi(grd, seq);
+
 	// Now, we go to the forward-backward algorithm. As this part of the
 	// code rely on a lot of recursive sums and products of exponentials,
 	// we have to take care of numerical problems.
