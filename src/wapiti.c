@@ -2535,6 +2535,8 @@ struct grd_s {
 	double *unorm;
 	double *bnorm;
 	double  lloss;
+	int     first;
+	int     last;
 };
 
 /* grd_new:
@@ -2735,7 +2737,7 @@ static void grd_flfwdbwd(grd_t *grd, const seq_t *seq) {
 	for (size_t y = 0; y < Y; y++)
 		(*alpha)[0][y] = (*psi)[0][0][y];
 	scale[0] = xvm_unit((*alpha)[0], (*alpha)[0], Y);
-	for (int t = 1; t < T; t++) {
+	for (int t = 1; t < grd->last + 1; t++) {
 		for (size_t y = 0; y < Y; y++) {
 			double sum = 0.0;
 			for (size_t yp = 0; yp < Y; yp++)
@@ -2746,7 +2748,7 @@ static void grd_flfwdbwd(grd_t *grd, const seq_t *seq) {
 	}
 	for (size_t yp = 0; yp < Y; yp++)
 		(*beta)[T - 1][yp] = 1.0 / Y;
-	for (int t = T - 1; t > 0; t--) {
+	for (int t = T - 1; t > grd->first; t--) {
 		for (size_t yp = 0; yp < Y; yp++) {
 			double sum = 0.0;
 			for (size_t y = 0; y < Y; y++)
@@ -2799,7 +2801,7 @@ static void grd_spfwdbwd(grd_t *grd, const seq_t *seq) {
 	for (size_t y = 0; y < Y; y++)
 		(*alpha)[0][y] = (*psiuni)[0][y];
 	scale[0] = xvm_unit((*alpha)[0], (*alpha)[0], Y);
-	for (int t = 1; t < T; t++) {
+	for (int t = 1; t < grd->last + 1; t++) {
 		for (size_t y = 0; y < Y; y++)
 			(*alpha)[t][y] = 1.0;
 		const size_t off = psioff[t];
@@ -2819,7 +2821,7 @@ static void grd_spfwdbwd(grd_t *grd, const seq_t *seq) {
 	}
 	for (size_t yp = 0; yp < Y; yp++)
 		(*beta)[T - 1][yp] = 1.0 / Y;
-	for (int t = T - 1; t > 0; t--) {
+	for (int t = T - 1; t > grd->first; t--) {
 		double sum = 0.0, tmp[Y];
 		for (size_t y = 0; y < Y; y++) {
 			tmp[y] = (*beta)[t][y] * (*psiuni)[t][y];
@@ -3057,6 +3059,8 @@ static void grd_logloss(grd_t *grd, const seq_t *seq) {
  */
 static double grd_doseq(grd_t *grd, const seq_t *seq, double g[]) {
 	const mdl_t *mdl = grd->mdl;
+	grd->first = 0;
+	grd->last  = seq->len - 1;
 	if (!mdl->opt->sparse) {
 		grd_fldopsi(grd, seq);
 		grd_flfwdbwd(grd, seq);
@@ -3657,6 +3661,8 @@ static void bcd_actpos(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, size_t o) {
 	}
 	assert(actcnt != 0);
 	bcd->actcnt = actcnt;
+	bcd->grd->first = actpos[0];
+	bcd->grd->last  = actpos[actcnt - 1];
 }
 
 /* bct_flgradhes:
