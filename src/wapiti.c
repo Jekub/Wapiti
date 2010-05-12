@@ -2524,6 +2524,8 @@ static bool uit_progress(mdl_t *mdl, int it, double obj) {
 typedef struct grd_s grd_t;
 struct grd_s {
 	mdl_t  *mdl;
+	double *g;
+	double  lloss;
 	double *psi;
 	double *psiuni;
 	size_t *psiyp;
@@ -2534,7 +2536,6 @@ struct grd_s {
 	double *scale;
 	double *unorm;
 	double *bnorm;
-	double  lloss;
 	int     first;
 	int     last;
 };
@@ -2543,11 +2544,12 @@ struct grd_s {
  *   Allocation memory for gradient computation state. This allocate memory for
  *   the longest sequence present in the data set.
  */
-static grd_t *grd_new(mdl_t *mdl) {
+static grd_t *grd_new(mdl_t *mdl, double *g) {
 	const size_t Y = mdl->nlbl;
 	const int    T = mdl->train->mlen;
 	grd_t *grd = xmalloc(sizeof(grd_t));
 	grd->mdl   = mdl;
+	grd->g     = g;
 	grd->psi   = xvm_alloc(sizeof(double) * T * Y * Y);
 	grd->alpha = xmalloc(sizeof(double) * T * Y);
 	grd->beta  = xmalloc(sizeof(double) * T * Y);
@@ -2877,7 +2879,7 @@ static void grd_spfwdbwd(grd_t *grd, const seq_t *seq) {
  *   vector but just adding the contribution of this sequence. This allow to
  *   compute it easily the gradient over more than one sequence.
  */
-static void grd_flupgrad(grd_t *grd, const seq_t *seq, double *g) {
+static void grd_flupgrad(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
 	const size_t Y = mdl->nlbl;
 	const int    T = seq->len;
@@ -2886,6 +2888,7 @@ static void grd_flupgrad(grd_t *grd, const seq_t *seq, double *g) {
 	const double (*beta )[T][Y]    = (void *)grd->beta;
 	const double  *unorm           =         grd->unorm;
 	const double  *bnorm           =         grd->bnorm;
+	double *g = grd->g;
 	for (int t = 0; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
 		// Add the expectation over the model distribution
@@ -2931,7 +2934,7 @@ static void grd_flupgrad(grd_t *grd, const seq_t *seq, double *g) {
  *   matrix. We first fill it with the unigram component and next multiply it
  *   with the bigram one.
  */
-static void grd_spupgrad(grd_t *grd, const seq_t *seq, double *g) {
+static void grd_spupgrad(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
@@ -2944,6 +2947,7 @@ static void grd_spupgrad(grd_t *grd, const seq_t *seq, double *g) {
 	const double (*beta )[T][Y]  = (void *)grd->beta;
 	const double  *unorm         =         grd->unorm;
 	const double  *bnorm         =         grd->bnorm;
+	double *g = grd->g;
 	for (int t = 0; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
 		// Add the expectation over the model distribution
@@ -3046,7 +3050,7 @@ static void grd_logloss(grd_t *grd, const seq_t *seq) {
 		for (size_t n = 0; n < pos->bcnt; n++)
 			lloss -= x[mdl->boff[pos->bobs[n]] + d];
 	}
-	grd->lloss = lloss;
+	grd->lloss += lloss;
 }
 
 /* grd_doseq:
@@ -3057,21 +3061,20 @@ static void grd_logloss(grd_t *grd, const seq_t *seq) {
  *   just accumulate the values for the given sequence in it. This allow to
  *   easily compute the gradient over a set of sequences.
  */
-static double grd_doseq(grd_t *grd, const seq_t *seq, double g[]) {
+static void grd_doseq(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
 	grd->first = 0;
 	grd->last  = seq->len - 1;
 	if (!mdl->opt->sparse) {
 		grd_fldopsi(grd, seq);
 		grd_flfwdbwd(grd, seq);
-		grd_flupgrad(grd, seq, g);
+		grd_flupgrad(grd, seq);
 	} else {
 		grd_spdopsi(grd, seq);
 		grd_spfwdbwd(grd, seq);
-		grd_spupgrad(grd, seq, g);
+		grd_spupgrad(grd, seq);
 	}
 	grd_logloss(grd, seq);
-	return grd->lloss;
 }
 
 /******************************************************************************
@@ -3094,33 +3097,24 @@ static double grd_doseq(grd_t *grd, const seq_t *seq, double g[]) {
  *   cores, or to more thread than you have memory to hold vectors.
  ******************************************************************************/
 
-typedef struct wrk_s wrk_t;
-struct wrk_s {
-	mdl_t  *mdl;
-	double *g;
-	double  fx;
-};
-
 /* grd_worker:
  *   This is a simple function who compute the gradient over a subset of the
  *   training set. It is mean to be called by the thread spawner in order to
  *   compute the gradient over the full training set.
  */
-static void grd_worker(int id, int cnt, wrk_t *wrk) {
-	mdl_t *mdl = wrk->mdl;
+static void grd_worker(int id, int cnt, grd_t *grd) {
+	mdl_t *mdl = grd->mdl;
 	const dat_t *dat = mdl->train;
 	const size_t F = mdl->nftr;
 	// We first cleanup the gradient and value as our parent don't do it (it
 	// is better to do this also in parallel)
-	wrk->fx = 0.0;
+	grd->lloss = 0.0;
 	for (size_t f = 0; f < F; f++)
-		wrk->g[f] = 0.0;
+		grd->g[f] = 0.0;
 	// Now all is ready, we can process our sequences and accumulate the
 	// gradient and inverse log-likelihood
-	grd_t *grd = grd_new(mdl);
 	for (int s = id; !uit_stop && s < dat->nseq; s += cnt)
-		wrk->fx += grd_doseq(grd, dat->seq[s], wrk->g);
-	grd_free(grd);
+		grd_doseq(grd, dat->seq[s]);
 }
 
 /* grd_gradient:
@@ -3138,34 +3132,33 @@ static double grd_gradient(mdl_t *mdl, double *g, double *pg) {
 	// Now we prepare the workers, allocating a local gradient for each one
 	// except the first which will receive the global one. We allocate all
 	// the gradient as a one big vector for easier memory managment.
-	wrk_t wrk[W], *pwrk[W];
+	grd_t *wrk[W];
 	double *raw = xmalloc(sizeof(double) * F * W);
 	double *tmp = raw;
 	for (size_t w = 0; w < W; w++) {
-		wrk[w].mdl = mdl;
+		wrk[w] = grd_new(mdl, (w != 0) ? tmp : g);
 		if (w != 0)
-			wrk[w].g = tmp, tmp += F;
-		else
-			wrk[w].g = g;
-		pwrk[w] = &wrk[w];
+			tmp += F;
 	}
 	// All is ready to compute the gradient, we spawn the threads of
 	// workers, each one working on a part of the data. As the gradient and
 	// log-likelihood are additive, computing the final values will be
 	// trivial.
-	mth_spawn((func_t *)grd_worker, W, (void **)pwrk);
+	mth_spawn((func_t *)grd_worker, W, (void **)wrk);
 	if (uit_stop) {
 		free(raw);
 		return -1.0;
 	}
 	// All computations are done, it just remain to add all the gradients
 	// and inverse log-likelihood from all the workers.
-	double fx = wrk[0].fx;
+	double fx = wrk[0]->lloss;
 	for (size_t w = 1; w < W; w++) {
 		for (size_t f = 0; f < F; f++)
-			g[f] += wrk[w].g[f];
-		fx += wrk[w].fx;
+			g[f] += wrk[w]->g[f];
+		fx += wrk[w]->lloss;
 	}
+	for (size_t w = 0; w < W; w++)
+		grd_free(wrk[w]);
 	free(raw);
 	// If needed we clip the gradient: setting to 0.0 all coordinate where
 	// the function is 0.0.
@@ -3535,7 +3528,7 @@ static void trn_sgdl1(mdl_t *mdl) {
 	// computing the decay, we will need to keep track of the number of
 	// already processed sequences, this is tracked by the <i> variable.
 	double u = 0.0;
-	grd_t *grd = grd_new(mdl);
+	grd_t *grd = grd_new(mdl, g);
 	for (int k = 0, i = 0; k < K && !uit_stop; k++) {
 		// First we shuffle the sequence by making a lot of random swap
 		// of entry in the permutation index.
@@ -3550,7 +3543,7 @@ static void trn_sgdl1(mdl_t *mdl) {
 		for (int sp = 0; sp < S && !uit_stop; sp++, i++) {
 			const int s = perm[sp];
 			const seq_t *seq = mdl->train->seq[s];
-			grd_doseq(grd, seq, g);
+			grd_doseq(grd, seq);
 			// Before applying the gradient, we have to compute the
 			// learning rate to apply to this sequence. For this we
 			// use an exponential decay [1, pp 481(5)]
@@ -3903,7 +3896,7 @@ static void trn_bcd(mdl_t *mdl) {
 	bcd->bgrd   = xmalloc(sizeof(double) * Y * Y);
 	bcd->bhes   = xmalloc(sizeof(double) * Y * Y);
 	bcd->actpos = xmalloc(sizeof(size_t) * T);
-	bcd->grd    = grd_new(mdl);
+	bcd->grd    = grd_new(mdl, NULL);
 	// And train the model
 	for (int i = 0; i < K; i++) {
 		for (size_t o = 0; o < O; o++) {
