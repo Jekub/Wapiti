@@ -3125,41 +3125,25 @@ static void grd_worker(int id, int cnt, grd_t *grd) {
  *   gradient over the full training set is just the sum of the gradient of
  *   each sequence.
  */
-static double grd_gradient(mdl_t *mdl, double *g, double *pg) {
+static double grd_gradient(mdl_t *mdl, double *g, double *pg, grd_t *grds[]) {
 	const double *x = mdl->theta;
 	const size_t  F = mdl->nftr;
 	const size_t  W = mdl->opt->nthread;
-	// Now we prepare the workers, allocating a local gradient for each one
-	// except the first which will receive the global one. We allocate all
-	// the gradient as a one big vector for easier memory managment.
-	grd_t *wrk[W];
-	double *raw = xmalloc(sizeof(double) * F * W);
-	double *tmp = raw;
-	for (size_t w = 0; w < W; w++) {
-		wrk[w] = grd_new(mdl, (w != 0) ? tmp : g);
-		if (w != 0)
-			tmp += F;
-	}
 	// All is ready to compute the gradient, we spawn the threads of
 	// workers, each one working on a part of the data. As the gradient and
 	// log-likelihood are additive, computing the final values will be
 	// trivial.
-	mth_spawn((func_t *)grd_worker, W, (void **)wrk);
-	if (uit_stop) {
-		free(raw);
+	mth_spawn((func_t *)grd_worker, W, (void **)grds);
+	if (uit_stop)
 		return -1.0;
-	}
 	// All computations are done, it just remain to add all the gradients
 	// and inverse log-likelihood from all the workers.
-	double fx = wrk[0]->lloss;
+	double fx = grds[0]->lloss;
 	for (size_t w = 1; w < W; w++) {
 		for (size_t f = 0; f < F; f++)
-			g[f] += wrk[w]->g[f];
-		fx += wrk[w]->lloss;
+			g[f] += grds[w]->g[f];
+		fx += grds[w]->lloss;
 	}
-	for (size_t w = 0; w < W; w++)
-		grd_free(wrk[w]);
-	free(raw);
 	// If needed we clip the gradient: setting to 0.0 all coordinate where
 	// the function is 0.0.
 	if (mdl->opt->lbfgs.clip == true)
@@ -3222,10 +3206,11 @@ static double grd_gradient(mdl_t *mdl, double *g, double *pg) {
  ******************************************************************************/
 
 static void trn_lbfgs(mdl_t *mdl) {
-	const size_t F = mdl->nftr;
-	const int    K = mdl->opt->maxiter;
-	const int    M = mdl->opt->lbfgs.histsz;
-	const bool l1 = mdl->opt->rho1 != 0.0;
+	const size_t F  = mdl->nftr;
+	const int    K  = mdl->opt->maxiter;
+	const int    M  = mdl->opt->lbfgs.histsz;
+	const size_t W  = mdl->opt->nthread;
+	const bool   l1 = mdl->opt->rho1 != 0.0;
 	double *x, *xp; // Current and previous value of the variables
 	double *g, *gp; // Current and previous value of the gradient
 	double *pg;     // The pseudo-gradient (only for owl-qn)
@@ -3233,6 +3218,7 @@ static void trn_lbfgs(mdl_t *mdl) {
 	double *s[M];   // History value s_k = Δ(x,px)
 	double *y[M];   // History value y_k = Δ(g,pg)
 	double  p[M];   // ρ_k
+	grd_t  *grds[W];
 	// Initialization: Here, we have to allocate memory on the heap as we
 	// cannot request so much memory on the stack as this will have a too
 	// big impact on performance and will be refused by the system on non-
@@ -3240,7 +3226,7 @@ static void trn_lbfgs(mdl_t *mdl) {
 	// To make things simpler, we allocate all the memory in one call to
 	// malloc and dispatch memory in the various arrays. The main pointer
 	// will remain in the raw variable to be freed at the end.
-	double *raw = xmalloc(sizeof(double) * F * (4 + M * 2 + l1));
+	double *raw = xmalloc(sizeof(double) * F * (4 + M * 2 + l1 + W));
 	double *tmp = raw;
 	x  = mdl->theta;
 	xp = tmp; tmp += F; g = tmp; tmp += F;
@@ -3249,14 +3235,19 @@ static void trn_lbfgs(mdl_t *mdl) {
 		s[m] = tmp; tmp += F;
 		y[m] = tmp; tmp += F;
 	}
-	pg = l1 ? tmp : NULL;
+	pg = NULL;
+	if (l1 == true)
+		pg = tmp, tmp += F;
+	grds[0] = grd_new(mdl, g);
+	for (size_t w = 1; w < W; w++)
+		grds[w] = grd_new(mdl, tmp), tmp += F;
 	// Minimization: This is the heart of the function. (a big heart...) We
 	// will perform iterations until one these conditions is reached
 	//   - the maximum iteration count is reached
 	//   - we have converged (upto numerical precision)
 	//   - the report function return false
 	//   - an error happen somewhere
-	double fx = grd_gradient(mdl, g, pg);
+	double fx = grd_gradient(mdl, g, pg, grds);
 	for (int k = 0; !uit_stop && k < K; k++) {
 		// 1st step: We compute the search direction. We search in the
 		// direction who minimize the second order approximation given
@@ -3343,7 +3334,7 @@ static void trn_lbfgs(mdl_t *mdl) {
 			}
 			// And we ask for the value of the objective function
 			// and its gradient and pseudo gradient.
-			fx = grd_gradient(mdl, g, pg);
+			fx = grd_gradient(mdl, g, pg, grds);
 			// Now we check if the step satisfy the conditions. For
 			// l-bfgs, we check the classical decrease and curvature
 			// known as the Wolfe conditions [2, pp 506]
@@ -3413,6 +3404,8 @@ static void trn_lbfgs(mdl_t *mdl) {
 	// Cleanup: This is very simple as we have carefully allocated memory in
 	// a sigle block, we must not forget to free it.
 	free(raw);
+	for (size_t w = 0; w < W; w++)
+		grd_free(grds[w]);
 }
 
 /******************************************************************************
