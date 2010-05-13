@@ -3133,7 +3133,10 @@ static double grd_gradient(mdl_t *mdl, double *g, double *pg, grd_t *grds[]) {
 	// workers, each one working on a part of the data. As the gradient and
 	// log-likelihood are additive, computing the final values will be
 	// trivial.
-	mth_spawn((func_t *)grd_worker, W, (void **)grds);
+	if (W == 1)
+		grd_worker(1, 1, grds[0]);
+	else
+		mth_spawn((func_t *)grd_worker, W, (void **)grds);
 	if (uit_stop)
 		return -1.0;
 	// All computations are done, it just remain to add all the gradients
