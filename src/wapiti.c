@@ -3262,7 +3262,7 @@ static void trn_lbfgs(mdl_t *mdl) {
 		// The only special thing for owl-qn here is to use the pseudo
 		// gradient instead of the true one.
 		for (size_t f = 0; f < F; f++)
-			d[f] = l1 ? -pg[f] : g[f];
+			d[f] = l1 ? -pg[f] : -g[f];
 		if (k != 0) {
 			const int km = k % M;
 			const int bnd = (k <= M) ? k : M;
