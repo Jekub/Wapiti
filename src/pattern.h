@@ -28,7 +28,31 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef model_h
-#define model_h
+#ifndef pattern_h
+#define pattern_h
+
+#include <stdbool.h>
+
+#include "sequence.h"
+
+typedef struct pat_s pat_t;
+typedef struct pat_item_s pat_item_t;
+struct pat_s {
+	char *src;
+	int   ntoks;
+	int   nitems;
+	struct pat_item_s {
+		char  type;
+		bool  caps;
+		char *value;
+		int   offset;
+		int   column;
+	} items[];
+};
+
+pat_t *pat_comp(char *p);
+char *pat_exec(pat_t *pat, tok_t *tok, int at);
+void pat_free(pat_t *pat);
 
 #endif
+
