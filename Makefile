@@ -11,13 +11,16 @@ INSTALL= install -p
 INSTALL_EXEC= $(INSTALL) -m 0755
 INSTALL_DATA= $(INSTALL) -m 0644
 
-wapiti: src/wapiti.c
-	@echo "CC: wapiti.c --> wapiti"
-	@$(CC) -DNDEBUG $(CFLAGS) $(ARCH) $(LIBS) -o wapiti src/wapiti.c
+SRC=src/*.c
+HDR=src/*.h
 
-debug: src/wapiti.c
+wapiti: $(SRC) $(HDR)
 	@echo "CC: wapiti.c --> wapiti"
-	@$(CC) -g $(CFLAGS) $(ARCH) $(LIBS) -o wapiti src/wapiti.c
+	@$(CC) -DNDEBUG $(CFLAGS) $(ARCH) $(LIBS) -o wapiti $(SRC)
+
+debug: $(SRC) $(HDR)
+	@echo "CC: wapiti.c --> wapiti"
+	@$(CC) -g $(CFLAGS) $(ARCH) $(LIBS) -o wapiti $(SRC)
 
 install: wapiti
 	@echo "CP: wapiti   --> $(DESTDIR)$(PREFIX)/bin"
