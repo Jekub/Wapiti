@@ -27,24 +27,12 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef tools_h
-#define tools_h
 
-#include <stdarg.h>
-#include <stddef.h>
+#ifndef thread_h
+#define thread_h
 
-#define unused(v) ((void)(v))
-#define none ((size_t)-1)
+typedef void (func_t)(int id, int cnt, void *ud);
 
-#define min(a, b) ((a) < (b) ? (a) : (b))
-#define max(a, b) ((a) < (b) ? (b) : (a))
-
-void fatal(const char *msg, ...);
-void pfatal(const char *msg, ...);
-void warning(const char *msg, ...);
-void info(const char *msg, ...);
-void *xmalloc(size_t size);
-void *xrealloc(void *ptr, size_t size);
-char *xstrdup(const char *str);
+void mth_spawn(func_t *f, int W, void *ud[W]);
 
 #endif
