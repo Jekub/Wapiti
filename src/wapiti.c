@@ -43,8 +43,9 @@
 #include <unistd.h>
 #include <sys/times.h>
 #include <sys/resource.h>
-
 #include <pthread.h>
+
+#include "tools.h"
 
 #define VERSION "0.9.13"
 
@@ -55,112 +56,6 @@
 #define max(a, b) ((a) < (b) ? (b) : (a))
 
 typedef struct tms tms_t;
-
-/*******************************************************************************
- * Error handling and memory managment
- *
- *   Wapiti use a very simple system for error handling: violently fail. Errors
- *   can occurs in two cases, when user feed Wapiti with bad datas or when there
- *   is a problem on the system side. In both cases, there is nothing we can do,
- *   so the best thing is to exit with a meaning full error message.
- *
- *   Memory allocation is one of the possible point of failure and its painfull
- *   to always remeber to check return value of malloc so we provide wrapper
- *   around it and realloc who check and fail in case of error.
- ******************************************************************************/
-
-/* fatal:
- *   This is the main error function, it will print the given message with same
- *   formating than the printf family and exit program with an error. We let the
- *   OS care about freeing ressources.
- */
-static void fatal(const char *msg, ...) {
-	va_list args;
-	fprintf(stderr, "error: ");
-	va_start(args, msg);
-	vfprintf(stderr, msg, args);
-	va_end(args);
-	fprintf(stderr, "\n");
-	exit(EXIT_FAILURE);
-}
-
-/* pfatal:
- *   This one is very similar to the fatal function but print an additional
- *   system error message depending on the errno. This can be used when a
- *   function who set the errno fail to print more detailed informations. You
- *   must be carefull to not call other functino that might reset it before
- *   calling pfatal.
- */
-static void pfatal(const char *msg, ...) {
-	const char *err = strerror(errno);
-	va_list args;
-	fprintf(stderr, "error: ");
-	va_start(args, msg);
-	vfprintf(stderr, msg, args);
-	va_end(args);
-	fprintf(stderr, "\n\t<%s>\n", err);
-	exit(EXIT_FAILURE);
-}
-
-/* warning:
- *   This one is less violent as it just print a warning on stderr, but doesn't
- *   exit the program. It is intended to inform the user that something strange
- *   have happen and the result might be not what it have expected.
- */
-static void warning(const char *msg, ...) {
-	va_list args;
-	fprintf(stderr, "warning: ");
-	va_start(args, msg);
-	vfprintf(stderr, msg, args);
-	va_end(args);
-	fprintf(stderr, "\n");
-}
-
-/* info:
- *   Function used for all progress reports. This is where an eventual verbose
- *   level can be implemented later or redirection to a logfile. For now, it is
- *   just a wrapper for printf to stderr. Note that unlike the previous one,
- *   this function doesn't automatically append a new line character.
- */
-static void info(const char *msg, ...) {
-	va_list args;
-	va_start(args, msg);
-	vfprintf(stderr, msg, args);
-	va_end(args);
-}
-
-/* xmalloc:
- *   A simple wrapper around malloc who violently fail if memory cannot be
- *   allocated, so it will never return NULL.
- */
-static void *xmalloc(size_t size) {
-	void *ptr = malloc(size);
-	if (ptr == NULL)
-		fatal("out of memory");
-	return ptr;
-}
-
-/* xrealloc:
- *   As xmalloc, this is a simple wrapper around realloc who fail on memory
- *   error and so never return NULL.
- */
-static void *xrealloc(void *ptr, size_t size) {
-	void *new = realloc(ptr, size);
-	if (new == NULL)
-		fatal("out of memory");
-	return new;
-}
-
-/* xstrdup:
- *   As the previous one, this is a safe version of xstrdup who fail on
- *   allocation error.
- */
-static char *xstrdup(const char *str) {
-	const int len = strlen(str) + 1;
-	char *res = xmalloc(sizeof(char) * len);
-	memcpy(res, str, len);
-	return res;
-}
 
 /******************************************************************************
  * Command line parsing
@@ -541,6 +436,7 @@ static void xvm_axpy(double r[], double a, const double x[], const double y[],
  *   This code is copyright 2004-2010 Thomas Lavergne and licenced under the
  *   BSD licence like the remaining of Wapiti.
  */
+#undef __SSE2__
 #ifndef __SSE2__
 #define xvm_align
 #define xvm_alloc xmalloc
