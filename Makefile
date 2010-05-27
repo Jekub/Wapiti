@@ -2,8 +2,6 @@ CC     =cc
 CFLAGS =-std=c99 -W -Wall -O3
 LIBS   =-lm -lpthread
 
-ARCH   =-march=native
-
 DESTDIR=
 PREFIX =/usr/local
 
@@ -16,11 +14,11 @@ HDR=src/*.h
 
 wapiti: $(SRC) $(HDR)
 	@echo "CC: wapiti.c --> wapiti"
-	@$(CC) -DNDEBUG $(CFLAGS) $(ARCH) $(LIBS) -o wapiti $(SRC)
+	@$(CC) -DNDEBUG $(CFLAGS) $(LIBS) -o wapiti $(SRC)
 
 debug: $(SRC) $(HDR)
 	@echo "CC: wapiti.c --> wapiti"
-	@$(CC) -g $(CFLAGS) $(ARCH) $(LIBS) -o wapiti $(SRC)
+	@$(CC) -g $(CFLAGS) $(LIBS) -o wapiti $(SRC)
 
 install: wapiti
 	@echo "CP: wapiti   --> $(DESTDIR)$(PREFIX)/bin"
