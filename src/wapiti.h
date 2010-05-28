@@ -30,7 +30,7 @@
 #ifndef wapiti_h
 #define wapiti_h
 
-#define VERSION "0.9.14"
+#define VERSION "0.9.15"
 
 #endif
 
