@@ -176,8 +176,7 @@ void xvm_expma(double r[], const double x[], double a, size_t N) {
 	const __m128d p10 = xvm_vconst(0x3e9299068168ac8fULL);
 	const __m128d p11 = xvm_vconst(0x3e5ac52350b60b19ULL);
 	const __m128d va  = _mm_set1_pd(a);
-	size_t n, d = N % 4;
-	for (n = 0; n < N - d; n += 4) {
+	for (size_t n = 0; n < N; n += 4) {
 		__m128d mn1, mn2, mi1, mi2;
 		__m128d t1,  t2,  d1,  d2;
 		__m128d v1,  v2,  w1,  w2;
@@ -241,9 +240,6 @@ void xvm_expma(double r[], const double x[], double a, size_t N) {
 		_mm_store_pd(r + n,     v1);
 		_mm_store_pd(r + n + 2, v2);
 	}
-	// Handle the lasts elements
-	for ( ; n < N; n++)
-		r[n] = exp(x[n]) - a;
 #endif
 }
 
