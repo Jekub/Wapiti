@@ -205,11 +205,13 @@ void opt_parse(int argc, char *argv[argc], opt_t *opt) {
 					fatal(err_badval, arg);
 				argc -= 2, argv += 2;
 				break;
-			case 'F':
-				if (sscanf(argv[1], "%lf", (double *)ptr) != 1)
+			case 'F': {
+				double tmp;
+				if (sscanf(argv[1], "%lf", &tmp) != 1)
 					fatal(err_badval, arg);
+				*((real *)ptr) = tmp;
 				argc -= 2, argv += 2;
-				break;
+				break; }
 			case 'B':
 				*((bool *)ptr) = true;
 				argc--, argv++;

@@ -34,6 +34,7 @@
 #include <stddef.h>
 #include <sys/times.h>
 
+#include "wapiti.h"
 #include "options.h"
 #include "sequence.h"
 #include "reader.h"
@@ -75,7 +76,7 @@ struct mdl_s {
 	size_t  *boff;    //  [O]  bigram weights offset
 
 	// The model itself
-	double  *theta;   //  [F]  features weights
+	real    *theta;   //  [F]  features weights
 
 	// Datasets
 	dat_t   *train;   //       training dataset
@@ -83,13 +84,13 @@ struct mdl_s {
 	rdr_t   *reader;
 
 	// Stoping criterion
-	double  *werr;    //       Window of error rate of last iters
+	real    *werr;    //       Window of error rate of last iters
 	int      wcnt;    //       Number of iters in the window
 	int      wpos;    //       Position for the next iter
 
 	// Timing
 	tms_t    timer;   //       start time of last iter
-	double   total;   //       total training time
+	real     total;   //       total training time
 };
 
 mdl_t *mdl_new(rdr_t *rdr);

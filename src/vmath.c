@@ -31,7 +31,9 @@
 #include <assert.h>
 #include <math.h>
 #include <stddef.h>
+#include <stdlib.h>
 
+#include "wapiti.h"
 #include "tools.h"
 #include "vmath.h"
 
@@ -44,6 +46,13 @@
   #define XVM_SSE1
 #elif defined(__SSE__)
   #define XVM_SSE1
+  #define XVM_ANSI
+#endif
+
+#if WAP_PREC == single
+  #undef XVM_SSE1
+  #undef XVM_SSE2
+  #undef XVM_SSE3
   #define XVM_ANSI
 #endif
 
@@ -98,13 +107,13 @@ const char *xvm_mode(void) {
  *   ensure that the vector size contains the need padding. You must only use
  *   vector allocated by this function if you use the optimized code paths.
  */
-double *xvm_new(size_t N) {
+real *xvm_new(size_t N) {
 #ifdef XVM_ANSI
-	return xmalloc(sizeof(double) * N);
+	return xmalloc(sizeof(real) * N);
 #else
 	if (N % 4 != 0)
 		N += 4 - N % 4;
-	void *ptr = _mm_malloc(sizeof(double) * N, 16);
+	void *ptr = _mm_malloc(sizeof(real) * N, 16);
 	if (ptr == NULL)
 		fatal("out of memory");
 	return ptr;
@@ -114,7 +123,7 @@ double *xvm_new(size_t N) {
 /* xvm_free:
  *   Free a vector allocated by xvm_new.
  */
-void xvm_free(double x[]) {
+void xvm_free(real x[]) {
 #ifdef XVM_ANSI
 	free(x);
 #else
@@ -126,7 +135,7 @@ void xvm_free(double x[]) {
  *   Return the component-wise negation of the given vector:
  *       r = -x
  */
-void xvm_neg(double r[], const double x[], size_t N) {
+void xvm_neg(real r[], const real x[], size_t N) {
 #ifdef XVM_SSE2
 	assert(r != NULL && ((size_t)r % 16) == 0);
 	assert(x != NULL && ((size_t)x % 16) == 0);
@@ -149,7 +158,7 @@ void xvm_neg(double r[], const double x[], size_t N) {
  *   Return the difference of the two given vector:
  *       r = x .- y
  */
-void xvm_sub(double r[], const double x[], const double y[], size_t N) {
+void xvm_sub(real r[], const real x[], const real y[], size_t N) {
 #ifdef XVM_SSE2
 	assert(r != NULL && ((size_t)r % 16) == 0);
 	assert(x != NULL && ((size_t)x % 16) == 0);
@@ -174,7 +183,7 @@ void xvm_sub(double r[], const double x[], const double y[], size_t N) {
  *   Return the given vector scaled by a constant:
  *     r = a * x
  */
-void xvm_scale(double r[], const double x[], double a, size_t N) {
+void xvm_scale(real r[], const real x[], real a, size_t N) {
 	for (size_t n = 0; n < N; n++)
 		r[n] = x[n] * a;
 }
@@ -183,11 +192,11 @@ void xvm_scale(double r[], const double x[], double a, size_t N) {
  *   Store a normalized copy of the given vector in r and return the
  *   normalization factor.
  */
-double xvm_unit(double r[], const double x[], size_t N) {
-	double sum = 0.0;
+real xvm_unit(real r[], const real x[], size_t N) {
+	real sum = 0.0;
 	for (size_t n = 0; n < N; n++)
 		sum += x[n];
-	const double scale = 1.0 / sum;
+	const real scale = 1.0 / sum;
 	xvm_scale(r, x, scale, N);
 	return scale;
 }
@@ -195,8 +204,8 @@ double xvm_unit(double r[], const double x[], size_t N) {
 /* xvm_norm:
  *   Return the euclidian norm of the given vector.
  */
-double xvm_norm(const double x[], size_t N) {
-	double r = 0.0;
+real xvm_norm(const real x[], size_t N) {
+	real r = 0.0;
 #ifdef XVM_SSE2
 	assert(x != NULL && ((size_t)x % 16) == 0);
 	size_t n, d = N % 4;
@@ -217,10 +226,8 @@ double xvm_norm(const double x[], size_t N) {
 	for ( ; n < N; n++)
 		r += x[n] * x[n];
 #else
-	float r = 0.0;
 	for (size_t n = 0; n < N; n++)
 		r += x[n] * x[n];
-	return r;
 #endif
 	return sqrt(r);
 }
@@ -228,7 +235,7 @@ double xvm_norm(const double x[], size_t N) {
 /* xvm_dot:
  *   Return the dot product of the two given vectors.
  */
-double xvm_dot(const double x[], const double y[], size_t N) {
+real xvm_dot(const real x[], const real y[], size_t N) {
 #ifdef XVM_SSE2
 	assert(x != NULL && ((size_t)x % 16) == 0);
 	assert(y != NULL && ((size_t)y % 16) == 0);
@@ -248,7 +255,7 @@ double xvm_dot(const double x[], const double y[], size_t N) {
 	s0 = _mm_add_pd(s0, s1);
 	s1 = _mm_shuffle_pd(s0, s0, _MM_SHUFFLE2(1, 1));
 	s0 = _mm_add_pd(s0, s1);
-	double r;
+	real r;
 	_mm_store_sd(&r, s0);
 	for ( ; n < N; n++)
 		r += x[n] * y[n];
@@ -265,7 +272,7 @@ double xvm_dot(const double x[], const double y[], size_t N) {
  *   Return the sum of x scaled by a and y:
  *       r = a * x + y
  */
-void xvm_axpy(double r[], double a, const double x[], const double y[],
+void xvm_axpy(real r[], real a, const real x[], const real y[],
                      size_t N) {
 #ifdef XVM_SSE2
 	assert(r != NULL && ((size_t)r % 16) == 0);
@@ -322,7 +329,7 @@ void xvm_axpy(double r[], double a, const double x[], const double y[],
  *   This code is copyright 2004-2010 Thomas Lavergne and licenced under the
  *   BSD licence like the remaining of Wapiti.
  */
-void xvm_expma(double r[], const double x[], double a, size_t N) {
+void xvm_expma(real r[], const real x[], real a, size_t N) {
 #ifndef XVM_SSE2
 	for (size_t n = 0; n < N; n++)
 		r[n] = exp(x[n]) - a;

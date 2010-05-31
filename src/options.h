@@ -32,6 +32,8 @@
 
 #include <stdbool.h>
 
+#include "wapiti.h"
+
 /* opt_t:
  *   This structure hold all user configurable parameter for Wapiti and is
  *   filled with parameters from command line.
@@ -46,10 +48,10 @@ struct opt_s {
 	bool   compact, sparse;
 	int    nthread;
 	int    maxiter;
-	double rho1,    rho2;
+	real   rho1,    rho2;
 	// Window size criterion
 	int    stopwin;
-	double stopeps;
+	real   stopeps;
 	// Options specific to L-BFGS
 	struct {
 		bool   clip;
@@ -58,12 +60,12 @@ struct opt_s {
 	} lbfgs;
 	// Options specific to SGD-L1
 	struct {
-		double eta0;
-		double alpha;
+		real   eta0;
+		real   alpha;
 	} sgdl1;
 	// Options specific to BCD
 	struct {
-		double kappa;
+		real   kappa;
 	} bcd;
 	// Options for labelling
 	bool   label;

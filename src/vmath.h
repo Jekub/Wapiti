@@ -35,20 +35,21 @@
 
 const char *xvm_mode(void);
 
-double *xvm_new(size_t N);
-void    xvm_free(double x[]);
+real *xvm_new(size_t N);
+void    xvm_free(real x[]);
 
-void xvm_neg(double r[], const double x[], size_t N);
-void xvm_sub(double r[], const double x[], const double y[], size_t N);
+void xvm_neg(real r[], const real x[], size_t N);
+void xvm_sub(real r[], const real x[], const real y[], size_t N);
+void xvm_scale(real r[], const real x[], real a, size_t N);
+real xvm_unit(real r[], const real x[], size_t N);
 
-double xvm_dot(const double x[], const double y[], size_t N);
+real xvm_norm(const real x[], size_t N);
+real xvm_dot(const real x[], const real y[], size_t N);
 
-double xvm_norm(const double x[], size_t N);
-void xvm_scale(double r[], const double x[], double a, size_t N);
-double xvm_unit(double r[], const double x[], size_t N);
-void xvm_axpy(double r[], double a, const double x[], const double y[],
+void xvm_axpy(real r[], real a, const real x[], const real y[],
               size_t N);
-void xvm_expma(double r[], const double x[], double a, size_t N);
+
+void xvm_expma(real r[], const real x[], real a, size_t N);
 
 #endif
 

@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "wapiti.h"
 #include "model.h"
 #include "options.h"
 #include "quark.h"
@@ -176,7 +177,7 @@ void mdl_sync(mdl_t *mdl) {
 	// This is a bit tricky as aligned malloc cannot be simply grown so we
 	// have to allocate a new vector and copy old values ourself.
 	if (oldF != 0) {
-		double *new = xvm_new(F);
+		real *new = xvm_new(F);
 		for (size_t f = 0; f < oldF; f++)
 			new[f] = mdl->theta[f];
 		xvm_free(mdl->theta);
@@ -228,7 +229,7 @@ void mdl_compact(mdl_t *mdl) {
 	// corresponding to the compacted model.
 	size_t *old_uoff  = mdl->uoff;  mdl->uoff  = NULL;
 	size_t *old_boff  = mdl->boff;  mdl->boff  = NULL;
-	double *old_theta = mdl->theta; mdl->theta = NULL;
+	real   *old_theta = mdl->theta; mdl->theta = NULL;
 	free(mdl->kind);
 	mdl->kind = NULL;
 	mdl->nlbl = mdl->nobs = mdl->nftr = 0;
@@ -239,14 +240,14 @@ void mdl_compact(mdl_t *mdl) {
 	for (size_t newo = 0; newo < mdl->nobs; newo++) {
 		const size_t oldo = trans[newo];
 		if (mdl->kind[newo] & 1) {
-			double *src = old_theta  + old_uoff[oldo];
-			double *dst = mdl->theta + mdl->uoff[newo];
+			real *src = old_theta  + old_uoff[oldo];
+			real *dst = mdl->theta + mdl->uoff[newo];
 			for (size_t y = 0; y < Y; y++)
 				dst[y] = src[y];
 		}
 		if (mdl->kind[newo] & 2) {
-			double *src = old_theta  + old_boff[oldo];
-			double *dst = mdl->theta + mdl->boff[newo];
+			real *src = old_theta  + old_boff[oldo];
+			real *dst = mdl->theta + mdl->boff[newo];
 			for (size_t d = 0; d < Y * Y; d++)
 				dst[d] = src[d];
 		}

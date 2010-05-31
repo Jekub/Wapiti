@@ -237,7 +237,7 @@ static void dodump(mdl_t *mdl) {
 		const char *obs = qrk_id2str(Qobs, o);
 		bool empty = true;
 		if (mdl->kind[o] & 1) {
-			const double *w = mdl->theta + mdl->uoff[o];
+			const real *w = mdl->theta + mdl->uoff[o];
 			for (size_t y = 0; y < Y; y++) {
 				if (w[y] == 0.0)
 					continue;
@@ -247,7 +247,7 @@ static void dodump(mdl_t *mdl) {
 			}
 		}
 		if (mdl->kind[o] & 2) {
-			const double *w = mdl->theta + mdl->boff[o];
+			const real *w = mdl->theta + mdl->boff[o];
 			for (size_t d = 0; d < Y * Y; d++) {
 				if (w[d] == 0.0)
 					continue;

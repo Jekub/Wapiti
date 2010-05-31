@@ -31,29 +31,30 @@
 #ifndef gradient_h
 #define gradient_h
 
+#include "wapiti.h"
 #include "model.h"
 #include "sequence.h"
 
 typedef struct grd_s grd_t;
 struct grd_s {
 	mdl_t  *mdl;
-	double *g;
-	double  lloss;
-	double *psi;
-	double *psiuni;
+	real   *g;
+	real    lloss;
+	real   *psi;
+	real   *psiuni;
 	size_t *psiyp;
 	size_t *psiidx;
 	size_t *psioff;
-	double *alpha;
-	double *beta;
-	double *scale;
-	double *unorm;
-	double *bnorm;
+	real   *alpha;
+	real   *beta;
+	real   *scale;
+	real   *unorm;
+	real   *bnorm;
 	int     first;
 	int     last;
 };
 
-grd_t *grd_new(mdl_t *mdl, double *g);
+grd_t *grd_new(mdl_t *mdl, real *g);
 void grd_free(grd_t *grd);
 
 void grd_fldopsi(grd_t *grd, const seq_t *seq);
@@ -67,7 +68,7 @@ void grd_spupgrad(grd_t *grd, const seq_t *seq);
 void grd_logloss(grd_t *grd, const seq_t *seq);
 
 void grd_doseq(grd_t *grd, const seq_t *seq);
-double grd_gradient(mdl_t *mdl, double *g, double *pg, grd_t *grds[]);
+real grd_gradient(mdl_t *mdl, real *g, real *pg, grd_t *grds[]);
 
 #endif
 

@@ -34,6 +34,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
+#include "wapiti.h"
 #include "pattern.h"
 #include "quark.h"
 #include "sequence.h"

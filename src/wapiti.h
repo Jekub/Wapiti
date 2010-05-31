@@ -30,7 +30,15 @@
 #ifndef wapiti_h
 #define wapiti_h
 
-#define VERSION "0.9.16"
+#define VERSION "0.9.17"
+
+#define WAP_PREC double
+
+#if WAP_PREC == single
+typedef float real;
+#else
+typedef double real;
+#endif
 
 #endif
 

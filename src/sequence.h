@@ -33,6 +33,8 @@
 
 #include <stddef.h>
 
+#include "wapiti.h"
+
 /*******************************************************************************
  * Sequences and Dataset objects
  *

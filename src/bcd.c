@@ -35,6 +35,7 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "wapiti.h"
 #include "gradient.h"
 #include "model.h"
 #include "options.h"
@@ -60,10 +61,10 @@
  ******************************************************************************/
 typedef struct bcd_s bcd_t;
 struct bcd_s {
-	double *ugrd;    //  [Y]
-	double *uhes;    //  [Y]
-	double *bgrd;    //  [Y][Y]
-	double *bhes;    //  [Y][Y]
+	real *ugrd;    //  [Y]
+	real *uhes;    //  [Y]
+	real *bgrd;    //  [Y][Y]
+	real *bhes;    //  [Y][Y]
 	size_t *actpos;  //  [T]
 	size_t  actcnt;
 	grd_t  *grd;
@@ -72,7 +73,7 @@ struct bcd_s {
 /* bcd_soft:
  *   The softmax function.
  */
-static double bcd_soft(double z, double r) {
+static real bcd_soft(real z, real r) {
 	if (z >  r) return z - r;
 	if (z < -r) return z + r;
 	return 0.0;
@@ -116,25 +117,25 @@ static void bcd_flgradhes(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, size_t o) {
 	const grd_t *grd = bcd->grd;
 	const size_t Y = mdl->nlbl;
 	const size_t T = seq->len;
-	const double (*psi  )[T][Y][Y] = (void *)grd->psi;
-	const double (*alpha)[T][Y]    = (void *)grd->alpha;
-	const double (*beta )[T][Y]    = (void *)grd->beta;
-	const double  *unorm           =         grd->unorm;
-	const double  *bnorm           =         grd->bnorm;
+	const real   (*psi  )[T][Y][Y] = (void *)grd->psi;
+	const real   (*alpha)[T][Y]    = (void *)grd->alpha;
+	const real   (*beta )[T][Y]    = (void *)grd->beta;
+	const real    *unorm           =         grd->unorm;
+	const real    *bnorm           =         grd->bnorm;
 	const size_t  *actpos          =         bcd->actpos;
 	const size_t   actcnt          =         bcd->actcnt;
-	double *ugrd = bcd->ugrd;
-	double *uhes = bcd->uhes;
-	double *bgrd = bcd->bgrd;
-	double *bhes = bcd->bhes;
+	real *ugrd = bcd->ugrd;
+	real *uhes = bcd->uhes;
+	real *bgrd = bcd->bgrd;
+	real *bhes = bcd->bhes;
 	// Update the gradient and the hessian but here we sum only on the
 	// positions where the block is active for unigrams features
 	if (mdl->kind[o] & 1) {
 		for (size_t n = 0; n < actcnt; n++) {
 			const size_t t = actpos[n];
 			for (size_t y = 0; y < Y; y++) {
-				const double e = (*alpha)[t][y] * (*beta)[t][y]
-				               * unorm[t];
+				const real e = (*alpha)[t][y] * (*beta)[t][y]
+				             * unorm[t];
 				ugrd[y] += e;
 				uhes[y] += e * (1.0 - e);
 			}
@@ -151,8 +152,8 @@ static void bcd_flgradhes(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, size_t o) {
 			continue;
 		for (size_t yp = 0, d = 0; yp < Y; yp++) {
 			for (size_t y = 0; y < Y; y++, d++) {
-				double e = (*alpha)[t - 1][yp] * (*beta)[t][y]
-				         * (*psi)[t][yp][y] * bnorm[t];
+				real e = (*alpha)[t - 1][yp] * (*beta)[t][y]
+				       * (*psi)[t][yp][y] * bnorm[t];
 				bgrd[d] += e;
 				bhes[d] += e * (1.0 - e);
 			}
@@ -172,29 +173,29 @@ static void bcd_spgradhes(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, size_t o) {
 	const grd_t *grd = bcd->grd;
 	const size_t Y = mdl->nlbl;
 	const size_t T = seq->len;
-	const double (*psiuni)[T][Y] = (void *)grd->psiuni;
-	const double  *psival        =         grd->psi;
+	const real   (*psiuni)[T][Y] = (void *)grd->psiuni;
+	const real    *psival        =         grd->psi;
 	const size_t  *psiyp         =         grd->psiyp;
 	const size_t (*psiidx)[T][Y] = (void *)grd->psiidx;
 	const size_t  *psioff        =         grd->psioff;
-	const double (*alpha)[T][Y]  = (void *)grd->alpha;
-	const double (*beta )[T][Y]  = (void *)grd->beta;
-	const double  *unorm         =         grd->unorm;
-	const double  *bnorm         =         grd->bnorm;
+	const real   (*alpha)[T][Y]  = (void *)grd->alpha;
+	const real   (*beta )[T][Y]  = (void *)grd->beta;
+	const real    *unorm         =         grd->unorm;
+	const real    *bnorm         =         grd->bnorm;
 	const size_t  *actpos        =         bcd->actpos;
 	const size_t   actcnt        =         bcd->actcnt;
-	double *ugrd = bcd->ugrd;
-	double *uhes = bcd->uhes;
-	double *bgrd = bcd->bgrd;
-	double *bhes = bcd->bhes;
+	real *ugrd = bcd->ugrd;
+	real *uhes = bcd->uhes;
+	real *bgrd = bcd->bgrd;
+	real *bhes = bcd->bhes;
 	// Update the gradient and the hessian but here we sum only on the
 	// positions where the block is active for unigrams features
 	if (mdl->kind[o] & 1) {
 		for (size_t n = 0; n < actcnt; n++) {
 			const size_t t = actpos[n];
 			for (size_t y = 0; y < Y; y++) {
-				const double e = (*alpha)[t][y] * (*beta)[t][y]
-				               * unorm[t];
+				const real e = (*alpha)[t][y] * (*beta)[t][y]
+				             * unorm[t];
 				ugrd[y] += e;
 				uhes[y] += e * (1.0 - e);
 			}
@@ -210,7 +211,7 @@ static void bcd_spgradhes(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, size_t o) {
 		if (t == 0)
 			continue;
 		// We build the expectation matrix
-		double e[Y][Y];
+		real e[Y][Y];
 		for (size_t yp = 0; yp < Y; yp++)
 			for (size_t y = 0; y < Y; y++)
 				e[yp][y] = (*alpha)[t - 1][yp] * (*beta)[t][y]
@@ -221,7 +222,7 @@ static void bcd_spgradhes(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, size_t o) {
 				y++;
 			while (n < (*psiidx)[t][y]) {
 				const size_t yp = psiyp [off + n];
-				const double v  = psival[off + n];
+				const real   v  = psival[off + n];
 				e[yp][y] += e[yp][y] * v;
 				n++;
 			}
@@ -243,39 +244,39 @@ static void bcd_spgradhes(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, size_t o) {
  *   Update the model with the computed gradient and hessian.
  */
 static void bcd_update(mdl_t *mdl, bcd_t *bcd, size_t o) {
-	const double  rho1  = mdl->opt->rho1;
-	const double  rho2  = mdl->opt->rho2;
-	const double  kappa = mdl->opt->bcd.kappa;
+	const real    rho1  = mdl->opt->rho1;
+	const real    rho2  = mdl->opt->rho2;
+	const real    kappa = mdl->opt->bcd.kappa;
 	const size_t  Y     = mdl->nlbl;
-	const double *ugrd  = bcd->ugrd;
-	const double *bgrd  = bcd->bgrd;
-	      double *uhes  = bcd->uhes;
-	      double *bhes  = bcd->bhes;
+	const real   *ugrd  = bcd->ugrd;
+	const real   *bgrd  = bcd->bgrd;
+	      real   *uhes  = bcd->uhes;
+	      real *bhes  = bcd->bhes;
 	if (mdl->kind[o] & 1) {
 		// Adjust the hessian
-		double a = 1.0;
+		real a = 1.0;
 		for (size_t y = 0; y < Y; y++)
 			a = max(a, fabs(ugrd[y] / uhes[y]));
 		xvm_scale(uhes, uhes, a * kappa, Y);
 		// Update the model
-		double *w = mdl->theta + mdl->uoff[o];
+		real *w = mdl->theta + mdl->uoff[o];
 		for (size_t y = 0; y < Y; y++) {
-			double z = uhes[y] * w[y] - ugrd[y];
-			double d = uhes[y] + rho2;
+			real z = uhes[y] * w[y] - ugrd[y];
+			real d = uhes[y] + rho2;
 			w[y] = bcd_soft(z, rho1) / d;
 		}
 	}
 	if (mdl->kind[o] & 2) {
 		// Adjust the hessian
-		double a = 1.0;
+		real a = 1.0;
 		for (size_t i = 0; i < Y * Y; i++)
 			a = max(a, fabs(bgrd[i] / bhes[i]));
 		xvm_scale(bhes, bhes, a * kappa, Y * Y);
 		// Update the model
-		double *bw = mdl->theta + mdl->boff[o];
+		real *bw = mdl->theta + mdl->boff[o];
 		for (size_t i = 0; i < Y * Y; i++) {
-			double z = bhes[i] * bw[i] - bgrd[i];
-			double d = bhes[i] + rho2;
+			real z = bhes[i] * bw[i] - bgrd[i];
+			real d = bhes[i] + rho2;
 			bw[i] = bcd_soft(z, rho1) / d;
 		}
 	}

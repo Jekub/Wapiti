@@ -34,6 +34,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "wapiti.h"
 #include "pattern.h"
 #include "quark.h"
 #include "reader.h"
