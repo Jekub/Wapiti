@@ -120,7 +120,29 @@ void xvm_free(double x[]) {
 	_mm_free(x);
 #endif
 }
-	
+
+/* xvm_neg:
+ *   Return the component-wise negation of the given vector in the result.
+ */
+void xvm_neg(double r[], const double x[], size_t N) {
+#ifdef XVM_SSE2
+	assert(r != NULL && ((size_t)r % 16) == 0);
+	assert(x != NULL && ((size_t)x % 16) == 0);
+	const __m128d vz = _mm_setzero_pd();
+	for (size_t n = 0; n < N; n += 4) {
+		const __m128d x0 = _mm_load_pd(x + n    );
+		const __m128d x1 = _mm_load_pd(x + n + 2);
+		const __m128d r0 = _mm_sub_pd(vz, x0);
+		const __m128d r1 = _mm_sub_pd(vz, x1);
+		_mm_store_pd(r + n,     r0);
+		_mm_store_pd(r + n + 2, r1);
+	}
+#else
+	for (size_t n = 0; n < N; n++)
+		r[n] = -x[n];
+#endif
+}
+
 double xvm_norm(const double x[], size_t N) {
 	double res = 0.0;
 	for (size_t n = 0; n < N; n++)

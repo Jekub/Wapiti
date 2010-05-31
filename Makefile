@@ -1,5 +1,5 @@
 CC     =cc
-CFLAGS =-std=c99 -W -Wall -O3
+CFLAGS =-std=c99 -W -Wall -O3 -fwhole-program -combine
 LIBS   =-lm -lpthread
 
 DESTDIR=
