@@ -33,12 +33,7 @@
 
 #include <stddef.h>
 
-#ifndef __SSE2__
-#define xvm_align
-#else
-#include <emmintrin.h>
-#define xvm_align __attribute__((aligned(16)))
-#endif
+const char *xvm_mode(void);
 
 double *xvm_new(size_t N);
 void    xvm_free(double x[]);

@@ -38,6 +38,7 @@
 #include "wapiti.h"
 #include "tools.h"
 #include "options.h"
+#include "vmath.h"
 
 /******************************************************************************
  * Command line parsing
@@ -160,6 +161,7 @@ void opt_parse(int argc, char *argv[argc], opt_t *opt) {
 		exit(EXIT_FAILURE);
 	} else if (!strcmp(argv[0], "--version")) {
 		fprintf(stderr, "Wapiti v" VERSION "\n");
+		fprintf(stderr, "  Optimization mode: %s\n", xvm_mode());
 		exit(EXIT_SUCCESS);
 	}
 	// Get the mode to use

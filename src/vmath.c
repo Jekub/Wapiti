@@ -35,8 +35,26 @@
 #include "tools.h"
 #include "vmath.h"
 
-#ifdef __SSE2__
+#if defined(__SSE3__)
+  #define XVM_SSE3
+  #define XVM_SSE2
+  #define XVM_SSE1
+#elif defined(__SSE2__)
+  #define XVM_SSE2
+  #define XVM_SSE1
+#elif defined(__SSE__)
+  #define XVM_SSE1
+  #define XVM_ANSI
+#endif
+
+#ifdef XVM_SSE3
+#include <pmmintrin.h>
+#endif
+#ifdef XVM_SSE2
 #include <emmintrin.h>
+#endif
+#ifdef XVM_SSE1
+#include <xmmintrin.h>
 #endif
 
 /******************************************************************************
@@ -60,8 +78,28 @@
  *   As the code is pretty straight forward, there is no need for comments here.
  ******************************************************************************/
 
+/* xvm_mode:
+ *   Return a string describing the SSE level used in the optimized code paths.
+ */
+const char *xvm_mode(void) {
+#if defined(XVM_SSE3)
+	return "sse3";
+#elif defined(XVM_SSE2)
+	return "sse2";
+#elif defined(XVM_SSE1)
+	return "sse1";
+#else
+	return "no-sse";
+#endif
+}
+
+/* xvm_new:
+ *   Allocate a new vector suitable to be used in the SSE code paths. This
+ *   ensure that the vector size contains the need padding. You must only use
+ *   vector allocated by this function if you use the optimized code paths.
+ */
 double *xvm_new(size_t N) {
-#ifndef __SSE2__
+#ifdef XVM_ANSI
 	return xmalloc(sizeof(double) * N);
 #else
 	N += N % 4;
@@ -72,8 +110,11 @@ double *xvm_new(size_t N) {
 #endif
 }
 
+/* xvm_free:
+ *   Free a vector allocated by xvm_new.
+ */
 void xvm_free(double x[]) {
-#ifndef __SSE2__
+#ifdef XVM_ANSI
 	free(x);
 #else
 	_mm_free(x);
@@ -147,7 +188,7 @@ void xvm_axpy(double r[], double a, const double x[], const double y[],
  *   BSD licence like the remaining of Wapiti.
  */
 void xvm_expma(double r[], const double x[], double a, size_t N) {
-#ifndef __SSE2__
+#ifndef XVM_SSE2
 	for (size_t n = 0; n < N; n++)
 		r[n] = exp(x[n]) - a;
 #else
