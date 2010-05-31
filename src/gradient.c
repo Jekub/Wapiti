@@ -407,10 +407,10 @@ void grd_spfwdbwd(grd_t *grd, const seq_t *seq) {
  *   the second one is the expectation of f_k under the empirical distribution.
  *
  *   The second is very simple to compute as we just have to sum over the
- *   actives observations in the sequence. The first one is more tricky as it
- *   involve computing the probability p_θ. This is where we use all the
- *   previous computations. Again we separate the computations for unigrams and
- *   bigrams here.
+ *   actives observations in the sequence and will be done by the grd_subemp.
+ *   The first one is more tricky as it involve computing the probability p_θ.
+ *   This is where we use all the previous computations. Again we separate the
+ *   computations for unigrams and bigrams here.
  *
  *   These probabilities are given by
  *       p_θ(y_t=y|x)            = α_t(y)β_t(y) / Z_θ
@@ -434,7 +434,6 @@ void grd_flupgrad(grd_t *grd, const seq_t *seq) {
 	double *g = grd->g;
 	for (int t = 0; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
-		// Add the expectation over the model distribution
 		for (size_t y = 0; y < Y; y++) {
 			double e = (*alpha)[t][y] * (*beta)[t][y] * unorm[t];
 			for (size_t n = 0; n < pos->ucnt; n++) {
@@ -442,14 +441,9 @@ void grd_flupgrad(grd_t *grd, const seq_t *seq) {
 				g[mdl->uoff[o] + y] += e;
 			}
 		}
-		// And substract the expectation over the empirical one.
-		const size_t y = seq->pos[t].lbl;
-		for (size_t n = 0; n < pos->ucnt; n++)
-			g[mdl->uoff[pos->uobs[n]] + y] -= 1.0;
 	}
 	for (int t = 1; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
-		// Add the expectation over the model distribution
 		for (size_t yp = 0, d = 0; yp < Y; yp++) {
 			for (size_t y = 0; y < Y; y++, d++) {
 				double e = (*alpha)[t - 1][yp] * (*beta)[t][y]
@@ -460,16 +454,10 @@ void grd_flupgrad(grd_t *grd, const seq_t *seq) {
 				}
 			}
 		}
-		// And substract the expectation over the empirical one.
-		const size_t yp = seq->pos[t - 1].lbl;
-		const size_t y  = seq->pos[t    ].lbl;
-		const size_t d  = yp * Y + y;
-		for (size_t n = 0; n < pos->bcnt; n++)
-			g[mdl->boff[pos->bobs[n]] + d] -= 1.0;
 	}
 }
 
-/* grd_flupgrad:
+/* grd_spupgrad:
  *   The sparse matrix make things a bit more complicated here as we cannot
  *   directly multiply with the original Ψ_t(y',y,x) because we have split it
  *   two components and the second one is sparse, so we have to make a quite
@@ -493,7 +481,6 @@ void grd_spupgrad(grd_t *grd, const seq_t *seq) {
 	double *g = grd->g;
 	for (int t = 0; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
-		// Add the expectation over the model distribution
 		for (size_t y = 0; y < Y; y++) {
 			double e = (*alpha)[t][y] * (*beta)[t][y] * unorm[t];
 			for (size_t n = 0; n < pos->ucnt; n++) {
@@ -501,10 +488,6 @@ void grd_spupgrad(grd_t *grd, const seq_t *seq) {
 				g[mdl->uoff[o] + y] += e;
 			}
 		}
-		// And substract the expectation over the empirical one.
-		const size_t y = seq->pos[t].lbl;
-		for (size_t n = 0; n < pos->ucnt; n++)
-			g[mdl->uoff[pos->uobs[n]] + y] -= 1.0;
 	}
 	for (int t = 1; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
@@ -534,7 +517,27 @@ void grd_spupgrad(grd_t *grd, const seq_t *seq) {
 				}
 			}
 		}
-		// And substract the expectation over the empirical one.
+	}
+}
+
+/* grd_subemp:
+ *   Substract from the gradient, the expectation over the empirical
+ *   distribution. This is the second step of the gradient computation shared
+ *   by the non-sparse and sparse version.
+ */
+void grd_subemp(grd_t *grd, const seq_t *seq) {
+	const mdl_t *mdl = grd->mdl;
+	const size_t Y = mdl->nlbl;
+	const int    T = seq->len;
+	double *g = grd->g;
+	for (int t = 0; t < T; t++) {
+		const pos_t *pos = &(seq->pos[t]);
+		const size_t y = seq->pos[t].lbl;
+		for (size_t n = 0; n < pos->ucnt; n++)
+			g[mdl->uoff[pos->uobs[n]] + y] -= 1.0;
+	}
+	for (int t = 1; t < T; t++) {
+		const pos_t *pos = &(seq->pos[t]);
 		const size_t yp = seq->pos[t - 1].lbl;
 		const size_t y  = seq->pos[t    ].lbl;
 		const size_t d  = yp * Y + y;
@@ -617,6 +620,7 @@ void grd_doseq(grd_t *grd, const seq_t *seq) {
 		grd_spfwdbwd(grd, seq);
 		grd_spupgrad(grd, seq);
 	}
+	grd_subemp(grd, seq);
 	grd_logloss(grd, seq);
 }
 
