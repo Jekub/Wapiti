@@ -65,7 +65,7 @@ void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[]) {
 	const int     T = seq->len;
 	// Like for the gradient, we rely on stack storage and let the caller
 	// ensure there is enough free space there. This function will need
-	//   8 * T * (2 + Y * (1 + Y))
+	//   8 * ((T * Y * (1 + Y)) + 2 * Y)
 	// bytes of stack plus a bit more for variables.
 	double psi [T][Y][Y];
 	size_t back[T][Y];
