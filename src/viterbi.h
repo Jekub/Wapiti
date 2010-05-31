@@ -38,6 +38,7 @@
 #include "sequence.h"
 
 void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[]);
+void tag_nbviterbi(const mdl_t *mdl, const seq_t *seq, size_t out[], size_t N);
 void tag_label(const mdl_t *mdl, FILE *fin, FILE *fout);
 
 #endif

@@ -28,6 +28,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <float.h>
 #include <stddef.h>
 #include <stdio.h>
 
@@ -166,6 +167,111 @@ void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[]) {
 	}
 }
 
+/* tag_nbviterbi:
+ *   This function implement the Viterbi algorithm in order to decode the N-most
+ *   probable sequences of labels according to the model. It can be used to
+ *   compute only the best one and will return the same sequence than the
+ *   previous function but will be slower to do it.
+ */
+void tag_nbviterbi(const mdl_t *mdl, const seq_t *seq, size_t out[], size_t N) {
+	const double *x = mdl->theta;
+	const size_t  Y = mdl->nlbl;
+	const int     T = seq->len;
+	// Like for the gradient, we rely on stack storage and let the caller
+	// ensure there is enough free space there. This function will need
+	//   8 * (Y * N * (T + 2) + Y * Y * T)
+	// bytes of stack plus a bit more for variables.
+	double psi [T][Y    ][Y];
+	size_t back[T][Y * N];
+	double cur    [Y * N];
+	double old    [Y * N];
+	// We first have to compute the Ψ_t(y',y,x_t) weights defined as
+	//   Ψ_t(y',y,x_t) = \exp( ∑_k θ_k f_k(y',y,x_t) )
+	// This is exactly the same as standard Viterbi so see comment above.
+	for (int t = 0; t < T; t++) {
+		const pos_t *pos = &(seq->pos[t]);
+		for (size_t y = 0; y < Y; y++) {
+			double sum = 0.0;
+			for (size_t n = 0; n < pos->ucnt; n++) {
+				const size_t o = pos->uobs[n];
+				sum += x[mdl->uoff[o] + y];
+			}
+			for (size_t yp = 0; yp < Y; yp++)
+				psi[t][yp][y] = sum;
+		}
+	}
+	for (int t = 1; t < T; t++) {
+		const pos_t *pos = &(seq->pos[t]);
+		for (size_t yp = 0, d = 0; yp < Y; yp++) {
+			for (size_t y = 0; y < Y; y++, d++) {
+				double sum = 0.0;
+				for (size_t n = 0; n < pos->bcnt; n++) {
+					const size_t o = pos->bobs[n];
+					sum += x[mdl->boff[o] + d];
+				}
+				psi[t][yp][y] += sum;
+			}
+		}
+	}
+	// Here also, it's classical but we have to keep the N best paths
+	// leading to each nodes of the lattice instead of only the best one.
+	// This mean that code is less trivial and the current implementation is
+	// not the most efficient way to do this but it works well and is good
+	// enough for the moment.
+	// We first build the list of all incoming arcs from all paths from all
+	// N-best nodes and next select the N-best one. There is a lot of room
+	// here for later optimisations if needed.
+	for (size_t y = 0, d = 0; y < Y; y++) {
+		cur[d++] = psi[0][0][y];
+		for (size_t n = 1; n < N; n++)
+			cur[d++] = -DBL_MAX;
+	}
+	for (int t = 1; t < T; t++) {
+		for (size_t d = 0; d < Y * N; d++)
+			old[d] = cur[d];
+		for (size_t y = 0; y < Y; y++) {
+			// 1st, build the list of all incoming
+			double lst[Y * N];
+			for (size_t yp = 0, d = 0; yp < Y; yp++)
+				for (size_t n = 0; n < N; n++, d++)
+					lst[d] = psi[t][yp][y] + old[d];
+			// 2nd, init the back with the N first
+			size_t *bk = &back[t][y * N];
+			for (size_t n = 0; n < N; n++)
+				bk[n] = n;
+			// 3rd, search the N highest values
+			for (size_t i = N; i < N * Y; i++) {
+				// Search the smallest current value
+				size_t idx = 0;
+				for (size_t n = 1; n < N; n++)
+					if (lst[bk[n]] < lst[bk[idx]])
+						idx = n;
+				// And replace it if needed
+				if (lst[i] > lst[bk[idx]])
+					bk[idx] = i;
+			}
+			// 4th, get the new scores
+			for (size_t n = 0; n < N; n++)
+				cur[y * N + n] = lst[bk[n]];
+		}
+	}
+	// Retrieving the best paths is similar to classical Viterbi except that
+	// we have to search for the N bet ones and there is N time more
+	// possibles starts.
+	for (size_t n = 0; n < N; n++) {
+		size_t *o = &out[n * T];
+		int bst = 0;
+		for (size_t d = 1; d < Y * N; d++)
+			if (cur[d] > cur[bst])
+				bst = d;
+		cur[bst] = -DBL_MAX;
+		for (int t = T; t > 0; t--) {
+			o[t - 1] = bst / N;
+			bst = back[t - 1][bst];
+		}
+	}
+}
+
 /* tag_label:
  *   Label a data file using the current model. This output an almost exact copy
  *   of the input file with an additional column with the predicted label. If
@@ -177,6 +283,7 @@ void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[]) {
 void tag_label(const mdl_t *mdl, FILE *fin, FILE *fout) {
 	qrk_t *lbls = mdl->reader->lbl;
 	const size_t Y = mdl->nlbl;
+	const size_t N = mdl->opt->nbest;
 	// We start by preparing the statistic collection to be ready if check
 	// option is used. The stat array hold the following for each label
 	//   [0] # of reference with this label
@@ -197,14 +304,21 @@ void tag_label(const mdl_t *mdl, FILE *fin, FILE *fout) {
 		if (raw == NULL)
 			break;
 		seq_t *seq = rdr_raw2seq(mdl->reader, raw, mdl->opt->check);
-		size_t out[seq->len];
-		tag_viterbi(mdl, seq, out);
+		size_t out[seq->len * N];
+		if (N == 1)
+			tag_viterbi(mdl, seq, out);
+		else
+			tag_nbviterbi(mdl, seq, out, N);
 		// Next we output the raw sequence with an aditional column for
 		// the predicted labels
 		for (int t = 0; t < seq->len; t++) {
 			if (!mdl->opt->label)
 				fprintf(fout, "%s\t", raw->lines[t]);
-			fprintf(fout, "%s\n", qrk_id2str(lbls, out[t]));
+			for (size_t n = 0; n < N; n++) {
+				size_t lbl = out[n * seq->len + t];
+				fprintf(fout, "%s", qrk_id2str(lbls, lbl));
+				fprintf(fout, "%c", n == N - 1 ? '\n' : '\t');
+			}
 		}
 		fprintf(fout, "\n");
 		// If user provided reference labels, use them to collect
@@ -213,11 +327,11 @@ void tag_label(const mdl_t *mdl, FILE *fin, FILE *fout) {
 			bool err = false;
 			for (int t = 0; t < seq->len; t++) {
 				stat[0][seq->pos[t].lbl]++;
-				stat[1][out[t]]++;
+				stat[1][out[t * N]]++;
 				if (seq->pos[t].lbl != out[t])
 					terr++, err = true;
 				else
-					stat[2][out[t]]++;
+					stat[2][out[t * N]]++;
 			}
 			tcnt += seq->len;
 			serr += err;
