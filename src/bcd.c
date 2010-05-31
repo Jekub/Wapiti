@@ -340,10 +340,10 @@ void trn_bcd(mdl_t *mdl) {
 	info("      Done\n");
 	// Allocate the specific trainer of BCD
 	bcd_t *bcd = xmalloc(sizeof(bcd_t));
-	bcd->ugrd   = xmalloc(sizeof(double) * Y);
-	bcd->uhes   = xmalloc(sizeof(double) * Y);
-	bcd->bgrd   = xmalloc(sizeof(double) * Y * Y);
-	bcd->bhes   = xmalloc(sizeof(double) * Y * Y);
+	bcd->ugrd   = xvm_new(Y);
+	bcd->uhes   = xvm_new(Y);
+	bcd->bgrd   = xvm_new(Y * Y);
+	bcd->bhes   = xvm_new(Y * Y);
 	bcd->actpos = xmalloc(sizeof(size_t) * T);
 	bcd->grd    = grd_new(mdl, NULL);
 	// And train the model
@@ -381,8 +381,8 @@ void trn_bcd(mdl_t *mdl) {
 	}
 	// Cleanup memory
 	grd_free(bcd->grd);
-	free(bcd->ugrd); free(bcd->uhes);
-	free(bcd->bgrd); free(bcd->bhes);
+	xvm_free(bcd->ugrd); xvm_free(bcd->uhes);
+	xvm_free(bcd->bgrd); xvm_free(bcd->bhes);
 	free(bcd->actpos);
 	free(bcd);
 	for (size_t o = 0; o < O; o++)

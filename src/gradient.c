@@ -94,16 +94,16 @@ grd_t *grd_new(mdl_t *mdl, double *g) {
 	grd->mdl   = mdl;
 	grd->g     = g;
 	grd->psi   = xvm_new(T * Y * Y);
-	grd->alpha = xmalloc(sizeof(double) * T * Y);
-	grd->beta  = xmalloc(sizeof(double) * T * Y);
-	grd->scale = xmalloc(sizeof(double) * T);
-	grd->unorm = xmalloc(sizeof(double) * T);
-	grd->bnorm = xmalloc(sizeof(double) * T);
+	grd->alpha = xvm_new(T * Y);
+	grd->beta  = xvm_new(T * Y);
+	grd->scale = xvm_new(T);
+	grd->unorm = xvm_new(T);
+	grd->bnorm = xvm_new(T);
 	if (mdl->opt->sparse) {
 		grd->psiuni = xvm_new(T * Y);
-		grd->psiyp  = xmalloc(sizeof(double) * T * Y * Y);
-		grd->psiidx = xmalloc(sizeof(double) * T * Y);
-		grd->psioff = xmalloc(sizeof(double) * T);
+		grd->psiyp  = xmalloc(T * Y * Y);
+		grd->psiidx = xmalloc(T * Y);
+		grd->psioff = xmalloc(T);
 	}
 	return grd;
 }
@@ -119,11 +119,11 @@ void grd_free(grd_t *grd) {
 		free(grd->psioff);
 	}
 	xvm_free(grd->psi);
-	free(grd->bnorm);
-	free(grd->unorm);
-	free(grd->scale);
-	free(grd->beta);
-	free(grd->alpha);
+	xvm_free(grd->bnorm);
+	xvm_free(grd->unorm);
+	xvm_free(grd->scale);
+	xvm_free(grd->beta);
+	xvm_free(grd->alpha);
 	free(grd);
 }
 
