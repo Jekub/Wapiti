@@ -37,23 +37,28 @@
 #include "tools.h"
 #include "vmath.h"
 
-#if defined(__SSE3__)
-  #define XVM_SSE3
-  #define XVM_SSE2
-  #define XVM_SSE1
-#elif defined(__SSE2__)
-  #define XVM_SSE2
-  #define XVM_SSE1
-#elif defined(__SSE__)
-  #define XVM_SSE1
+#if defined(WAP_USE_SSE)
+  #if defined(__SSE3__)
+    #define XVM_SSE3
+    #define XVM_SSE2
+    #define XVM_SSE1
+  #elif defined(__SSE2__)
+    #define XVM_SSE2
+    #define XVM_SSE1
+  #elif defined(__SSE__)
+    #define XVM_SSE1
+    #define XVM_ANSI
+  #endif
+#else
   #define XVM_ANSI
 #endif
 
-#if WAP_PREC == single
-  #undef XVM_SSE1
-  #undef XVM_SSE2
-  #undef XVM_SSE3
-  #define XVM_ANSI
+#if defined(WAP_PREC_SGL)
+  #define XVM_32
+#elif defined(WAP_PREC_DBL)
+  #define XVM_64
+#else
+  #error "no floating point precision defined"
 #endif
 
 #ifdef XVM_SSE3
@@ -65,27 +70,6 @@
 #ifdef XVM_SSE1
 #include <xmmintrin.h>
 #endif
-
-/******************************************************************************
- * eXtended Vector Maths
- *
- *   These functions are vector operations that you can found in almost all
- *   linear agebra library like BLAS. As compielrs optimize them quite well,
- *   there is just plain C99 version of them. If you have an optimized BLAS
- *   library for your system, fell free to call it here as you will probably
- *   gain a little performance improvment but don't expect to much.
- *
- *   The main thing is that we work on very huge vectors that do not fit in
- *   cache so the bottleneck is in memory access not in the computations
- *   themselves.
- *
- *   There is one exception, the component exponential minus a constant. The
- *   exponential function is quite slow and can take a huge amount of total time
- *   so we provide an SSE2 optimized version which can be up to four time
- *   quicker than the system one, depending on your processor.
- *
- *   As the code is pretty straight forward, there is no need for comments here.
- ******************************************************************************/
 
 /* xvm_mode:
  *   Return a string describing the SSE level used in the optimized code paths.
@@ -111,8 +95,13 @@ real *xvm_new(size_t N) {
 #ifdef XVM_ANSI
 	return xmalloc(sizeof(real) * N);
 #else
+  #ifdef XVM_32
+	if (N % 8 != 0)
+		N += 8 - N % 8;
+  #else
 	if (N % 4 != 0)
 		N += 4 - N % 4;
+  #endif
 	void *ptr = _mm_malloc(sizeof(real) * N, 16);
 	if (ptr == NULL)
 		fatal("out of memory");
@@ -136,7 +125,19 @@ void xvm_free(real x[]) {
  *       r = -x
  */
 void xvm_neg(real r[], const real x[], size_t N) {
-#ifdef XVM_SSE2
+#if defined(XVM_32) && defined(XVM_SSE1)
+	assert(r != NULL && ((size_t)r % 16) == 0);
+	assert(x != NULL && ((size_t)x % 16) == 0);
+	const __m128 vz = _mm_setzero_ps();
+	for (size_t n = 0; n < N; n += 8) {
+		const __m128 x0 = _mm_load_ps(x + n    );
+		const __m128 x1 = _mm_load_ps(x + n + 4);
+		const __m128 r0 = _mm_sub_ps(vz, x0);
+		const __m128 r1 = _mm_sub_ps(vz, x1);
+		_mm_store_ps(r + n,     r0);
+		_mm_store_ps(r + n + 4, r1);
+	}
+#elif defined(XVM_64) && defined(XVM_SSE2)
 	assert(r != NULL && ((size_t)r % 16) == 0);
 	assert(x != NULL && ((size_t)x % 16) == 0);
 	const __m128d vz = _mm_setzero_pd();
@@ -159,7 +160,21 @@ void xvm_neg(real r[], const real x[], size_t N) {
  *       r = x .- y
  */
 void xvm_sub(real r[], const real x[], const real y[], size_t N) {
-#ifdef XVM_SSE2
+#if defined(XVM_32) && defined(XVM_SSE1)
+	assert(r != NULL && ((size_t)r % 16) == 0);
+	assert(x != NULL && ((size_t)x % 16) == 0);
+	assert(y != NULL && ((size_t)y % 16) == 0);
+	for (size_t n = 0; n < N; n += 8) {
+		const __m128 x0 = _mm_load_ps(x + n    );
+		const __m128 x1 = _mm_load_ps(x + n + 4);
+		const __m128 y0 = _mm_load_ps(y + n    );
+		const __m128 y1 = _mm_load_ps(y + n + 4);
+		const __m128 r0 = _mm_sub_ps(x0, y0);
+		const __m128 r1 = _mm_sub_ps(x1, y1);
+		_mm_store_ps(r + n,     r0);
+		_mm_store_ps(r + n + 4, r1);
+	}
+#elif defined(XVM_64) && defined(XVM_SSE2)
 	assert(r != NULL && ((size_t)r % 16) == 0);
 	assert(x != NULL && ((size_t)x % 16) == 0);
 	assert(y != NULL && ((size_t)y % 16) == 0);
@@ -206,7 +221,35 @@ real xvm_unit(real r[], const real x[], size_t N) {
  */
 real xvm_norm(const real x[], size_t N) {
 	real r = 0.0;
-#ifdef XVM_SSE2
+#if defined(XVM_32) && defined(XVM_SSE1)
+	assert(x != NULL && ((size_t)x % 16) == 0);
+	size_t n, d = N % 8;
+	__m128 s0 = _mm_setzero_ps();
+	__m128 s1 = _mm_setzero_ps();
+	for (n = 0; n < N - d; n += 8) {
+		const __m128 x0 = _mm_load_ps(x + n    );
+		const __m128 x1 = _mm_load_ps(x + n + 4);
+		const __m128 r0 = _mm_mul_ps(x0, x0);
+		const __m128 r1 = _mm_mul_ps(x1, x1);
+		s0 = _mm_add_ps(s0, r0);
+		s1 = _mm_add_ps(s1, r1);
+	}
+	s0 = _mm_add_ps(s0, s1);
+  #if defined(XVM_SSE3)
+	s0 = _mm_hadd_ps(s0, s0);
+	s0 = _mm_hadd_ps(s0, s0);
+  #else
+	s1 = s0;
+	s0 = _mm_shuffle_ps(s0, s1, _MM_SHUFFLE(1, 0, 3, 2));
+	s0 = _mm_add_ps(s0, s1);
+	s1 = s0;
+	s0 = _mm_shuffle_ps(s0, s1, _MM_SHUFFLE(2, 3, 0, 1));
+	s0 = _mm_add_ps(s0, s1);
+  #endif
+	_mm_store_ss(&r, s0);
+	for ( ; n < N; n++)
+		r += x[n] * x[n];
+#elif defined(XVM_64) && defined(XVM_SSE2)
 	assert(x != NULL && ((size_t)x % 16) == 0);
 	size_t n, d = N % 4;
 	__m128d s0 = _mm_setzero_pd();
@@ -229,14 +272,50 @@ real xvm_norm(const real x[], size_t N) {
 	for (size_t n = 0; n < N; n++)
 		r += x[n] * x[n];
 #endif
+#if defined(XVM_32)
+	return sqrtf(r);
+#else
 	return sqrt(r);
+#endif
 }
 
 /* xvm_dot:
  *   Return the dot product of the two given vectors.
  */
 real xvm_dot(const real x[], const real y[], size_t N) {
-#ifdef XVM_SSE2
+	real r = 0.0;
+#if defined(XVM_32) && defined(XVM_SSE1)
+	assert(x != NULL && ((size_t)x % 16) == 0);
+	assert(y != NULL && ((size_t)y % 16) == 0);
+	size_t n, d = N % 8;
+	__m128 s0 = _mm_setzero_ps();
+	__m128 s1 = _mm_setzero_ps();
+	for (n = 0; n < N - d; n += 8) {
+		const __m128 x0 = _mm_load_ps(x + n    );
+		const __m128 x1 = _mm_load_ps(x + n + 4);
+		const __m128 y0 = _mm_load_ps(y + n    );
+		const __m128 y1 = _mm_load_ps(y + n + 4);
+		const __m128 r0 = _mm_mul_ps(x0, y0);
+		const __m128 r1 = _mm_mul_ps(x1, y1);
+		s0 = _mm_add_ps(s0, r0);
+		s1 = _mm_add_ps(s1, r1);
+	}
+	s0 = _mm_add_ps(s0, s1);
+  #if __SSE__ >= 3
+	s0 = _mm_hadd_ps(s0, s0);
+	s0 = _mm_hadd_ps(s0, s0);
+  #else
+	s1 = s0;
+	s0 = _mm_shuffle_ps(s0, s1, _MM_SHUFFLE(1, 0, 3, 2));
+	s0 = _mm_add_ps(s0, s1);
+	s1 = s0;
+	s0 = _mm_shuffle_ps(s0, s1, _MM_SHUFFLE(2, 3, 0, 1));
+	s0 = _mm_add_ps(s0, s1);
+  #endif
+	_mm_store_ss(&r, s0);
+	for ( ; n < N; n++)
+		r += x[n] * y[n];
+#elif defined(XVM_64) && defined(XVM_SSE2)
 	assert(x != NULL && ((size_t)x % 16) == 0);
 	assert(y != NULL && ((size_t)y % 16) == 0);
 	size_t n, d = N % 4;
@@ -255,26 +334,39 @@ real xvm_dot(const real x[], const real y[], size_t N) {
 	s0 = _mm_add_pd(s0, s1);
 	s1 = _mm_shuffle_pd(s0, s0, _MM_SHUFFLE2(1, 1));
 	s0 = _mm_add_pd(s0, s1);
-	real r;
 	_mm_store_sd(&r, s0);
 	for ( ; n < N; n++)
 		r += x[n] * y[n];
-	return r;
 #else
-	float r = 0.0;
 	for (size_t n = 0; n < N; n++)
 		r += x[n] * y[n];
-	return r;
 #endif
+	return r;
 }
 
 /* xvm_axpy:
  *   Return the sum of x scaled by a and y:
  *       r = a * x + y
  */
-void xvm_axpy(real r[], real a, const real x[], const real y[],
-                     size_t N) {
-#ifdef XVM_SSE2
+void xvm_axpy(real r[], real a, const real x[], const real y[], size_t N) {
+#if defined(XVM_32) && defined(XVM_SSE1)
+	assert(r != NULL && ((size_t)r % 16) == 0);
+	assert(x != NULL && ((size_t)x % 16) == 0);
+	assert(y != NULL && ((size_t)y % 16) == 0);
+	const __m128 va = _mm_set1_ps(a);
+	for (size_t n = 0; n < N; n += 8) {
+		const __m128 x0 = _mm_load_ps(x + n    );
+		const __m128 x1 = _mm_load_ps(x + n + 4);
+		const __m128 y0 = _mm_load_ps(y + n    );
+		const __m128 y1 = _mm_load_ps(y + n + 4);
+		const __m128 t0 = _mm_mul_ps(x0, va);
+		const __m128 t1 = _mm_mul_ps(x1, va);
+		const __m128 r0 = _mm_add_ps(t0, y0);
+		const __m128 r1 = _mm_add_ps(t1, y1);
+		_mm_store_ps(r + n,     r0);
+		_mm_store_ps(r + n + 4, r1);
+	}
+#elif defined(XVM_64) && defined(XVM_SSE2)
 	assert(r != NULL && ((size_t)r % 16) == 0);
 	assert(x != NULL && ((size_t)x % 16) == 0);
 	assert(y != NULL && ((size_t)y % 16) == 0);
@@ -330,11 +422,8 @@ void xvm_axpy(real r[], real a, const real x[], const real y[],
  *   BSD licence like the remaining of Wapiti.
  */
 void xvm_expma(real r[], const real x[], real a, size_t N) {
-#ifndef XVM_SSE2
-	for (size_t n = 0; n < N; n++)
-		r[n] = exp(x[n]) - a;
-#else
-#define xvm_vconst(v) (_mm_castsi128_pd(_mm_set1_epi64x((v))))
+#if defined(XVM_64) && defined(XVM_SSE2)
+  #define xvm_vconst(v) (_mm_castsi128_pd(_mm_set1_epi64x((v))))
 	assert(r != NULL && ((size_t)r % 16) == 0);
 	assert(x != NULL && ((size_t)x % 16) == 0);
 	const __m128i vl  = _mm_set1_epi64x(0x3ff0000000000000ULL);
@@ -423,6 +512,9 @@ void xvm_expma(real r[], const real x[], real a, size_t N) {
 		_mm_store_pd(r + n,     v1);
 		_mm_store_pd(r + n + 2, v2);
 	}
+#else
+	for (size_t n = 0; n < N; n++)
+		r[n] = exp(x[n]) - a;
 #endif
 }
 

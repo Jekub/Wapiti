@@ -46,8 +46,7 @@ real xvm_unit(real r[], const real x[], size_t N);
 real xvm_norm(const real x[], size_t N);
 real xvm_dot(const real x[], const real y[], size_t N);
 
-void xvm_axpy(real r[], real a, const real x[], const real y[],
-              size_t N);
+void xvm_axpy(real r[], real a, const real x[], const real y[], size_t N);
 
 void xvm_expma(real r[], const real x[], real a, size_t N);
 

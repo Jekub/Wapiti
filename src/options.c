@@ -161,7 +161,12 @@ void opt_parse(int argc, char *argv[argc], opt_t *opt) {
 		exit(EXIT_FAILURE);
 	} else if (!strcmp(argv[0], "--version")) {
 		fprintf(stderr, "Wapiti v" VERSION "\n");
-		fprintf(stderr, "  Optimization mode: %s\n", xvm_mode());
+#ifdef WAP_PREC_SGL
+		fprintf(stderr, "  Floating point prec: single\n");
+#else
+		fprintf(stderr, "  Floating point prec: double\n");
+#endif
+		fprintf(stderr, "  Optimization mode:   %s\n", xvm_mode());
 		exit(EXIT_SUCCESS);
 	}
 	// Get the mode to use
