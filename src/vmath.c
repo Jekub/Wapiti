@@ -205,6 +205,35 @@ double xvm_dot(const double x[], const double y[], size_t N) {
 #endif
 }
 
+/* xvm_axpy:
+ *   Return the sum of x scaled by a and y:
+ *       r = a * x + y
+ */
+void xvm_axpy(double r[], double a, const double x[], const double y[],
+                     size_t N) {
+#ifdef XVM_SSE2
+	assert(r != NULL && ((size_t)r % 16) == 0);
+	assert(x != NULL && ((size_t)x % 16) == 0);
+	assert(y != NULL && ((size_t)y % 16) == 0);
+	const __m128d va = _mm_set1_pd(a);
+	for (size_t n = 0; n < N; n += 4) {
+		const __m128d x0 = _mm_load_pd(x + n    );
+		const __m128d x1 = _mm_load_pd(x + n + 2);
+		const __m128d y0 = _mm_load_pd(y + n    );
+		const __m128d y1 = _mm_load_pd(y + n + 2);
+		const __m128d t0 = _mm_mul_pd(x0, va);
+		const __m128d t1 = _mm_mul_pd(x1, va);
+		const __m128d r0 = _mm_add_pd(t0, y0);
+		const __m128d r1 = _mm_add_pd(t1, y1);
+		_mm_store_pd(r + n,     r0);
+		_mm_store_pd(r + n + 2, r1);
+	}
+#else
+	for (size_t n = 0; n < N; n++)
+		r[n] = a * x[n] + y[n];
+#endif
+}
+
 double xvm_norm(const double x[], size_t N) {
 	double res = 0.0;
 	for (size_t n = 0; n < N; n++)
@@ -224,12 +253,6 @@ double xvm_unit(double r[], const double x[], size_t N) {
 	const double scale = 1.0 / sum;
 	xvm_scale(r, x, scale, N);
 	return scale;
-}
-
-void xvm_axpy(double r[], double a, const double x[], const double y[],
-                     size_t N) {
-	for (size_t n = 0; n < N; n++)
-		r[n] = a * x[n] + y[n];
 }
 
 /* vms_expma:
