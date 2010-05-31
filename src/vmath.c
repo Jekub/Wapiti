@@ -35,6 +35,10 @@
 #include "tools.h"
 #include "vmath.h"
 
+#ifdef __SSE2__
+#include <emmintrin.h>
+#endif
+
 /******************************************************************************
  * eXtended Vector Maths
  *
@@ -56,6 +60,26 @@
  *   As the code is pretty straight forward, there is no need for comments here.
  ******************************************************************************/
 
+double *xvm_new(size_t N) {
+#ifndef __SSE2__
+	return xmalloc(sizeof(double) * N);
+#else
+	N += N % 4;
+	void *ptr = _mm_malloc(sizeof(double) * N, 16);
+	if (ptr == NULL)
+		fatal("out of memory");
+	return ptr;
+#endif
+}
+
+void xvm_free(double x[]) {
+#ifndef __SSE2__
+	free(x);
+#else
+	_mm_free(x);
+#endif
+}
+	
 double xvm_norm(const double x[], size_t N) {
 	double res = 0.0;
 	for (size_t n = 0; n < N; n++)
@@ -122,25 +146,12 @@ void xvm_axpy(double r[], double a, const double x[], const double y[],
  *   This code is copyright 2004-2010 Thomas Lavergne and licenced under the
  *   BSD licence like the remaining of Wapiti.
  */
-#ifndef __SSE2__
-
 void xvm_expma(double r[], const double x[], double a, size_t N) {
+#ifndef __SSE2__
 	for (size_t n = 0; n < N; n++)
 		r[n] = exp(x[n]) - a;
-}
-
 #else
-
-#include <emmintrin.h>
-void *xvm_alloc(size_t sz) {
-	void *ptr = _mm_malloc(sz, 16);
-	if (ptr == NULL)
-		fatal("out of memory");
-	return ptr;
-}
-
 #define xvm_vconst(v) (_mm_castsi128_pd(_mm_set1_epi64x((v))))
-void xvm_expma(double r[], const double x[], double a, size_t N) {
 	assert(r != NULL && ((size_t)r % 16) == 0);
 	assert(x != NULL && ((size_t)x % 16) == 0);
 	const __m128i vl  = _mm_set1_epi64x(0x3ff0000000000000ULL);
@@ -233,6 +244,6 @@ void xvm_expma(double r[], const double x[], double a, size_t N) {
 	// Handle the lasts elements
 	for ( ; n < N; n++)
 		r[n] = exp(x[n]) - a;
-}
 #endif
+}
 

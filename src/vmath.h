@@ -35,14 +35,13 @@
 
 #ifndef __SSE2__
 #define xvm_align
-#define xvm_alloc xmalloc
-#define xvm_free  free
 #else
 #include <emmintrin.h>
 #define xvm_align __attribute__((aligned(16)))
-#define xvm_free _mm_free
-void *xvm_alloc(size_t sz);
 #endif
+
+double *xvm_new(size_t N);
+void    xvm_free(double x[]);
 
 double xvm_norm(const double x[], size_t N);
 void xvm_scale(double r[], const double x[], double a, size_t N);

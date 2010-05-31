@@ -93,14 +93,14 @@ grd_t *grd_new(mdl_t *mdl, double *g) {
 	grd_t *grd = xmalloc(sizeof(grd_t));
 	grd->mdl   = mdl;
 	grd->g     = g;
-	grd->psi   = xvm_alloc(sizeof(double) * T * Y * Y);
+	grd->psi   = xvm_new(T * Y * Y);
 	grd->alpha = xmalloc(sizeof(double) * T * Y);
 	grd->beta  = xmalloc(sizeof(double) * T * Y);
 	grd->scale = xmalloc(sizeof(double) * T);
 	grd->unorm = xmalloc(sizeof(double) * T);
 	grd->bnorm = xmalloc(sizeof(double) * T);
 	if (mdl->opt->sparse) {
-		grd->psiuni = xvm_alloc(sizeof(double) * T * Y);
+		grd->psiuni = xvm_new(T * Y);
 		grd->psiyp  = xmalloc(sizeof(double) * T * Y * Y);
 		grd->psiidx = xmalloc(sizeof(double) * T * Y);
 		grd->psioff = xmalloc(sizeof(double) * T);
