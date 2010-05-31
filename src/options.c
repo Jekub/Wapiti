@@ -233,6 +233,7 @@ void opt_parse(int argc, char *argv[argc], opt_t *opt) {
 	argchecksub("--maxls",  opt->lbfgs.maxls  >  0  );
 	argchecksub("--eta0",   opt->sgdl1.eta0   >  0.0);
 	argchecksub("--alpha",  opt->sgdl1.alpha  >  0.0);
+	argchecksub("--nbest",  opt->nbest        >  0  );
 	#undef argchecksub
 }
 
