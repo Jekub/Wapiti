@@ -169,6 +169,42 @@ void xvm_sub(double r[], const double x[], const double y[], size_t N) {
 #endif
 }
 
+/* xvm_dot:
+ *   Return the dot product of the two given vectors.
+ */
+double xvm_dot(const double x[], const double y[], size_t N) {
+#ifdef XVM_SSE2
+	assert(x != NULL && ((size_t)x % 16) == 0);
+	assert(y != NULL && ((size_t)y % 16) == 0);
+	size_t n, d = N % 4;
+	__m128d s0 = _mm_setzero_pd();
+	__m128d s1 = _mm_setzero_pd();
+	for (n = 0; n < N - d; n += 4) {
+		const __m128d x0 = _mm_load_pd(x + n    );
+		const __m128d x1 = _mm_load_pd(x + n + 2);
+		const __m128d y0 = _mm_load_pd(y + n    );
+		const __m128d y1 = _mm_load_pd(y + n + 2);
+		const __m128d r0 = _mm_mul_pd(x0, y0);
+		const __m128d r1 = _mm_mul_pd(x1, y1);
+		s0 = _mm_add_pd(s0, r0);
+		s1 = _mm_add_pd(s1, r1);
+	}
+	s0 = _mm_add_pd(s0, s1);
+	s1 = _mm_shuffle_pd(s0, s0, _MM_SHUFFLE2(1, 1));
+	s0 = _mm_add_pd(s0, s1);
+	double r;
+	_mm_store_sd(&r, s0);
+	for ( ; n < N; n++)
+		r += x[n] * y[n];
+	return r;
+#else
+	float r = 0.0;
+	for (size_t n = 0; n < N; n++)
+		r += x[n] * y[n];
+	return r;
+#endif
+}
+
 double xvm_norm(const double x[], size_t N) {
 	double res = 0.0;
 	for (size_t n = 0; n < N; n++)
@@ -188,13 +224,6 @@ double xvm_unit(double r[], const double x[], size_t N) {
 	const double scale = 1.0 / sum;
 	xvm_scale(r, x, scale, N);
 	return scale;
-}
-
-double xvm_dot(const double x[], const double y[], size_t N) {
-	double res = 0.0;
-	for (size_t n = 0; n < N; n++)
-		res += x[n] * y[n];
-	return res;
 }
 
 void xvm_axpy(double r[], double a, const double x[], const double y[],
