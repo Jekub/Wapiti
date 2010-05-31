@@ -82,6 +82,7 @@ static void opt_help(const char *pname) {
 		"\t-m | --model    FILE    model file to load\n"
 		"\t-l | --label            output only labels\n"
 		"\t-c | --check            input is already labeled\n"
+		"\t-s | --score            add scores to output\n"
 		"\t-n | --nbest    INT     output n-best list\n"
 		"\n"
 		"Dumping mode\n"
@@ -102,7 +103,7 @@ const opt_t opt_defaults = {
 	.lbfgs = {.clip  = false, .histsz = 5, .maxls = 20},
 	.sgdl1 = {.eta0  = 0.8,   .alpha  = 0.85},
 	.bcd   = {.kappa = 1.5},
-	.label   = false,    .check   = false, .nbest = 1
+	.label   = false,    .check   = false, .outsc = false,  .nbest = 1
 };
 
 /* opt_switch:
@@ -137,6 +138,7 @@ struct {
 	{1, "-m", "--model",   'S', offsetof(opt_t, model       )},
 	{1, "-l", "--label",   'B', offsetof(opt_t, label       )},
 	{1, "-c", "--check",   'B', offsetof(opt_t, check       )},
+	{1, "-s", "--score",   'B', offsetof(opt_t, outsc       )},
 	{1, "-n", "--nbest",   'I', offsetof(opt_t, nbest       )},
 	{-1, NULL, NULL, '\0', 0}
 };

@@ -68,6 +68,7 @@ struct opt_s {
 	// Options for labelling
 	bool   label;
 	bool   check;
+	bool   outsc;
 	int    nbest;
 };
 

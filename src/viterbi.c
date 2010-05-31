@@ -60,7 +60,7 @@
  *   And like for the gradient, the caller is responsible to ensure there is
  *   enough stack space.
  */
-void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[]) {
+void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[], double *sc) {
 	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
@@ -161,6 +161,8 @@ void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[]) {
 	for (size_t y = 1; y < Y; y++)
 		if (cur[y] > cur[bst])
 			bst = y;
+	if (sc != NULL)
+		*sc = cur[bst];
 	for (int t = T; t > 0; t--) {
 		out[t - 1] = bst;
 		bst = back[t - 1][bst];
@@ -173,7 +175,8 @@ void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[]) {
  *   compute only the best one and will return the same sequence than the
  *   previous function but will be slower to do it.
  */
-void tag_nbviterbi(const mdl_t *mdl, const seq_t *seq, size_t out[], size_t N) {
+void tag_nbviterbi(const mdl_t *mdl, const seq_t *seq, size_t out[],
+                   double scs[], size_t N) {
 	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
@@ -264,6 +267,8 @@ void tag_nbviterbi(const mdl_t *mdl, const seq_t *seq, size_t out[], size_t N) {
 		for (size_t d = 1; d < Y * N; d++)
 			if (cur[d] > cur[bst])
 				bst = d;
+		if (scs != NULL)
+			scs[n] = cur[bst];
 		cur[bst] = -DBL_MAX;
 		for (int t = T; t > 0; t--) {
 			o[t - 1] = bst / N;
@@ -305,10 +310,18 @@ void tag_label(const mdl_t *mdl, FILE *fin, FILE *fout) {
 			break;
 		seq_t *seq = rdr_raw2seq(mdl->reader, raw, mdl->opt->check);
 		size_t out[seq->len * N];
+		double scs[N];
 		if (N == 1)
-			tag_viterbi(mdl, seq, out);
+			tag_viterbi(mdl, seq, out, scs);
 		else
-			tag_nbviterbi(mdl, seq, out, N);
+			tag_nbviterbi(mdl, seq, out, scs, N);
+		// If requested, output the scores
+		if (mdl->opt->outsc) {
+			fprintf(fout, "#");
+			for (size_t n = 0; n < N; n++)
+				fprintf(fout, " %f", scs[n]);
+			fprintf(fout, "\n");
+		}
 		// Next we output the raw sequence with an aditional column for
 		// the predicted labels
 		for (int t = 0; t < seq->len; t++) {

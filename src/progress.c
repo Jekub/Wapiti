@@ -130,7 +130,7 @@ bool uit_progress(mdl_t *mdl, int it, double obj) {
 		const seq_t *seq = dat->seq[s];
 		const int    T   = seq->len;
 		size_t out[T];
-		tag_viterbi(mdl, seq, out);
+		tag_viterbi(mdl, seq, out, NULL);
 		// And check for eventual (probable ?) errors
 		bool err = false;
 		for (int t = 0; t < T; t++)
