@@ -122,7 +122,8 @@ void xvm_free(double x[]) {
 }
 
 /* xvm_neg:
- *   Return the component-wise negation of the given vector in the result.
+ *   Return the component-wise negation of the given vector:
+ *       r = -x
  */
 void xvm_neg(double r[], const double x[], size_t N) {
 #ifdef XVM_SSE2
@@ -140,6 +141,31 @@ void xvm_neg(double r[], const double x[], size_t N) {
 #else
 	for (size_t n = 0; n < N; n++)
 		r[n] = -x[n];
+#endif
+}
+
+/* xvm_sub:
+ *   Return the difference of the two given vector:
+ *       r = x .- y
+ */
+void xvm_sub(double r[], const double x[], const double y[], size_t N) {
+#ifdef XVM_SSE2
+	assert(r != NULL && ((size_t)r % 16) == 0);
+	assert(x != NULL && ((size_t)x % 16) == 0);
+	assert(y != NULL && ((size_t)y % 16) == 0);
+	for (size_t n = 0; n < N; n += 4) {
+		const __m128d x0 = _mm_load_pd(x + n    );
+		const __m128d x1 = _mm_load_pd(x + n + 2);
+		const __m128d y0 = _mm_load_pd(y + n    );
+		const __m128d y1 = _mm_load_pd(y + n + 2);
+		const __m128d r0 = _mm_sub_pd(x0, y0);
+		const __m128d r1 = _mm_sub_pd(x1, y1);
+		_mm_store_pd(r + n,     r0);
+		_mm_store_pd(r + n + 2, r1);
+	}
+#else
+	for (size_t n = 0; n < N; n++)
+		r[n] = x[n] - y[n];
 #endif
 }
 

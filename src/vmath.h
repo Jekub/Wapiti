@@ -39,6 +39,7 @@ double *xvm_new(size_t N);
 void    xvm_free(double x[]);
 
 void xvm_neg(double r[], const double x[], size_t N);
+void xvm_sub(double r[], const double x[], const double y[], size_t N);
 
 double xvm_norm(const double x[], size_t N);
 void xvm_scale(double r[], const double x[], double a, size_t N);

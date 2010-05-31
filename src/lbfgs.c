@@ -241,10 +241,8 @@ void trn_lbfgs(mdl_t *mdl) {
 		//   y_k = g_{k+1} - g_k
 		//   ρ_k = 1 / y_k^T s_k
 		const int kn = (k + 1) % M;
-		for (size_t f = 0; f < F; f++) {
-			s[kn][f] = x[f] - xp[f];
-			y[kn][f] = g[f] - gp[f];
-		}
+		xvm_sub(s[kn], x, xp, F);
+		xvm_sub(y[kn], g, gp, F);
 		p[kn] = 1.0 / xvm_dot(y[kn], s[kn], F);
 	}
 	// Cleanup: We free all the vectors we have allocated.
