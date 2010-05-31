@@ -68,7 +68,7 @@ void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[]) {
 	//   8 * T * (2 + Y * (1 + Y))
 	// bytes of stack plus a bit more for variables.
 	double psi [T][Y][Y];
-	double back[T][Y];
+	size_t back[T][Y];
 	double cur [Y];
 	double old [Y];
 	// We first have to compute the Ψ_t(y',y,x_t) weights defined as
