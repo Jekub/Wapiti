@@ -102,7 +102,8 @@ double *xvm_new(size_t N) {
 #ifdef XVM_ANSI
 	return xmalloc(sizeof(double) * N);
 #else
-	N += N % 4;
+	if (N % 4 != 0)
+		N += 4 - N % 4;
 	void *ptr = _mm_malloc(sizeof(double) * N, 16);
 	if (ptr == NULL)
 		fatal("out of memory");
@@ -169,6 +170,61 @@ void xvm_sub(double r[], const double x[], const double y[], size_t N) {
 #endif
 }
 
+/* xvm_scale:
+ *   Return the given vector scaled by a constant:
+ *     r = a * x
+ */
+void xvm_scale(double r[], const double x[], double a, size_t N) {
+	for (size_t n = 0; n < N; n++)
+		r[n] = x[n] * a;
+}
+
+/* xvm_norm:
+ *   Store a normalized copy of the given vector in r and return the
+ *   normalization factor.
+ */
+double xvm_unit(double r[], const double x[], size_t N) {
+	double sum = 0.0;
+	for (size_t n = 0; n < N; n++)
+		sum += x[n];
+	const double scale = 1.0 / sum;
+	xvm_scale(r, x, scale, N);
+	return scale;
+}
+
+/* xvm_norm:
+ *   Return the euclidian norm of the given vector.
+ */
+double xvm_norm(const double x[], size_t N) {
+	double r = 0.0;
+#ifdef XVM_SSE2
+	assert(x != NULL && ((size_t)x % 16) == 0);
+	size_t n, d = N % 4;
+	__m128d s0 = _mm_setzero_pd();
+	__m128d s1 = _mm_setzero_pd();
+	for (n = 0; n < N - d; n += 4) {
+		const __m128d x0 = _mm_load_pd(x + n    );
+		const __m128d x1 = _mm_load_pd(x + n + 2);
+		const __m128d r0 = _mm_mul_pd(x0, x0);
+		const __m128d r1 = _mm_mul_pd(x1, x1);
+		s0 = _mm_add_pd(s0, r0);
+		s1 = _mm_add_pd(s1, r1);
+	}
+	s0 = _mm_add_pd(s0, s1);
+	s1 = _mm_shuffle_pd(s0, s0, _MM_SHUFFLE2(1, 1));
+	s0 = _mm_add_pd(s0, s1);
+	_mm_store_sd(&r, s0);
+	for ( ; n < N; n++)
+		r += x[n] * x[n];
+#else
+	float r = 0.0;
+	for (size_t n = 0; n < N; n++)
+		r += x[n] * x[n];
+	return r;
+#endif
+	return sqrt(r);
+}
+
 /* xvm_dot:
  *   Return the dot product of the two given vectors.
  */
@@ -232,27 +288,6 @@ void xvm_axpy(double r[], double a, const double x[], const double y[],
 	for (size_t n = 0; n < N; n++)
 		r[n] = a * x[n] + y[n];
 #endif
-}
-
-double xvm_norm(const double x[], size_t N) {
-	double res = 0.0;
-	for (size_t n = 0; n < N; n++)
-		res += x[n] * x[n];
-	return sqrt(res);
-}
-
-void xvm_scale(double r[], const double x[], double a, size_t N) {
-	for (size_t n = 0; n < N; n++)
-		r[n] = x[n] * a;
-}
-
-double xvm_unit(double r[], const double x[], size_t N) {
-	double sum = 0.0;
-	for (size_t n = 0; n < N; n++)
-		sum += x[n];
-	const double scale = 1.0 / sum;
-	xvm_scale(r, x, scale, N);
-	return scale;
 }
 
 /* vms_expma:
