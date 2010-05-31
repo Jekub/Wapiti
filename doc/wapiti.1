@@ -126,6 +126,13 @@ affect the labelling process and output data will remain exactly the same with
 or without the switch, but progress will be more verbose and informative and at
 the end of the process, for each labels, the precision, recall, and f-measure
 will be displayed.
+If you also ask for N-best output, statistics are compute only on the best sequence.
+.TP
+.B \-s | \-\-score
+Output a line with Viterbi score before the data. The line start with a '#' symbol folowed by the score of each sequence of labels separated by spaces.
+.TP
+.B \-n | \-\-nbest <int>
+Output the N best sequences of labels instead of just the best one. Each sequence of labels is output as one column in the output file.
 
 .SS Dump mode
 For the moment, there is no switch specific to this mode.
