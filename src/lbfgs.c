@@ -77,24 +77,17 @@ void trn_lbfgs(mdl_t *mdl) {
 	// cannot request so much memory on the stack as this will have a too
 	// big impact on performance and will be refused by the system on non-
 	// trivial models.
-	// To make things simpler, we allocate all the memory in one call to
-	// malloc and dispatch memory in the various arrays. The main pointer
-	// will remain in the raw variable to be freed at the end.
-	double *raw = xmalloc(sizeof(double) * F * (4 + M * 2 + l1 + W));
-	double *tmp = raw;
 	x  = mdl->theta;
-	xp = tmp; tmp += F; g = tmp; tmp += F;
-	gp = tmp; tmp += F; d = tmp; tmp += F;
+	xp = xvm_new(F); g = xvm_new(F);
+	gp = xvm_new(F); d = xvm_new(F);
 	for (int m = 0; m < M; m++) {
-		s[m] = tmp; tmp += F;
-		y[m] = tmp; tmp += F;
+		s[m] = xvm_new(F);
+		y[m] = xvm_new(F);
 	}
-	pg = NULL;
-	if (l1 == true)
-		pg = tmp, tmp += F;
+	pg = l1 ? xvm_new(F) : NULL;
 	grds[0] = grd_new(mdl, g);
 	for (size_t w = 1; w < W; w++)
-		grds[w] = grd_new(mdl, tmp), tmp += F;
+		grds[w] = grd_new(mdl, xvm_new(F));
 	// Minimization: This is the heart of the function. (a big heart...) We
 	// will perform iterations until one these conditions is reached
 	//   - the maximum iteration count is reached
@@ -255,9 +248,17 @@ void trn_lbfgs(mdl_t *mdl) {
 		}
 		p[kn] = 1.0 / xvm_dot(y[kn], s[kn], F);
 	}
-	// Cleanup: This is very simple as we have carefully allocated memory in
-	// a sigle block, we must not forget to free it.
-	free(raw);
+	// Cleanup: We free all the vectors we have allocated.
+	xvm_free(xp); xvm_free(g);
+	xvm_free(gp); xvm_free(d);
+	for (int m = 0; m < M; m++) {
+		xvm_free(s[m]);
+		xvm_free(y[m]);
+	}
+	if (l1)
+		xvm_free(pg);
+	for (size_t w = 1; w < W; w++)
+		xvm_free(grds[w]->g);
 	for (size_t w = 0; w < W; w++)
 		grd_free(grds[w]);
 }

@@ -38,6 +38,7 @@
 #include "quark.h"
 #include "reader.h"
 #include "tools.h"
+#include "vmath.h"
 
 /*******************************************************************************
  * Linear chain CRF model
@@ -85,7 +86,8 @@ void mdl_free(mdl_t *mdl) {
 	free(mdl->kind);
 	free(mdl->uoff);
 	free(mdl->boff);
-	free(mdl->theta);
+	if (mdl->theta != NULL)
+		xvm_free(mdl->theta);
 	if (mdl->train != NULL)
 		rdr_freedat(mdl->train);
 	if (mdl->devel != NULL)
@@ -137,7 +139,10 @@ void mdl_sync(mdl_t *mdl) {
 		free(mdl->kind);  mdl->kind  = NULL;
 		free(mdl->uoff);  mdl->uoff  = NULL;
 		free(mdl->boff);  mdl->boff  = NULL;
-		free(mdl->theta); mdl->theta = NULL;
+		if (mdl->theta != NULL) {
+			xvm_free(mdl->theta);
+			mdl->theta = NULL;
+		}
 		oldF = oldO = 0;
 	}
 	mdl->nlbl = Y;
@@ -168,7 +173,17 @@ void mdl_sync(mdl_t *mdl) {
 	mdl->nftr = F;
 	// We can finally grow the features weights vector itself. We set all
 	// the new features to 0.0 but don't touch the old ones.
-	mdl->theta = xrealloc(mdl->theta, sizeof(double) * F);
+	// This is a bit tricky as aligned malloc cannot be simply grown so we
+	// have to allocate a new vector and copy old values ourself.
+	if (oldF != 0) {
+		double *new = xvm_new(F);
+		for (size_t f = 0; f < oldF; f++)
+			new[f] = mdl->theta[f];
+		xvm_free(mdl->theta);
+		mdl->theta = new;
+	} else {
+		mdl->theta = xvm_new(F);
+	}
 	for (size_t f = oldF; f < F; f++)
 		mdl->theta[f] = 0.0;
 	// And lock the databases
