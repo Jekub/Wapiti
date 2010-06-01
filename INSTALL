@@ -4,10 +4,9 @@
 If you have a recent compiler, normally you can just do the classical:
 	make
 	make install
-switch to super user for the second. If your compiler doesn't support the
-"-march=native" switch or if you want to install somewhere else than in
-/usr/local you will have to edit the variable definitions at the head of
-the Makefile.
+switch to super user for the second. If you want to install somewhere else than
+in /usr/local you will have to edit the variable definitions at the head of the
+Makefile.
 
-Setting a good value for the ARCH variable is very important as it will
-define if the SSE2 code is used which improve a lot performances.
+You can configure the precision used for the computations and the use of SSE instruction if available by modifying define in wapiti.h. By default, Wapiti will use double precision and SSE if available.
+
