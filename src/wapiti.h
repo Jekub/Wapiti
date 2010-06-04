@@ -30,7 +30,7 @@
 #ifndef wapiti_h
 #define wapiti_h
 
-#define VERSION "0.9.18"
+#define VERSION "0.9.19"
 
 /* The following two defined allow you to control the precision used for
  * floating point computation and the use of vector operations. Both of them

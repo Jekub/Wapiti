@@ -320,10 +320,12 @@ seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl) {
 		pos->bcnt = 0;
 		for (int x = 0; x < rdr->npats; x++) {
 			// Get the observation and map it to an identifier
-			const char *obs = pat_exec(rdr->pats[x], tok, t);
+			char *obs = pat_exec(rdr->pats[x], tok, t);
 			size_t id = qrk_str2id(rdr->obs, obs);
-			if (id == none)
+			if (id == none) {
+				free(obs);
 				continue;
+			}
 			// If the observation is ok, add it to the lists
 			int kind = 0;
 			switch (obs[0]) {
@@ -335,6 +337,7 @@ seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl) {
 				pos->uobs[pos->ucnt++] = id;
 			if (kind & 2)
 				pos->bobs[pos->bcnt++] = id;
+			free(obs);
 		}
 	}
 	// And finally, if the user specified it, populate the labels
