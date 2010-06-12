@@ -30,33 +30,14 @@
 #ifndef wapiti_h
 #define wapiti_h
 
-#define VERSION "0.9.19"
+#define VERSION "0.9.20"
 
-/* The following two defined allow you to control the precision used for
- * floating point computation and the use of vector operations. Both of them
- * will have an impact on the numerical precision of the computations.
- *
- * On x86 platform, by default, computation are done using double precision and
- * use SSE. This mean that the real precision of computation is 64bit.
- *
- * If you switch off SSE  optimisation and force your compiler to use the FP
- * stack, the precision will go up to 80bit for internal computation. If you
- * switch to single precision without SSE, you will get 32bit precision with
- * internal computation done in 80bit. And with single precision with SSE, you
- * will get only 32bit precision with only the IEEE garantee.
+/* XVM_ANSI:
+ *   By uncomenting the following define, you can force wapiti to not use SSE2 even
+ *   if available. This is the first step for a full C99 compliant version of Wapiti.
+ *   Next thing will be to make the threading code also optional.
  */
-//#define WAP_PREC_SGL
-#define WAP_USE_SSE
-
-#ifndef WAP_PREC_SGL
-  #define WAP_PREC_DBL
-#endif
-
-#ifdef WAP_PREC_SGL
-typedef float real;
-#else
-typedef double real;
-#endif
+//#define XVM_ANSI
 
 #endif
 

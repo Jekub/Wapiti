@@ -94,7 +94,7 @@ void uit_setup(mdl_t *mdl) {
 		warning("failed to set signal handler, no clean early stop");
 	times(&mdl->timer);
 	if (mdl->opt->stopwin != 0)
-		mdl->werr = xmalloc(sizeof(real) * mdl->opt->stopwin);
+		mdl->werr = xmalloc(sizeof(double) * mdl->opt->stopwin);
 	mdl->wcnt = mdl->wpos = 0;
 }
 
@@ -119,7 +119,7 @@ void uit_cleanup(mdl_t *mdl) {
  *   and false if he must stop, so this is were we will implement the trainer
  *   independant stoping criterion.
  */
-bool uit_progress(mdl_t *mdl, int it, real obj) {
+bool uit_progress(mdl_t *mdl, int it, double obj) {
 	// We first evaluate the current model performances on the devel dataset
 	// if available, else on the training dataset. We compute tokens and
 	// sequence error rate.
@@ -140,8 +140,8 @@ bool uit_progress(mdl_t *mdl, int it, real obj) {
 		tcnt += T, scnt += 1;
 		serr += err;
 	}
-	const real te = (real)terr / tcnt * 100.0;
-	const real se = (real)serr / scnt * 100.0;
+	const double te = (double)terr / tcnt * 100.0;
+	const double se = (double)serr / scnt * 100.0;
 	// Next, we compute the number of active features
 	size_t act = 0;
 	for (size_t f = 0; f < mdl->nftr; f++)
@@ -151,8 +151,8 @@ bool uit_progress(mdl_t *mdl, int it, real obj) {
 	// cannot use ansi/c function and must rely on posix one to sum time
 	// spent in main thread and in child ones.
 	tms_t now; times(&now);
-	real tm = (now.tms_utime  - mdl->timer.tms_utime )
-	        + (now.tms_cutime - mdl->timer.tms_cutime);
+	double tm = (now.tms_utime  - mdl->timer.tms_utime )
+	          + (now.tms_cutime - mdl->timer.tms_cutime);
 	tm /= sysconf(_SC_CLK_TCK);
 	mdl->total += tm;
 	mdl->timer  = now;
@@ -171,7 +171,7 @@ bool uit_progress(mdl_t *mdl, int it, real obj) {
 		mdl->wpos = (mdl->wpos + 1) % mdl->opt->stopwin;
 		mdl->wcnt++;
 		if (mdl->wcnt >= mdl->opt->stopwin) {
-			real emin = 200.0, emax = -100.0;
+			double emin = 200.0, emax = -100.0;
 			for (int i = 0; i < mdl->opt->stopwin; i++) {
 				emin = min(emin, mdl->werr[i]);
 				emax = max(emax, mdl->werr[i]);

@@ -88,7 +88,7 @@
  *   Allocation memory for gradient computation state. This allocate memory for
  *   the longest sequence present in the data set.
  */
-grd_t *grd_new(mdl_t *mdl, real *g) {
+grd_t *grd_new(mdl_t *mdl, double *g) {
 	const size_t Y = mdl->nlbl;
 	const int    T = mdl->train->mlen;
 	grd_t *grd = xmalloc(sizeof(grd_t));
@@ -151,14 +151,14 @@ void grd_free(grd_t *grd) {
  */
 void grd_fldopsi(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
-	const real   *x = mdl->theta;
+	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
-	real (*psi)[T][Y][Y] = (void *)grd->psi;
+	double (*psi)[T][Y][Y] = (void *)grd->psi;
 	for (int t = 0; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
 		for (size_t y = 0; y < Y; y++) {
-			real sum = 0.0;
+			double sum = 0.0;
 			for (size_t n = 0; n < pos->ucnt; n++) {
 				const size_t o = pos->uobs[n];
 				sum += x[mdl->uoff[o] + y];
@@ -171,7 +171,7 @@ void grd_fldopsi(grd_t *grd, const seq_t *seq) {
 		const pos_t *pos = &(seq->pos[t]);
 		for (size_t yp = 0, d = 0; yp < Y; yp++) {
 			for (size_t y = 0; y < Y; y++, d++) {
-				real sum = 0.0;
+				double sum = 0.0;
 				for (size_t n = 0; n < pos->bcnt; n++) {
 					const size_t o = pos->bobs[n];
 					sum += x[mdl->boff[o] + d];
@@ -180,7 +180,7 @@ void grd_fldopsi(grd_t *grd, const seq_t *seq) {
 			}
 		}
 	}
-	xvm_expma((real *)psi, (real *)psi, 0.0, (size_t)T * Y * Y);
+	xvm_expma((double *)psi, (double *)psi, 0.0, (size_t)T * Y * Y);
 }
 
 /* grd_spdopsi:
@@ -206,18 +206,18 @@ void grd_fldopsi(grd_t *grd, const seq_t *seq) {
  */
 void grd_spdopsi(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
-	const real   *x = mdl->theta;
+	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
-	real   (*psiuni)[T][Y] = (void *)grd->psiuni;
-	real    *psival        =         grd->psi;
+	double (*psiuni)[T][Y] = (void *)grd->psiuni;
+	double  *psival        =         grd->psi;
 	size_t  *psiyp         =         grd->psiyp;
 	size_t (*psiidx)[T][Y] = (void *)grd->psiidx;
 	size_t  *psioff        =         grd->psioff;
 	for (int t = 0; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
 		for (size_t y = 0; y < Y; y++) {
-			real sum = 0.0;
+			double sum = 0.0;
 			for (size_t n = 0; n < pos->ucnt; n++) {
 				const size_t o = pos->uobs[n];
 				sum += x[mdl->uoff[o] + y];
@@ -231,7 +231,7 @@ void grd_spdopsi(grd_t *grd, const seq_t *seq) {
 		psioff[t] = off;
 		for (size_t y = 0, nnz = 0; y < Y; y++) {
 			for (size_t yp = 0; yp < Y; yp++) {
-				real sum = 0.0;
+				double sum = 0.0;
 				for (size_t n = 0; n < pos->bcnt; n++) {
 					const size_t o = pos->bobs[n];
 					sum += x[mdl->boff[o] + yp * Y + y];
@@ -245,8 +245,8 @@ void grd_spdopsi(grd_t *grd, const seq_t *seq) {
 			(*psiidx)[t][y] = nnz;
 		}
 	}
-	xvm_expma((real *)psiuni, (real *)psiuni, 0.0, (size_t)T * Y);
-	xvm_expma((real *)psival, (real *)psival, 1.0, off);
+	xvm_expma((double *)psiuni, (double *)psiuni, 0.0, (size_t)T * Y);
+	xvm_expma((double *)psival, (double *)psival, 1.0, off);
 }
 
 /* grd_flfwdbwd:
@@ -274,18 +274,18 @@ void grd_flfwdbwd(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
 	const size_t Y = mdl->nlbl;
 	const int    T = seq->len;
-	const real (*psi)[T][Y][Y] = (void *)grd->psi;
-	real (*alpha)[T][Y] = (void *)grd->alpha;
-	real (*beta )[T][Y] = (void *)grd->beta;
-	real  *scale        =         grd->scale;
-	real  *unorm        =         grd->unorm;
-	real  *bnorm        =         grd->bnorm;
+	const double (*psi)[T][Y][Y] = (void *)grd->psi;
+	double (*alpha)[T][Y] = (void *)grd->alpha;
+	double (*beta )[T][Y] = (void *)grd->beta;
+	double  *scale        =         grd->scale;
+	double  *unorm        =         grd->unorm;
+	double  *bnorm        =         grd->bnorm;
 	for (size_t y = 0; y < Y; y++)
 		(*alpha)[0][y] = (*psi)[0][0][y];
 	scale[0] = xvm_unit((*alpha)[0], (*alpha)[0], Y);
 	for (int t = 1; t < grd->last + 1; t++) {
 		for (size_t y = 0; y < Y; y++) {
-			real sum = 0.0;
+			double sum = 0.0;
 			for (size_t yp = 0; yp < Y; yp++)
 				sum += (*alpha)[t - 1][yp] * (*psi)[t][yp][y];
 			(*alpha)[t][y] = sum;
@@ -296,7 +296,7 @@ void grd_flfwdbwd(grd_t *grd, const seq_t *seq) {
 		(*beta)[T - 1][yp] = 1.0 / Y;
 	for (int t = T - 1; t > grd->first; t--) {
 		for (size_t yp = 0; yp < Y; yp++) {
-			real sum = 0.0;
+			double sum = 0.0;
 			for (size_t y = 0; y < Y; y++)
 				sum += (*beta)[t][y] * (*psi)[t][yp][y];
 			(*beta)[t - 1][yp] = sum;
@@ -304,7 +304,7 @@ void grd_flfwdbwd(grd_t *grd, const seq_t *seq) {
 		xvm_unit((*beta)[t - 1], (*beta)[t - 1], Y);
 	}
 	for (int t = 0; t < T; t++) {
-		real z = 0.0;
+		double z = 0.0;
 		for (size_t y = 0; y < Y; y++)
 			z += (*alpha)[t][y] * (*beta)[t][y];
 		unorm[t] = 1.0 / z;
@@ -334,16 +334,16 @@ void grd_spfwdbwd(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
 	const size_t Y = mdl->nlbl;
 	const int    T = seq->len;
-	const real   (*psiuni)[T][Y] = (void *)grd->psiuni;
-	const real    *psival        =         grd->psi;
+	const double (*psiuni)[T][Y] = (void *)grd->psiuni;
+	const double  *psival        =         grd->psi;
 	const size_t  *psiyp         =         grd->psiyp;
 	const size_t (*psiidx)[T][Y] = (void *)grd->psiidx;
 	const size_t  *psioff        =         grd->psioff;
-	real (*alpha)[T][Y] = (void *)grd->alpha;
-	real (*beta )[T][Y] = (void *)grd->beta;
-	real  *scale        =         grd->scale;
-	real  *unorm        =         grd->unorm;
-	real  *bnorm        =         grd->bnorm;
+	double (*alpha)[T][Y] = (void *)grd->alpha;
+	double (*beta )[T][Y] = (void *)grd->beta;
+	double  *scale        =         grd->scale;
+	double  *unorm        =         grd->unorm;
+	double  *bnorm        =         grd->bnorm;
 	for (size_t y = 0; y < Y; y++)
 		(*alpha)[0][y] = (*psiuni)[0][y];
 	scale[0] = xvm_unit((*alpha)[0], (*alpha)[0], Y);
@@ -356,7 +356,7 @@ void grd_spfwdbwd(grd_t *grd, const seq_t *seq) {
 				y++;
 			while (n < (*psiidx)[t][y]) {
 				const size_t yp = psiyp [off + n];
-				const real   v  = psival[off + n];
+				const double v  = psival[off + n];
 				(*alpha)[t][y] += (*alpha)[t - 1][yp] * v;
 				n++;
 			}
@@ -368,7 +368,7 @@ void grd_spfwdbwd(grd_t *grd, const seq_t *seq) {
 	for (size_t yp = 0; yp < Y; yp++)
 		(*beta)[T - 1][yp] = 1.0 / Y;
 	for (int t = T - 1; t > grd->first; t--) {
-		real sum = 0.0, tmp[Y];
+		double sum = 0.0, tmp[Y];
 		for (size_t y = 0; y < Y; y++) {
 			tmp[y] = (*beta)[t][y] * (*psiuni)[t][y];
 			sum += tmp[y];
@@ -381,7 +381,7 @@ void grd_spfwdbwd(grd_t *grd, const seq_t *seq) {
 				y++;
 			while (n < (*psiidx)[t][y]) {
 				const size_t yp = psiyp [off + n];
-				const real v  = psival[off + n];
+				const double v  = psival[off + n];
 				(*beta)[t - 1][yp] += v * tmp[y];
 				n++;
 			}
@@ -389,7 +389,7 @@ void grd_spfwdbwd(grd_t *grd, const seq_t *seq) {
 		xvm_unit((*beta)[t - 1], (*beta)[t - 1], Y);
 	}
 	for (int t = 0; t < T; t++) {
-		real z = 0.0;
+		double z = 0.0;
 		for (size_t y = 0; y < Y; y++)
 			z += (*alpha)[t][y] * (*beta)[t][y];
 		unorm[t] = 1.0 / z;
@@ -427,16 +427,16 @@ void grd_flupgrad(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
 	const size_t Y = mdl->nlbl;
 	const int    T = seq->len;
-	const real (*psi  )[T][Y][Y] = (void *)grd->psi;
-	const real (*alpha)[T][Y]    = (void *)grd->alpha;
-	const real (*beta )[T][Y]    = (void *)grd->beta;
-	const real  *unorm           =         grd->unorm;
-	const real  *bnorm           =         grd->bnorm;
-	real *g = grd->g;
+	const double (*psi  )[T][Y][Y] = (void *)grd->psi;
+	const double (*alpha)[T][Y]    = (void *)grd->alpha;
+	const double (*beta )[T][Y]    = (void *)grd->beta;
+	const double  *unorm           =         grd->unorm;
+	const double  *bnorm           =         grd->bnorm;
+	double *g = grd->g;
 	for (int t = 0; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
 		for (size_t y = 0; y < Y; y++) {
-			real e = (*alpha)[t][y] * (*beta)[t][y] * unorm[t];
+			double e = (*alpha)[t][y] * (*beta)[t][y] * unorm[t];
 			for (size_t n = 0; n < pos->ucnt; n++) {
 				const size_t o = pos->uobs[n];
 				g[mdl->uoff[o] + y] += e;
@@ -447,8 +447,8 @@ void grd_flupgrad(grd_t *grd, const seq_t *seq) {
 		const pos_t *pos = &(seq->pos[t]);
 		for (size_t yp = 0, d = 0; yp < Y; yp++) {
 			for (size_t y = 0; y < Y; y++, d++) {
-				real e = (*alpha)[t - 1][yp] * (*beta)[t][y]
-				       * (*psi)[t][yp][y] * bnorm[t];
+				double e = (*alpha)[t - 1][yp] * (*beta)[t][y]
+				         * (*psi)[t][yp][y] * bnorm[t];
 				for (size_t n = 0; n < pos->bcnt; n++) {
 					const size_t o = pos->bobs[n];
 					g[mdl->boff[o] + d] += e;
@@ -470,20 +470,20 @@ void grd_spupgrad(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
-	const real   (*psiuni)[T][Y] = (void *)grd->psiuni;
-	const real    *psival        =         grd->psi;
+	const double (*psiuni)[T][Y] = (void *)grd->psiuni;
+	const double  *psival        =         grd->psi;
 	const size_t  *psiyp         =         grd->psiyp;
 	const size_t (*psiidx)[T][Y] = (void *)grd->psiidx;
 	const size_t  *psioff        =         grd->psioff;
-	const real   (*alpha)[T][Y]  = (void *)grd->alpha;
-	const real   (*beta )[T][Y]  = (void *)grd->beta;
-	const real    *unorm         =         grd->unorm;
-	const real  *bnorm         =         grd->bnorm;
-	real *g = grd->g;
+	const double (*alpha)[T][Y]  = (void *)grd->alpha;
+	const double (*beta )[T][Y]  = (void *)grd->beta;
+	const double  *unorm         =         grd->unorm;
+	const double  *bnorm         =         grd->bnorm;
+	double *g = grd->g;
 	for (int t = 0; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
 		for (size_t y = 0; y < Y; y++) {
-			real e = (*alpha)[t][y] * (*beta)[t][y] * unorm[t];
+			double e = (*alpha)[t][y] * (*beta)[t][y] * unorm[t];
 			for (size_t n = 0; n < pos->ucnt; n++) {
 				const size_t o = pos->uobs[n];
 				g[mdl->uoff[o] + y] += e;
@@ -493,7 +493,7 @@ void grd_spupgrad(grd_t *grd, const seq_t *seq) {
 	for (int t = 1; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
 		// We build the expectation matrix
-		real e[Y][Y];
+		double e[Y][Y];
 		for (size_t yp = 0; yp < Y; yp++)
 			for (size_t y = 0; y < Y; y++)
 				e[yp][y] = (*alpha)[t - 1][yp] * (*beta)[t][y]
@@ -504,7 +504,7 @@ void grd_spupgrad(grd_t *grd, const seq_t *seq) {
 				y++;
 			while (n < (*psiidx)[t][y]) {
 				const size_t yp = psiyp [off + n];
-				const real   v  = psival[off + n];
+				const double v  = psival[off + n];
 				e[yp][y] += e[yp][y] * v;
 				n++;
 			}
@@ -530,7 +530,7 @@ void grd_subemp(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
 	const size_t Y = mdl->nlbl;
 	const int    T = seq->len;
-	real *g = grd->g;
+	double *g = grd->g;
 	for (int t = 0; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
 		const size_t y = seq->pos[t].lbl;
@@ -571,18 +571,18 @@ void grd_subemp(grd_t *grd, const seq_t *seq) {
  */
 void grd_logloss(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
-	const real   *x = mdl->theta;
+	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
-	const real (*alpha)[T][Y] = (void *)grd->alpha;
-	const real  *scale        =         grd->scale;
-	real logz = 0.0;
+	const double (*alpha)[T][Y] = (void *)grd->alpha;
+	const double  *scale        =         grd->scale;
+	double logz = 0.0;
 	for (size_t y = 0; y < Y; y++)
 		logz += (*alpha)[T - 1][y];
 	logz = log(logz);
 	for (int t = 0; t < T; t++)
 		logz -= log(scale[t]);
-	real lloss = logz;
+	double lloss = logz;
 	for (int t = 0; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
 		const size_t y   = seq->pos[t].lbl;
@@ -673,8 +673,8 @@ static void grd_worker(int id, int cnt, grd_t *grd) {
  *   gradient over the full training set is just the sum of the gradient of
  *   each sequence.
  */
-real grd_gradient(mdl_t *mdl, real *g, real *pg, grd_t *grds[]) {
-	const real   *x = mdl->theta;
+double grd_gradient(mdl_t *mdl, double *g, double *pg, grd_t *grds[]) {
+	const double *x = mdl->theta;
 	const size_t  F = mdl->nftr;
 	const size_t  W = mdl->opt->nthread;
 	// All is ready to compute the gradient, we spawn the threads of
@@ -689,7 +689,7 @@ real grd_gradient(mdl_t *mdl, real *g, real *pg, grd_t *grds[]) {
 		return -1.0;
 	// All computations are done, it just remain to add all the gradients
 	// and inverse log-likelihood from all the workers.
-	real fx = grds[0]->lloss;
+	double fx = grds[0]->lloss;
 	for (size_t w = 1; w < W; w++) {
 		for (size_t f = 0; f < F; f++)
 			g[f] += grds[w]->g[f];
@@ -703,11 +703,11 @@ real grd_gradient(mdl_t *mdl, real *g, real *pg, grd_t *grds[]) {
 				g[f] = 0.0;
 	// Now we can apply the elastic-net penalty. Depending of the values of
 	// rho1 and rho2, this can in fact be a classical L1 or L2 penalty.
-	const real rho1 = mdl->opt->rho1;
-	const real rho2 = mdl->opt->rho2;
-	real nl1 = 0.0, nl2 = 0.0;
+	const double rho1 = mdl->opt->rho1;
+	const double rho2 = mdl->opt->rho2;
+	double nl1 = 0.0, nl2 = 0.0;
 	for (size_t f = 0; f < F; f++) {
-		const real v = x[f];
+		const double v = x[f];
 		g[f] += rho2 * v;
 		nl1  += fabs(v);
 		nl2  += v * v;

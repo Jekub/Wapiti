@@ -48,10 +48,10 @@ struct opt_s {
 	bool   compact, sparse;
 	int    nthread;
 	int    maxiter;
-	real   rho1,    rho2;
+	double rho1,    rho2;
 	// Window size criterion
 	int    stopwin;
-	real   stopeps;
+	double stopeps;
 	// Options specific to L-BFGS
 	struct {
 		bool   clip;
@@ -60,12 +60,12 @@ struct opt_s {
 	} lbfgs;
 	// Options specific to SGD-L1
 	struct {
-		real   eta0;
-		real   alpha;
+		double eta0;
+		double alpha;
 	} sgdl1;
 	// Options specific to BCD
 	struct {
-		real   kappa;
+		double kappa;
 	} bcd;
 	// Options for labelling
 	bool   label;

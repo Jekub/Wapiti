@@ -40,7 +40,7 @@ extern bool uit_stop;
 
 void uit_setup(mdl_t *mdl);
 void uit_cleanup(mdl_t *mdl);
-bool uit_progress(mdl_t *mdl, int it, real obj);
+bool uit_progress(mdl_t *mdl, int it, double obj);
 
 #endif
 

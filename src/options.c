@@ -161,11 +161,6 @@ void opt_parse(int argc, char *argv[argc], opt_t *opt) {
 		exit(EXIT_FAILURE);
 	} else if (!strcmp(argv[0], "--version")) {
 		fprintf(stderr, "Wapiti v" VERSION "\n");
-#ifdef WAP_PREC_SGL
-		fprintf(stderr, "  Floating point prec: single\n");
-#else
-		fprintf(stderr, "  Floating point prec: double\n");
-#endif
 		fprintf(stderr, "  Optimization mode:   %s\n", xvm_mode());
 		exit(EXIT_SUCCESS);
 	}
@@ -214,7 +209,7 @@ void opt_parse(int argc, char *argv[argc], opt_t *opt) {
 				double tmp;
 				if (sscanf(argv[1], "%lf", &tmp) != 1)
 					fatal(err_badval, arg);
-				*((real *)ptr) = tmp;
+				*((double *)ptr) = tmp;
 				argc -= 2, argv += 2;
 				break; }
 			case 'B':

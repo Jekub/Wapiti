@@ -76,7 +76,7 @@ struct mdl_s {
 	size_t  *boff;    //  [O]  bigram weights offset
 
 	// The model itself
-	real    *theta;   //  [F]  features weights
+	double  *theta;   //  [F]  features weights
 
 	// Datasets
 	dat_t   *train;   //       training dataset
@@ -84,13 +84,13 @@ struct mdl_s {
 	rdr_t   *reader;
 
 	// Stoping criterion
-	real    *werr;    //       Window of error rate of last iters
+	double  *werr;    //       Window of error rate of last iters
 	int      wcnt;    //       Number of iters in the window
 	int      wpos;    //       Position for the next iter
 
 	// Timing
 	tms_t    timer;   //       start time of last iter
-	real     total;   //       total training time
+	double   total;   //       total training time
 };
 
 mdl_t *mdl_new(rdr_t *rdr);

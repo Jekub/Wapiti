@@ -61,18 +61,18 @@
  *   And like for the gradient, the caller is responsible to ensure there is
  *   enough stack space.
  */
-void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[], real *sc) {
-	const real   *x = mdl->theta;
+void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[], double *sc) {
+	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
 	// Like for the gradient, we rely on stack storage and let the caller
 	// ensure there is enough free space there. This function will need
 	//   8 * ((T * Y * (1 + Y)) + 2 * Y)
 	// bytes of stack plus a bit more for variables.
-	real   psi [T][Y][Y];
+	double psi [T][Y][Y];
 	size_t back[T][Y];
-	real   cur [Y];
-	real   old [Y];
+	double cur [Y];
+	double old [Y];
 	// We first have to compute the Ψ_t(y',y,x_t) weights defined as
 	//   Ψ_t(y',y,x_t) = \exp( ∑_k θ_k f_k(y',y,x_t) )
 	// So at position 't' in the sequence, for each couple (y',y) we have
@@ -100,7 +100,7 @@ void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[], real *sc) {
 	for (int t = 0; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
 		for (size_t y = 0; y < Y; y++) {
-			real sum = 0.0;
+			double sum = 0.0;
 			for (size_t n = 0; n < pos->ucnt; n++) {
 				const size_t o = pos->uobs[n];
 				sum += x[mdl->uoff[o] + y];
@@ -113,7 +113,7 @@ void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[], real *sc) {
 		const pos_t *pos = &(seq->pos[t]);
 		for (size_t yp = 0, d = 0; yp < Y; yp++) {
 			for (size_t y = 0; y < Y; y++, d++) {
-				real sum = 0.0;
+				double sum = 0.0;
 				for (size_t n = 0; n < pos->bcnt; n++) {
 					const size_t o = pos->bobs[n];
 					sum += x[mdl->boff[o] + d];
@@ -141,10 +141,10 @@ void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[], real *sc) {
 		for (size_t y = 0; y < Y; y++)
 			old[y] = cur[y];
 		for (size_t y = 0; y < Y; y++) {
-			real bst = -1.0;
-			int  idx = 0;
+			double bst = -1.0;
+			int    idx = 0;
 			for (size_t yp = 0; yp < Y; yp++) {
-				real val = psi[t][yp][y] + old[yp];
+				double val = psi[t][yp][y] + old[yp];
 				if (val > bst) {
 					bst = val;
 					idx = yp;
@@ -177,25 +177,25 @@ void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[], real *sc) {
  *   previous function but will be slower to do it.
  */
 void tag_nbviterbi(const mdl_t *mdl, const seq_t *seq, size_t out[],
-                   real scs[], size_t N) {
-	const real   *x = mdl->theta;
+                   double scs[], size_t N) {
+	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
 	// Like for the gradient, we rely on stack storage and let the caller
 	// ensure there is enough free space there. This function will need
 	//   8 * (Y * N * (T + 2) + Y * Y * T)
 	// bytes of stack plus a bit more for variables.
-	real   psi [T][Y    ][Y];
+	double psi [T][Y    ][Y];
 	size_t back[T][Y * N];
-	real   cur    [Y * N];
-	real   old    [Y * N];
+	double cur    [Y * N];
+	double old    [Y * N];
 	// We first have to compute the Ψ_t(y',y,x_t) weights defined as
 	//   Ψ_t(y',y,x_t) = \exp( ∑_k θ_k f_k(y',y,x_t) )
 	// This is exactly the same as standard Viterbi so see comment above.
 	for (int t = 0; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
 		for (size_t y = 0; y < Y; y++) {
-			real sum = 0.0;
+			double sum = 0.0;
 			for (size_t n = 0; n < pos->ucnt; n++) {
 				const size_t o = pos->uobs[n];
 				sum += x[mdl->uoff[o] + y];
@@ -208,7 +208,7 @@ void tag_nbviterbi(const mdl_t *mdl, const seq_t *seq, size_t out[],
 		const pos_t *pos = &(seq->pos[t]);
 		for (size_t yp = 0, d = 0; yp < Y; yp++) {
 			for (size_t y = 0; y < Y; y++, d++) {
-				real sum = 0.0;
+				double sum = 0.0;
 				for (size_t n = 0; n < pos->bcnt; n++) {
 					const size_t o = pos->bobs[n];
 					sum += x[mdl->boff[o] + d];
@@ -235,7 +235,7 @@ void tag_nbviterbi(const mdl_t *mdl, const seq_t *seq, size_t out[],
 			old[d] = cur[d];
 		for (size_t y = 0; y < Y; y++) {
 			// 1st, build the list of all incoming
-			real lst[Y * N];
+			double lst[Y * N];
 			for (size_t yp = 0, d = 0; yp < Y; yp++)
 				for (size_t n = 0; n < N; n++, d++)
 					lst[d] = psi[t][yp][y] + old[d];
@@ -311,7 +311,7 @@ void tag_label(const mdl_t *mdl, FILE *fin, FILE *fout) {
 			break;
 		seq_t *seq = rdr_raw2seq(mdl->reader, raw, mdl->opt->check);
 		size_t out[seq->len * N];
-		real   scs[N];
+		double scs[N];
 		if (N == 1)
 			tag_viterbi(mdl, seq, out, scs);
 		else
@@ -359,8 +359,8 @@ void tag_label(const mdl_t *mdl, FILE *fin, FILE *fout) {
 		if (++scnt % 1000 == 0) {
 			info("%10zu sequences labeled", scnt);
 			if (mdl->opt->check) {
-				const real te = (real)terr  / tcnt * 100.0;
-				const real se = (real)serr  / scnt * 100.0;
+				const double te = (double)terr  / tcnt * 100.0;
+				const double se = (double)serr  / scnt * 100.0;
 				info("\t%5.2f%%/%5.2f%%", te, se);
 			}
 			info("\n");
@@ -370,17 +370,17 @@ void tag_label(const mdl_t *mdl, FILE *fin, FILE *fout) {
 	// statistics and we can repport global token and sequence error rate as
 	// well as precision recall and f-measure for each labels.
 	if (mdl->opt->check) {
-		const real te = (real)terr  / tcnt * 100.0;
-		const real se = (real)serr  / scnt * 100.0;
+		const double te = (double)terr  / tcnt * 100.0;
+		const double se = (double)serr  / scnt * 100.0;
 		info("    Nb sequences  : %zu\n", scnt);
 		info("    Token error   : %5.2f%%\n", te);
 		info("    Sequence error: %5.2f%%\n", se);
 		info("* Per label statistics\n");
 		for (size_t y = 0; y < Y; y++) {
-			const char *lbl = qrk_id2str(lbls, y);
-			const real  Rc  = (real)stat[2][y] / stat[0][y];
-			const real  Pr  = (real)stat[2][y] / stat[1][y];
-			const real  F1  = 2.0 * (Pr * Rc) / (Pr + Rc);
+			const char   *lbl = qrk_id2str(lbls, y);
+			const double  Rc  = (double)stat[2][y] / stat[0][y];
+			const double  Pr  = (double)stat[2][y] / stat[1][y];
+			const double  F1  = 2.0 * (Pr * Rc) / (Pr + Rc);
 			info("    %-6s", lbl);
 			info("  Pr=%.2f", Pr);
 			info("  Rc=%.2f", Rc);

@@ -66,13 +66,13 @@ void trn_lbfgs(mdl_t *mdl) {
 	const int    M  = mdl->opt->lbfgs.histsz;
 	const size_t W  = mdl->opt->nthread;
 	const bool   l1 = mdl->opt->rho1 != 0.0;
-	real *x, *xp; // Current and previous value of the variables
-	real *g, *gp; // Current and previous value of the gradient
-	real *pg;     // The pseudo-gradient (only for owl-qn)
-	real *d;      // The search direction
-	real *s[M];   // History value s_k = Δ(x,px)
-	real *y[M];   // History value y_k = Δ(g,pg)
-	real  p[M];   // ρ_k
+	double *x, *xp; // Current and previous value of the variables
+	double *g, *gp; // Current and previous value of the gradient
+	double *pg;     // The pseudo-gradient (only for owl-qn)
+	double *d;      // The search direction
+	double *s[M];   // History value s_k = Δ(x,px)
+	double *y[M];   // History value y_k = Δ(g,pg)
+	double  p[M];   // ρ_k
 	grd_t  *grds[W];
 	// Initialization: Here, we have to allocate memory on the heap as we
 	// cannot request so much memory on the stack as this will have a too
@@ -95,7 +95,7 @@ void trn_lbfgs(mdl_t *mdl) {
 	//   - we have converged (upto numerical precision)
 	//   - the report function return false
 	//   - an error happen somewhere
-	real fx = grd_gradient(mdl, g, pg, grds);
+	double fx = grd_gradient(mdl, g, pg, grds);
 	for (int k = 0; !uit_stop && k < K; k++) {
 		// 1st step: We compute the search direction. We search in the
 		// direction who minimize the second order approximation given
@@ -110,7 +110,7 @@ void trn_lbfgs(mdl_t *mdl) {
 		if (k != 0) {
 			const int km = k % M;
 			const int bnd = (k <= M) ? k : M;
-			real alpha[M], beta;
+			double alpha[M], beta;
 			// α_i = ρ_j s_j^T q_{i+1}
 			// q_i = q_{i+1} - α_i y_i
 			for (int i = bnd; i > 0; i--) {
@@ -123,8 +123,8 @@ void trn_lbfgs(mdl_t *mdl) {
 			//     for k = 0: H_0 = I
 			//     for k > 0: H_0 = I * y_k^T s_k / ||y_k||²
 			//                    = I * 1 / ρ_k ||y_k||²
-			const real y2 = xvm_dot(y[km], y[km], F);
-			const real v = 1.0 / (p[km] * y2);
+			const double y2 = xvm_dot(y[km], y[km], F);
+			const double v = 1.0 / (p[km] * y2);
 			for (size_t f = 0; f < F; f++)
 				d[f] *= v;
 			// β_j     = ρ_j y_j^T r_i
@@ -155,13 +155,13 @@ void trn_lbfgs(mdl_t *mdl) {
 		// We have to keep track of the current point and gradient as we
 		// will need to compute the delta between those and the found
 		// point, and perhaps need to restore them if linesearch fail.
-		memcpy(xp, x, sizeof(real) * F);
-		memcpy(gp, g, sizeof(real) * F);
-		real gd = l1 ? 0.0 : xvm_dot(g, d, F); // gd = g_k^T d_k
-		real stp = 1.0, fi = fx;
+		memcpy(xp, x, sizeof(double) * F);
+		memcpy(gp, g, sizeof(double) * F);
+		double gd = l1 ? 0.0 : xvm_dot(g, d, F); // gd = g_k^T d_k
+		double stp = 1.0, fi = fx;
 		if (k == 0)
 			stp = 1.0 / xvm_norm(d, F);
-		real sc = 0.5;
+		double sc = 0.5;
 		bool err = false;
 		for (int ls = 1; !uit_stop; ls++, stp *= sc) {
 			// We compute the new point using the current step and
@@ -172,7 +172,7 @@ void trn_lbfgs(mdl_t *mdl) {
 			//   x^{k+1} = π(x^k + αp^k ; ξ)
 			if (l1) {
 				for (size_t f = 0; f < F; f++) {
-					real or = xp[f];
+					double or = xp[f];
 					if (or == 0.0)
 						or = -pg[f];
 					if (x[f] * or <= 0.0)
@@ -199,7 +199,7 @@ void trn_lbfgs(mdl_t *mdl) {
 				else
 					break;
 			} else {
-				real vp = 0.0;
+				double vp = 0.0;
 				for (size_t f = 0; f < F; f++)
 					vp += (x[f] - xp[f]) * d[f];
 				if (fx < fi + vp * 1e-4)
@@ -218,7 +218,7 @@ void trn_lbfgs(mdl_t *mdl) {
 		// probably not fully optimized but we let the user decide what
 		// to do with it.
 		if (err || uit_stop) {
-			memcpy(x, xp, sizeof(real) * F);
+			memcpy(x, xp, sizeof(double) * F);
 			break;
 		}
 		if (uit_progress(mdl, k + 1, fx) == false)
@@ -230,8 +230,8 @@ void trn_lbfgs(mdl_t *mdl) {
 		// with ε small enough so we stop when numerical precision is
 		// reached. For owl-qn we just have to check against the pseudo-
 		// gradient instead of the true one.
-		const real xn = xvm_norm(x, F);
-		const real gn = xvm_norm(l1 ? pg : g, F);
+		const double xn = xvm_norm(x, F);
+		const double gn = xvm_norm(l1 ? pg : g, F);
 		if (gn / max(xn, 1.0) <= 1e-5)
 			break;
 		if (k + 1 == K)

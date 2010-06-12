@@ -37,50 +37,16 @@
 #include "tools.h"
 #include "vmath.h"
 
-#if defined(WAP_USE_SSE)
-  #if defined(__SSE3__)
-    #define XVM_SSE3
-    #define XVM_SSE2
-    #define XVM_SSE1
-  #elif defined(__SSE2__)
-    #define XVM_SSE2
-    #define XVM_SSE1
-  #elif defined(__SSE__)
-    #define XVM_SSE1
-    #define XVM_ANSI
-  #endif
-#else
-  #define XVM_ANSI
-#endif
-
-#if defined(WAP_PREC_SGL)
-  #define XVM_32
-#elif defined(WAP_PREC_DBL)
-  #define XVM_64
-#else
-  #error "no floating point precision defined"
-#endif
-
-#ifdef XVM_SSE3
-#include <pmmintrin.h>
-#endif
-#ifdef XVM_SSE2
+#if defined(__SSE2__) && !defined(XVM_ANSI)
 #include <emmintrin.h>
-#endif
-#ifdef XVM_SSE1
-#include <xmmintrin.h>
 #endif
 
 /* xvm_mode:
  *   Return a string describing the SSE level used in the optimized code paths.
  */
 const char *xvm_mode(void) {
-#if defined(XVM_SSE3)
-	return "sse3";
-#elif defined(XVM_SSE2)
+#if defined(__SSE2__) && !defined(XVM_ANSI)
 	return "sse2";
-#elif defined(XVM_SSE1)
-	return "sse1";
 #else
 	return "no-sse";
 #endif
@@ -91,32 +57,27 @@ const char *xvm_mode(void) {
  *   ensure that the vector size contains the need padding. You must only use
  *   vector allocated by this function if you use the optimized code paths.
  */
-real *xvm_new(size_t N) {
-#ifdef XVM_ANSI
-	return xmalloc(sizeof(real) * N);
-#else
-  #ifdef XVM_32
-	if (N % 8 != 0)
-		N += 8 - N % 8;
-  #else
+double *xvm_new(size_t N) {
+#if defined(__SSE2__) && !defined(XVM_ANSI)
 	if (N % 4 != 0)
 		N += 4 - N % 4;
-  #endif
-	void *ptr = _mm_malloc(sizeof(real) * N, 16);
+	void *ptr = _mm_malloc(sizeof(double) * N, 16);
 	if (ptr == NULL)
 		fatal("out of memory");
 	return ptr;
+#else
+	return xmalloc(sizeof(double) * N);
 #endif
 }
 
 /* xvm_free:
  *   Free a vector allocated by xvm_new.
  */
-void xvm_free(real x[]) {
-#ifdef XVM_ANSI
-	free(x);
-#else
+void xvm_free(double x[]) {
+#if defined(__SSE2__) && !defined(XVM_ANSI)
 	_mm_free(x);
+#else
+	free(x);
 #endif
 }
 
@@ -124,20 +85,8 @@ void xvm_free(real x[]) {
  *   Return the component-wise negation of the given vector:
  *       r = -x
  */
-void xvm_neg(real r[], const real x[], size_t N) {
-#if defined(XVM_32) && defined(XVM_SSE1)
-	assert(r != NULL && ((size_t)r % 16) == 0);
-	assert(x != NULL && ((size_t)x % 16) == 0);
-	const __m128 vz = _mm_setzero_ps();
-	for (size_t n = 0; n < N; n += 8) {
-		const __m128 x0 = _mm_load_ps(x + n    );
-		const __m128 x1 = _mm_load_ps(x + n + 4);
-		const __m128 r0 = _mm_sub_ps(vz, x0);
-		const __m128 r1 = _mm_sub_ps(vz, x1);
-		_mm_store_ps(r + n,     r0);
-		_mm_store_ps(r + n + 4, r1);
-	}
-#elif defined(XVM_64) && defined(XVM_SSE2)
+void xvm_neg(double r[], const double x[], size_t N) {
+#if defined(__SSE2__) && !defined(XVM_ANSI)
 	assert(r != NULL && ((size_t)r % 16) == 0);
 	assert(x != NULL && ((size_t)x % 16) == 0);
 	const __m128d vz = _mm_setzero_pd();
@@ -159,22 +108,8 @@ void xvm_neg(real r[], const real x[], size_t N) {
  *   Return the difference of the two given vector:
  *       r = x .- y
  */
-void xvm_sub(real r[], const real x[], const real y[], size_t N) {
-#if defined(XVM_32) && defined(XVM_SSE1)
-	assert(r != NULL && ((size_t)r % 16) == 0);
-	assert(x != NULL && ((size_t)x % 16) == 0);
-	assert(y != NULL && ((size_t)y % 16) == 0);
-	for (size_t n = 0; n < N; n += 8) {
-		const __m128 x0 = _mm_load_ps(x + n    );
-		const __m128 x1 = _mm_load_ps(x + n + 4);
-		const __m128 y0 = _mm_load_ps(y + n    );
-		const __m128 y1 = _mm_load_ps(y + n + 4);
-		const __m128 r0 = _mm_sub_ps(x0, y0);
-		const __m128 r1 = _mm_sub_ps(x1, y1);
-		_mm_store_ps(r + n,     r0);
-		_mm_store_ps(r + n + 4, r1);
-	}
-#elif defined(XVM_64) && defined(XVM_SSE2)
+void xvm_sub(double r[], const double x[], const double y[], size_t N) {
+#if defined(__SSE2__) && !defined(XVM_ANSI)
 	assert(r != NULL && ((size_t)r % 16) == 0);
 	assert(x != NULL && ((size_t)x % 16) == 0);
 	assert(y != NULL && ((size_t)y % 16) == 0);
@@ -198,7 +133,7 @@ void xvm_sub(real r[], const real x[], const real y[], size_t N) {
  *   Return the given vector scaled by a constant:
  *     r = a * x
  */
-void xvm_scale(real r[], const real x[], real a, size_t N) {
+void xvm_scale(double r[], const double x[], double a, size_t N) {
 	for (size_t n = 0; n < N; n++)
 		r[n] = x[n] * a;
 }
@@ -207,11 +142,11 @@ void xvm_scale(real r[], const real x[], real a, size_t N) {
  *   Store a normalized copy of the given vector in r and return the
  *   normalization factor.
  */
-real xvm_unit(real r[], const real x[], size_t N) {
-	real sum = 0.0;
+double xvm_unit(double r[], const double x[], size_t N) {
+	double sum = 0.0;
 	for (size_t n = 0; n < N; n++)
 		sum += x[n];
-	const real scale = 1.0 / sum;
+	const double scale = 1.0 / sum;
 	xvm_scale(r, x, scale, N);
 	return scale;
 }
@@ -219,37 +154,9 @@ real xvm_unit(real r[], const real x[], size_t N) {
 /* xvm_norm:
  *   Return the euclidian norm of the given vector.
  */
-real xvm_norm(const real x[], size_t N) {
-	real r = 0.0;
-#if defined(XVM_32) && defined(XVM_SSE1)
-	assert(x != NULL && ((size_t)x % 16) == 0);
-	size_t n, d = N % 8;
-	__m128 s0 = _mm_setzero_ps();
-	__m128 s1 = _mm_setzero_ps();
-	for (n = 0; n < N - d; n += 8) {
-		const __m128 x0 = _mm_load_ps(x + n    );
-		const __m128 x1 = _mm_load_ps(x + n + 4);
-		const __m128 r0 = _mm_mul_ps(x0, x0);
-		const __m128 r1 = _mm_mul_ps(x1, x1);
-		s0 = _mm_add_ps(s0, r0);
-		s1 = _mm_add_ps(s1, r1);
-	}
-	s0 = _mm_add_ps(s0, s1);
-  #if defined(XVM_SSE3)
-	s0 = _mm_hadd_ps(s0, s0);
-	s0 = _mm_hadd_ps(s0, s0);
-  #else
-	s1 = s0;
-	s0 = _mm_shuffle_ps(s0, s1, _MM_SHUFFLE(1, 0, 3, 2));
-	s0 = _mm_add_ps(s0, s1);
-	s1 = s0;
-	s0 = _mm_shuffle_ps(s0, s1, _MM_SHUFFLE(2, 3, 0, 1));
-	s0 = _mm_add_ps(s0, s1);
-  #endif
-	_mm_store_ss(&r, s0);
-	for ( ; n < N; n++)
-		r += x[n] * x[n];
-#elif defined(XVM_64) && defined(XVM_SSE2)
+double xvm_norm(const double x[], size_t N) {
+	double r = 0.0;
+#if defined(__SSE2__) && !defined(XVM_ANSI)
 	assert(x != NULL && ((size_t)x % 16) == 0);
 	size_t n, d = N % 4;
 	__m128d s0 = _mm_setzero_pd();
@@ -272,50 +179,15 @@ real xvm_norm(const real x[], size_t N) {
 	for (size_t n = 0; n < N; n++)
 		r += x[n] * x[n];
 #endif
-#if defined(XVM_32)
-	return sqrtf(r);
-#else
 	return sqrt(r);
-#endif
 }
 
 /* xvm_dot:
  *   Return the dot product of the two given vectors.
  */
-real xvm_dot(const real x[], const real y[], size_t N) {
-	real r = 0.0;
-#if defined(XVM_32) && defined(XVM_SSE1)
-	assert(x != NULL && ((size_t)x % 16) == 0);
-	assert(y != NULL && ((size_t)y % 16) == 0);
-	size_t n, d = N % 8;
-	__m128 s0 = _mm_setzero_ps();
-	__m128 s1 = _mm_setzero_ps();
-	for (n = 0; n < N - d; n += 8) {
-		const __m128 x0 = _mm_load_ps(x + n    );
-		const __m128 x1 = _mm_load_ps(x + n + 4);
-		const __m128 y0 = _mm_load_ps(y + n    );
-		const __m128 y1 = _mm_load_ps(y + n + 4);
-		const __m128 r0 = _mm_mul_ps(x0, y0);
-		const __m128 r1 = _mm_mul_ps(x1, y1);
-		s0 = _mm_add_ps(s0, r0);
-		s1 = _mm_add_ps(s1, r1);
-	}
-	s0 = _mm_add_ps(s0, s1);
-  #if __SSE__ >= 3
-	s0 = _mm_hadd_ps(s0, s0);
-	s0 = _mm_hadd_ps(s0, s0);
-  #else
-	s1 = s0;
-	s0 = _mm_shuffle_ps(s0, s1, _MM_SHUFFLE(1, 0, 3, 2));
-	s0 = _mm_add_ps(s0, s1);
-	s1 = s0;
-	s0 = _mm_shuffle_ps(s0, s1, _MM_SHUFFLE(2, 3, 0, 1));
-	s0 = _mm_add_ps(s0, s1);
-  #endif
-	_mm_store_ss(&r, s0);
-	for ( ; n < N; n++)
-		r += x[n] * y[n];
-#elif defined(XVM_64) && defined(XVM_SSE2)
+double xvm_dot(const double x[], const double y[], size_t N) {
+	double r = 0.0;
+#if defined(__SSE2__) && !defined(XVM_ANSI)
 	assert(x != NULL && ((size_t)x % 16) == 0);
 	assert(y != NULL && ((size_t)y % 16) == 0);
 	size_t n, d = N % 4;
@@ -348,25 +220,8 @@ real xvm_dot(const real x[], const real y[], size_t N) {
  *   Return the sum of x scaled by a and y:
  *       r = a * x + y
  */
-void xvm_axpy(real r[], real a, const real x[], const real y[], size_t N) {
-#if defined(XVM_32) && defined(XVM_SSE1)
-	assert(r != NULL && ((size_t)r % 16) == 0);
-	assert(x != NULL && ((size_t)x % 16) == 0);
-	assert(y != NULL && ((size_t)y % 16) == 0);
-	const __m128 va = _mm_set1_ps(a);
-	for (size_t n = 0; n < N; n += 8) {
-		const __m128 x0 = _mm_load_ps(x + n    );
-		const __m128 x1 = _mm_load_ps(x + n + 4);
-		const __m128 y0 = _mm_load_ps(y + n    );
-		const __m128 y1 = _mm_load_ps(y + n + 4);
-		const __m128 t0 = _mm_mul_ps(x0, va);
-		const __m128 t1 = _mm_mul_ps(x1, va);
-		const __m128 r0 = _mm_add_ps(t0, y0);
-		const __m128 r1 = _mm_add_ps(t1, y1);
-		_mm_store_ps(r + n,     r0);
-		_mm_store_ps(r + n + 4, r1);
-	}
-#elif defined(XVM_64) && defined(XVM_SSE2)
+void xvm_axpy(double r[], double a, const double x[], const double y[], size_t N) {
+#if defined(__SSE2__) && !defined(XVM_ANSI)
 	assert(r != NULL && ((size_t)r % 16) == 0);
 	assert(x != NULL && ((size_t)x % 16) == 0);
 	assert(y != NULL && ((size_t)y % 16) == 0);
@@ -421,8 +276,8 @@ void xvm_axpy(real r[], real a, const real x[], const real y[], size_t N) {
  *   This code is copyright 2004-2010 Thomas Lavergne and licenced under the
  *   BSD licence like the remaining of Wapiti.
  */
-void xvm_expma(real r[], const real x[], real a, size_t N) {
-#if defined(XVM_64) && defined(XVM_SSE2)
+void xvm_expma(double r[], const double x[], double a, size_t N) {
+#if defined(__SSE2__) && !defined(XVM_ANSI)
   #define xvm_vconst(v) (_mm_castsi128_pd(_mm_set1_epi64x((v))))
 	assert(r != NULL && ((size_t)r % 16) == 0);
 	assert(x != NULL && ((size_t)x % 16) == 0);

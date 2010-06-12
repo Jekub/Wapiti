@@ -38,23 +38,23 @@
 typedef struct grd_s grd_t;
 struct grd_s {
 	mdl_t  *mdl;
-	real   *g;
-	real    lloss;
-	real   *psi;
-	real   *psiuni;
+	double *g;
+	double  lloss;
+	double *psi;
+	double *psiuni;
 	size_t *psiyp;
 	size_t *psiidx;
 	size_t *psioff;
-	real   *alpha;
-	real   *beta;
-	real   *scale;
-	real   *unorm;
-	real   *bnorm;
+	double *alpha;
+	double *beta;
+	double *scale;
+	double *unorm;
+	double *bnorm;
 	int     first;
 	int     last;
 };
 
-grd_t *grd_new(mdl_t *mdl, real *g);
+grd_t *grd_new(mdl_t *mdl, double *g);
 void grd_free(grd_t *grd);
 
 void grd_fldopsi(grd_t *grd, const seq_t *seq);
@@ -68,7 +68,7 @@ void grd_spupgrad(grd_t *grd, const seq_t *seq);
 void grd_logloss(grd_t *grd, const seq_t *seq);
 
 void grd_doseq(grd_t *grd, const seq_t *seq);
-real grd_gradient(mdl_t *mdl, real *g, real *pg, grd_t *grds[]);
+double grd_gradient(mdl_t *mdl, double *g, double *pg, grd_t *grds[]);
 
 #endif
 

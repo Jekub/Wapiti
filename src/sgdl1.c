@@ -68,7 +68,7 @@ typedef struct sgd_idx_s {
  *   and the formula on the middle of the page 480.
  */
 #define applypenalty(f) do {                               \
-	const real z = w[f];                               \
+	const double z = w[f];                             \
 	if      (z > 0.0) w[f] = max(0.0, z - (u + q[f])); \
 	else if (z < 0.0) w[f] = min(0.0, z + (u - q[f])); \
 	q[f] += w[f] - z;                                  \
@@ -83,7 +83,7 @@ void trn_sgdl1(mdl_t *mdl) {
 	const size_t  F = mdl->nftr;
 	const int     S = mdl->train->nseq;
 	const int     K = mdl->opt->maxiter;
-	      real   *w = mdl->theta;
+	      double *w = mdl->theta;
 	// First we have to build and index who hold, for each sequences, the
 	// list of actives observations.
 	// The index is a simple table indexed by sequences number. Each entry
@@ -145,15 +145,15 @@ void trn_sgdl1(mdl_t *mdl) {
 	int *perm = xmalloc(sizeof(int) * S);
 	for (int s = 0; s < S; s++)
 		perm[s] = s;
-	real *g = xmalloc(sizeof(real) * F);
-	real *q = xmalloc(sizeof(real) * F);
+	double *g = xmalloc(sizeof(double) * F);
+	double *q = xmalloc(sizeof(double) * F);
 	for (size_t f = 0; f < F; f++)
 		g[f] = q[f] = 0.0;
 	// We can now start training the model, we perform the requested number
 	// of iteration, each of these going through all the sequences. For
 	// computing the decay, we will need to keep track of the number of
 	// already processed sequences, this is tracked by the <i> variable.
-	real u = 0.0;
+	double u = 0.0;
 	grd_t *grd = grd_new(mdl, g);
 	for (int k = 0, i = 0; k < K && !uit_stop; k++) {
 		// First we shuffle the sequence by making a lot of random swap
@@ -177,9 +177,9 @@ void trn_sgdl1(mdl_t *mdl) {
 			// And at the same time, we update the total penalty
 			// that must have been applied to each features.
 			//   u <- u + η * rho1 / S
-			const real n0    = mdl->opt->sgdl1.eta0;
-			const real alpha = mdl->opt->sgdl1.alpha;
-			const real nk = n0 * pow(alpha, (real)i / S);
+			const double n0    = mdl->opt->sgdl1.eta0;
+			const double alpha = mdl->opt->sgdl1.alpha;
+			const double nk = n0 * pow(alpha, (double)i / S);
 			u = u + nk * mdl->opt->rho1 / S;
 			// Now we apply the update to all unigrams and bigrams
 			// observations actives in the current sequence. We must
