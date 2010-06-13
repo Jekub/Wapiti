@@ -47,13 +47,22 @@
 /*******************************************************************************
  * Training
  ******************************************************************************/
+static void trn_auto(mdl_t *mdl) {
+	const int maxiter = mdl->opt->maxiter;
+	mdl->opt->maxiter = 3;
+	trn_sgdl1(mdl);
+	mdl->opt->maxiter = maxiter;
+	trn_lbfgs(mdl);
+}
+
 static const struct {
 	char *name;
 	void (* train)(mdl_t *mdl);
 } trn_lst[] = {
 	{"l-bfgs", trn_lbfgs},
 	{"sgd-l1", trn_sgdl1},
-	{"bcd",    trn_bcd  }
+	{"bcd",    trn_bcd  },
+	{"auto",   trn_auto }
 };
 static const int trn_cnt = sizeof(trn_lst) / sizeof(trn_lst[0]);
 

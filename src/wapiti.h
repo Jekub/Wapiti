@@ -27,12 +27,12 @@
 #ifndef wapiti_h
 #define wapiti_h
 
-#define VERSION "0.9.20"
+#define VERSION "0.9.21"
 
 /* XVM_ANSI:
- *   By uncomenting the following define, you can force wapiti to not use SSE2 even
- *   if available. This is the first step for a full C99 compliant version of Wapiti.
- *   Next thing will be to make the threading code also optional.
+ *   By uncomenting the following define, you can force wapiti to not use SSE2
+ *   even if available. This is the first step for a full C99 compliant version
+ *   of Wapiti.  Next thing will be to make the threading code also optional.
  */
 //#define XVM_ANSI
 
