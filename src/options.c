@@ -67,7 +67,7 @@ static void opt_help(const char *pname) {
 		"\t-1 | --rho1     FLOAT   l1 penalty parameter\n"
 		"\t-2 | --rho2     FLOAT   l2 penalty parameter\n"
 		"\t-w | --stopwin  INT     stop window size\n"
-		"\t-e | --stopeps  DOUBLE  stop epsilon value\n"
+		"\t-e | --stopeps  FLOAT   stop epsilon value\n"
 		"\t   | --clip             (l-bfgs) clip gradient\n"
 		"\t   | --histsz   INT     (l-bfgs) history size\n"
 		"\t   | --maxls    INT     (l-bfgs) max linesearch iters\n"
@@ -125,7 +125,7 @@ struct {
 	{0, "-i", "--maxiter", 'I', offsetof(opt_t, maxiter     )},
 	{0, "-1", "--rho1",    'F', offsetof(opt_t, rho1        )},
 	{0, "-2", "--rho2",    'F', offsetof(opt_t, rho2        )},
-	{0, "-w", "--stopwin", 'F', offsetof(opt_t, stopwin     )},
+	{0, "-w", "--stopwin", 'I', offsetof(opt_t, stopwin     )},
 	{0, "-e", "--stopeps", 'F', offsetof(opt_t, stopeps     )},
 	{0, "##", "--clip",    'B', offsetof(opt_t, lbfgs.clip  )},
 	{0, "##", "--histsz",  'I', offsetof(opt_t, lbfgs.histsz)},
