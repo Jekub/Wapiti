@@ -98,7 +98,7 @@ const opt_t opt_defaults = {
 	.compact = false,    .sparse  = false, .nthread = 1,    .maxiter = 0,
 	.rho1    = 0.5,      .rho2    = 0.0001,
 	.stopwin = 5,        .stopeps = 0.02,
-	.lbfgs = {.clip  = false, .histsz = 5, .maxls = 20},
+	.lbfgs = {.clip  = false, .histsz = 5, .maxls = 40},
 	.sgdl1 = {.eta0  = 0.8,   .alpha  = 0.85},
 	.bcd   = {.kappa = 1.5},
 	.label   = false,    .check   = false, .outsc = false,  .nbest = 1
