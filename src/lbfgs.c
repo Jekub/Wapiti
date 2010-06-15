@@ -60,6 +60,7 @@
 void trn_lbfgs(mdl_t *mdl) {
 	const size_t F  = mdl->nftr;
 	const int    K  = mdl->opt->maxiter;
+	const int    C  = mdl->opt->objwin;
 	const int    M  = mdl->opt->lbfgs.histsz;
 	const size_t W  = mdl->opt->nthread;
 	const bool   l1 = mdl->opt->rho1 != 0.0;
@@ -70,6 +71,7 @@ void trn_lbfgs(mdl_t *mdl) {
 	double *s[M];   // History value s_k = Δ(x,px)
 	double *y[M];   // History value y_k = Δ(g,pg)
 	double  p[M];   // ρ_k
+	double  fh[C];  // f(x) history
 	grd_t  *grds[W];
 	// Initialization: Here, we have to allocate memory on the heap as we
 	// cannot request so much memory on the stack as this will have a too
@@ -242,9 +244,17 @@ void trn_lbfgs(mdl_t *mdl) {
 		}
 		if (uit_progress(mdl, k + 1, fx) == false)
 			break;
-		// 3rd step: We check for convergence and if not, we update the
-		// history to prepare the next iteration. The convergence check
-		// is quite simple [2, pp 508]
+		// 3rd step: we update the history used for approximating the
+		// inverse of the diagonal of the hessian
+		//   s_k = x_{k+1} - x_k
+		//   y_k = g_{k+1} - g_k
+		//   ρ_k = 1 / y_k^T s_k
+		const int kn = (k + 1) % M;
+		xvm_sub(s[kn], x, xp, F);
+		xvm_sub(y[kn], g, gp, F);
+		p[kn] = 1.0 / xvm_dot(y[kn], s[kn], F);
+		// And last, we check for convergence. The convergence check is
+		// quite simple [2, pp 508]
 		//   ||g|| / max(1, ||x||) ≤ ε
 		// with ε small enough so we stop when numerical precision is
 		// reached. For owl-qn we just have to check against the pseudo-
@@ -255,15 +265,17 @@ void trn_lbfgs(mdl_t *mdl) {
 			break;
 		if (k + 1 == K)
 			break;
-		// So, last we update the history used for approximating the
-		// inverse of the diagonal of the hessian
-		//   s_k = x_{k+1} - x_k
-		//   y_k = g_{k+1} - g_k
-		//   ρ_k = 1 / y_k^T s_k
-		const int kn = (k + 1) % M;
-		xvm_sub(s[kn], x, xp, F);
-		xvm_sub(y[kn], g, gp, F);
-		p[kn] = 1.0 / xvm_dot(y[kn], s[kn], F);
+		// Second stoping criterion tested is a check for improvement of
+		// the function value over the past W iteration. When this come
+		// under an epsilon, we also stop the minimization.
+		fh[k % C] = fx;
+		double dlt = 1.0;
+		if (k >= C) {
+			const double of = fh[(k + 1) % C];
+			dlt = fabs(of - fx) / of;
+			if (dlt < mdl->opt->stopeps)
+				break;
+		}
 	}
 	// Cleanup: We free all the vectors we have allocated.
 	xvm_free(xp); xvm_free(g);

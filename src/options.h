@@ -47,6 +47,7 @@ struct opt_s {
 	int    maxiter;
 	double rho1,    rho2;
 	// Window size criterion
+	int    objwin;
 	int    stopwin;
 	double stopeps;
 	// Options specific to L-BFGS

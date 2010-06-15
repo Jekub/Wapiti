@@ -66,6 +66,7 @@ static void opt_help(const char *pname) {
 		"\t-i | --maxiter  INT     maximum number of iterations\n"
 		"\t-1 | --rho1     FLOAT   l1 penalty parameter\n"
 		"\t-2 | --rho2     FLOAT   l2 penalty parameter\n"
+		"\t-o | --objwin   INT     convergence window size\n"
 		"\t-w | --stopwin  INT     stop window size\n"
 		"\t-e | --stopeps  FLOAT   stop epsilon value\n"
 		"\t   | --clip             (l-bfgs) clip gradient\n"
@@ -97,7 +98,7 @@ const opt_t opt_defaults = {
 	.algo    = "l-bfgs", .pattern = NULL,  .model   = NULL, .devel   = NULL,
 	.compact = false,    .sparse  = false, .nthread = 1,    .maxiter = 0,
 	.rho1    = 0.5,      .rho2    = 0.0001,
-	.stopwin = 5,        .stopeps = 0.02,
+	.objwin  = 5,        .stopwin = 5,     .stopeps = 0.02,
 	.lbfgs = {.clip  = false, .histsz = 5, .maxls = 40},
 	.sgdl1 = {.eta0  = 0.8,   .alpha  = 0.85},
 	.bcd   = {.kappa = 1.5},
@@ -125,6 +126,7 @@ struct {
 	{0, "-i", "--maxiter", 'I', offsetof(opt_t, maxiter     )},
 	{0, "-1", "--rho1",    'F', offsetof(opt_t, rho1        )},
 	{0, "-2", "--rho2",    'F', offsetof(opt_t, rho2        )},
+	{0, "-o", "--objsz",   'I', offsetof(opt_t, objwin      )},
 	{0, "-w", "--stopwin", 'I', offsetof(opt_t, stopwin     )},
 	{0, "-e", "--stopeps", 'F', offsetof(opt_t, stopeps     )},
 	{0, "##", "--clip",    'B', offsetof(opt_t, lbfgs.clip  )},

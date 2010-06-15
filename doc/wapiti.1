@@ -51,6 +51,9 @@ Defines the L1-component of the elastic-net penalty. Increasing this value lead 
 .B \-2 | \-\-rho2 <float>
 Specify the L2-component of the elastic-net penalty. Setting this value to 0 lead to a simple L1 regularization. While allowed, this is discouraged as it can lead to numerical instability. The default value is 0.00001.
 .TP
+.B \-o | \-\-objwin <integer>
+Set the window size for the objective value stoping criterion, see below for more details. Default value is 5.
+.TP
 .B \-w | \-\-stopwin <integer>
 Set the window size for the devel stoping criterion, see below for more details. Default value is 5.
 .TP
@@ -109,6 +112,8 @@ There is various way for training to stop depending on the command line switch y
 The simpler criterion is the iteration count. By default, algorithm will do iterations forever but you can specify a maximum number of iteration with \-\-maxiter.
 
 Finding the exact optimum is generally not needed to get the best model. There is an infinity of points around the optimum who lead to almost exactly the same model and are as good as the best one. The error window criterion check for this by looking at the error rate of the model over the development set and stop training when its stable enought. To do this, the error rate of the last few iteration is kept and when the difference between extreme values fall bellow a given value, training is stop. (If no devel set is given, the errors rates are computed over the training data, but this is bad practice)
+
+For algorithm who provide the objective function value at each iteration, we also stop when this value doesn't change significantly over the past few iterations. This window size is controled by the objwin parameter.
 
 Each algorithm can also provide their own stop system like l-bfgs who stop when numerical precision prevent further progress.
 

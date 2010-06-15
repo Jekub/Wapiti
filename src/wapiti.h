@@ -27,7 +27,7 @@
 #ifndef wapiti_h
 #define wapiti_h
 
-#define VERSION "0.9.21"
+#define VERSION "0.9.22"
 
 /* XVM_ANSI:
  *   By uncomenting the following define, you can force wapiti to not use SSE2
