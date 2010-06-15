@@ -65,7 +65,7 @@ void grd_spupgrad(grd_t *grd, const seq_t *seq);
 void grd_logloss(grd_t *grd, const seq_t *seq);
 
 void grd_doseq(grd_t *grd, const seq_t *seq);
-double grd_gradient(mdl_t *mdl, double *g, double *pg, grd_t *grds[]);
+double grd_gradient(mdl_t *mdl, double *g, grd_t *grds[]);
 
 #endif
 

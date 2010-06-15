@@ -92,8 +92,31 @@ void trn_lbfgs(mdl_t *mdl) {
 	//   - we have converged (upto numerical precision)
 	//   - the report function return false
 	//   - an error happen somewhere
-	double fx = grd_gradient(mdl, g, pg, grds);
+	double fx = grd_gradient(mdl, g, grds);
 	for (int k = 0; !uit_stop && k < K; k++) {
+		// We first compute the pseudo-gradient of f for owl-qn. It is
+		// defined in [3, pp 335(4)]
+		//              | ∂_i^- f(x)   if ∂_i^- f(x) > 0
+		//   ◇_i f(x) = | ∂_i^+ f(x)   if ∂_i^+ f(x) < 0
+		//              | 0            otherwise
+		// with
+		//   ∂_i^± f(x) = ∂/∂x_i l(x) + | Cσ(x_i) if x_i ≠ 0
+		//                              | ±C      if x_i = 0
+		if (l1) {
+			const double rho1 = mdl->opt->rho1;
+			for (unsigned f = 0; f < F; f++) {
+				if (x[f] < 0.0)
+					pg[f] = g[f] - rho1;
+				else if (x[f] > 0.0)
+					pg[f] = g[f] + rho1;
+				else if (g[f] < -rho1)
+					pg[f] = g[f] + rho1;
+				else if (g[f] > rho1)
+					pg[f] = g[f] - rho1;
+				else
+					pg[f] = 0.0;
+			}
+		}
 		// 1st step: We compute the search direction. We search in the
 		// direction who minimize the second order approximation given
 		// by the Taylor series which give
@@ -154,11 +177,10 @@ void trn_lbfgs(mdl_t *mdl) {
 		// point, and perhaps need to restore them if linesearch fail.
 		memcpy(xp, x, sizeof(double) * F);
 		memcpy(gp, g, sizeof(double) * F);
-		double gd = l1 ? 0.0 : xvm_dot(g, d, F); // gd = g_k^T d_k
-		double stp = 1.0, fi = fx;
-		if (k == 0)
-			stp = 1.0 / xvm_norm(d, F);
-		double sc = 0.5;
+		double sc  = (k == 0) ? 0.1 : 0.5;
+		double stp = (k == 0) ? 1.0 / xvm_norm(d, F) : 1.0;
+		double gd  = l1 ? 0.0 : xvm_dot(g, d, F); // gd = g_k^T d_k
+		double fi  = fx;
 		bool err = false;
 		for (int ls = 1; !uit_stop; ls++, stp *= sc) {
 			// We compute the new point using the current step and
@@ -177,8 +199,8 @@ void trn_lbfgs(mdl_t *mdl) {
 				}
 			}
 			// And we ask for the value of the objective function
-			// and its gradient and pseudo gradient.
-			fx = grd_gradient(mdl, g, pg, grds);
+			// and its gradient.
+			fx = grd_gradient(mdl, g, grds);
 			// Now we check if the step satisfy the conditions. For
 			// l-bfgs, we check the classical decrease and curvature
 			// known as the Wolfe conditions [2, pp 506]

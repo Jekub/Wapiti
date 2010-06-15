@@ -670,7 +670,7 @@ static void grd_worker(int id, int cnt, grd_t *grd) {
  *   gradient over the full training set is just the sum of the gradient of
  *   each sequence.
  */
-double grd_gradient(mdl_t *mdl, double *g, double *pg, grd_t *grds[]) {
+double grd_gradient(mdl_t *mdl, double *g, grd_t *grds[]) {
 	const double *x = mdl->theta;
 	const size_t  F = mdl->nftr;
 	const size_t  W = mdl->opt->nthread;
@@ -710,28 +710,6 @@ double grd_gradient(mdl_t *mdl, double *g, double *pg, grd_t *grds[]) {
 		nl2  += v * v;
 	}
 	fx += nl1 * rho1 + nl2 * rho2 / 2.0;
-	// And the last step is to compute the pseudo gradient for owl-qn if
-	// requested by the caller. It is define in [3, pp 35(4)]
-	//              | ∂_i^- f(x) if ∂_i^- f(x) > 0
-	//   ◇_i f(x) = | ∂_i^+ f(x) if ∂_i^+ f(x) < 0
-	//              | 0          otherwise
-	// with
-	//   ∂_i^± f(x) = ∂/∂x_i l(x) + | Cσ(x_i) if x_i ≠ 0
-	//                              | ±C      if x_i = 0
-	if (pg != NULL) {
-		for (size_t f = 0; f < F; f++) {
-			if (x[f] < 0.0)
-				pg[f] = g[f] - rho1;
-			else if (x[f] > 0.0)
-				pg[f] = g[f] + rho1;
-			else if (g[f] < -rho1)
-				pg[f] = g[f] + rho1;
-			else if (g[f] > rho1)
-				pg[f] = g[f] - rho1;
-			else
-				pg[f] = 0.0;
-		}
-	}
 	return fx;
 }
 
