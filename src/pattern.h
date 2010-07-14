@@ -48,7 +48,7 @@ struct pat_s {
 };
 
 pat_t *pat_comp(char *p);
-char *pat_exec(pat_t *pat, tok_t *tok, int at);
+char *pat_exec(const pat_t *pat, const tok_t *tok, int at);
 void pat_free(pat_t *pat);
 
 #endif

@@ -82,8 +82,6 @@ static void dotrain(mdl_t *mdl) {
 	if (trn == trn_cnt)
 		fatal("unknown algorithm '%s'", mdl->opt->algo);
 	// Load a previous model to train again if specified by the user.
-	if (mdl->opt->pattern == NULL && mdl->opt->model == NULL)
-		fatal("you must specify either a pattern or a model");
 	if (mdl->opt->model != NULL) {
 		info("* Load previous model\n");
 		FILE *file = fopen(mdl->opt->model, "r");
@@ -91,9 +89,8 @@ static void dotrain(mdl_t *mdl) {
 			pfatal("cannot open input model file");
 		mdl_load(mdl, file);
 	}
-	// Load the pattern file. This is mandatory if no models was loaded as
-	// we need some patterns to load data files. This will unlock the
-	// database if previously locked by loading a model.
+	// Load the pattern file. This will unlock the database if previously
+	// locked by loading a model.
 	if (mdl->opt->pattern != NULL) {
 		info("* Load patterns\n");
 		FILE *file = fopen(mdl->opt->pattern, "r");
@@ -103,8 +100,6 @@ static void dotrain(mdl_t *mdl) {
 		fclose(file);
 		qrk_lock(mdl->reader->obs, false);
 	}
-	if (mdl->reader->npats == 0)
-		fatal("no patterns, cannot load input data");
 	// Load the training data. When this is done we lock the quarks as we
 	// don't want to put in the model, informations present only in the
 	// devlopment set.

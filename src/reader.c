@@ -247,6 +247,118 @@ raw_t *rdr_readraw(rdr_t *rdr, FILE *file) {
 	return raw;
 }
 
+/* rdr_rawtok2seq:
+ *   Convert a tok_t to a seq_t object taking each tokens as a feature without
+ *   applying patterns.
+ */
+static seq_t *rdr_rawtok2seq(rdr_t *rdr, const tok_t *tok) {
+	const int T = tok->len;
+	int size = 0;
+	for (int t = 0; t < T; t++) {
+		for (int n = 0; n < tok->cnts[t]; n++) {
+			switch (tok->toks[t][n][0]) {
+				case 'u': size += 1; break;
+				case 'b': size += 2; break;
+				case '*': size += 3; break;
+			}
+		}
+	}
+	seq_t *seq = xmalloc(sizeof(seq_t) + sizeof(pos_t) * T);
+	seq->raw = xmalloc(sizeof(size_t) * size);
+	seq->len = T;
+	size_t *raw = seq->raw;
+	for (int t = 0; t < T; t++) {
+		seq->pos[t].lbl = none;
+		seq->pos[t].ucnt = 0;
+		seq->pos[t].uobs = raw;
+		for (int n = 0; n < tok->cnts[t]; n++) {
+			if (tok->toks[t][n][0] == 'b')
+				continue;
+			size_t id = qrk_str2id(rdr->obs, tok->toks[t][n]);
+			if (id != none) {
+				(*raw++) = id;
+				seq->pos[t].ucnt++;
+			}
+		}
+		seq->pos[t].bcnt = 0;
+		seq->pos[t].bobs = raw;
+		for (int n = 0; n < tok->cnts[t]; n++) {
+			if (tok->toks[t][n][0] == 'u')
+				continue;
+			size_t id = qrk_str2id(rdr->obs, tok->toks[t][n]);
+			if (id != none) {
+				(*raw++) = id;
+				seq->pos[t].bcnt++;
+			}
+		}
+	}
+	// And finally, if the user specified it, populate the labels
+	if (tok->lbl != NULL) {
+		for (int t = 0; t < T; t++) {
+			const char *lbl = tok->lbl[t];
+			size_t id = qrk_str2id(rdr->lbl, lbl);
+			seq->pos[t].lbl = id;
+		}
+	}
+	return seq;
+}
+
+/* rdr_pattok2seq:
+ *   Convert a tok_t to a seq_t object by applying the patterns of the reader.
+ */
+static seq_t *rdr_pattok2seq(rdr_t *rdr, const tok_t *tok) {
+	const int T = tok->len;
+	// So now the tok object is ready, we can start building the seq_t
+	// object by appling patterns. First we allocate the seq_t object. The
+	// sequence itself as well as the sub array are allocated in one time.
+	seq_t *seq = xmalloc(sizeof(seq_t) + sizeof(pos_t) * T);
+	seq->raw = xmalloc(sizeof(size_t) * (rdr->nuni + rdr->nbi) * T);
+	seq->len = T;
+	size_t *tmp = seq->raw;
+	for (int t = 0; t < T; t++) {
+		seq->pos[t].lbl  = none;
+		seq->pos[t].uobs = tmp; tmp += rdr->nuni;
+		seq->pos[t].bobs = tmp; tmp += rdr->nbi;
+	}
+	// Next, we can build the observations list by applying the patterns on
+	// the tok_t sequence.
+	for (int t = 0; t < T; t++) {
+		pos_t *pos = &seq->pos[t];
+		pos->ucnt = 0;
+		pos->bcnt = 0;
+		for (int x = 0; x < rdr->npats; x++) {
+			// Get the observation and map it to an identifier
+			char *obs = pat_exec(rdr->pats[x], tok, t);
+			size_t id = qrk_str2id(rdr->obs, obs);
+			if (id == none) {
+				free(obs);
+				continue;
+			}
+			// If the observation is ok, add it to the lists
+			int kind = 0;
+			switch (obs[0]) {
+				case 'u': kind = 1; break;
+				case 'b': kind = 2; break;
+				case '*': kind = 3; break;
+			}
+			if (kind & 1)
+				pos->uobs[pos->ucnt++] = id;
+			if (kind & 2)
+				pos->bobs[pos->bcnt++] = id;
+			free(obs);
+		}
+	}
+	// And finally, if the user specified it, populate the labels
+	if (tok->lbl != NULL) {
+		for (int t = 0; t < T; t++) {
+			const char *lbl = tok->lbl[t];
+			size_t id = qrk_str2id(rdr->lbl, lbl);
+			seq->pos[t].lbl = id;
+		}
+	}
+	return seq;
+}
+
 /* rdr_raw2seq:
  *   Convert a raw sequence to a seq_t object suitable for training or
  *   labelling. If lbl is true, the last column is assumed to be a label and
@@ -297,54 +409,12 @@ seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl) {
 		memcpy(tok->toks[t], toks, sizeof(char *) * cnt);
 	}
 	tok->len = T;
-	// So now the tok object is ready, we can start building the seq_t
-	// object by appling patterns. First we allocate the seq_t object. The
-	// sequence itself as well as the sub array are allocated in one time.
-	seq_t *seq = xmalloc(sizeof(seq_t) + sizeof(pos_t) * T);
-	seq->raw = xmalloc(sizeof(size_t) * (rdr->nuni + rdr->nbi) * T);
-	seq->len = T;
-	size_t *tmp = seq->raw;
-	for (int t = 0; t < T; t++) {
-		seq->pos[t].lbl  = none;
-		seq->pos[t].uobs = tmp; tmp += rdr->nuni;
-		seq->pos[t].bobs = tmp; tmp += rdr->nbi;
-	}
-	// Next, we can build the observations list by applying the patterns on
-	// the tok_t sequence.
-	for (int t = 0; t < T; t++) {
-		pos_t *pos = &seq->pos[t];
-		pos->ucnt = 0;
-		pos->bcnt = 0;
-		for (int x = 0; x < rdr->npats; x++) {
-			// Get the observation and map it to an identifier
-			char *obs = pat_exec(rdr->pats[x], tok, t);
-			size_t id = qrk_str2id(rdr->obs, obs);
-			if (id == none) {
-				free(obs);
-				continue;
-			}
-			// If the observation is ok, add it to the lists
-			int kind = 0;
-			switch (obs[0]) {
-				case 'u': kind = 1; break;
-				case 'b': kind = 2; break;
-				case '*': kind = 3; break;
-			}
-			if (kind & 1)
-				pos->uobs[pos->ucnt++] = id;
-			if (kind & 2)
-				pos->bobs[pos->bcnt++] = id;
-			free(obs);
-		}
-	}
-	// And finally, if the user specified it, populate the labels
-	if (lbl == true) {
-		for (int t = 0; t < T; t++) {
-			const char *lbl = tok->lbl[t];
-			size_t id = qrk_str2id(rdr->lbl, lbl);
-			seq->pos[t].lbl = id;
-		}
-	}
+	// Convert the tok_t to a seq_t
+	seq_t *seq = NULL;
+	if (rdr->npats == 0)
+		seq = rdr_rawtok2seq(rdr, tok);
+	else
+		seq = rdr_pattok2seq(rdr, tok);
 	// Before returning the sequence, we have to free the tok_t
 	for (int t = 0; t < T; t++) {
 		if (tok->cnts[t] == 0)

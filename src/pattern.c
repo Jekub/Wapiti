@@ -300,7 +300,7 @@ pat_t *pat_comp(char *p) {
  *   newly allocated memory block and the caller is responsible to free it when
  *   not needed anymore.
  */
-char *pat_exec(pat_t *pat, tok_t *tok, int at) {
+char *pat_exec(const pat_t *pat, const tok_t *tok, int at) {
 	static char *bval[] = {"_x-1", "_x-2", "_x-3", "_x-4", "_x-#"};
 	static char *eval[] = {"_x+1", "_x+2", "_x+3", "_x+4", "_x+#"};
 	const int T = tok->len;
