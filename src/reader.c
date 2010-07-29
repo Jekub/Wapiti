@@ -107,7 +107,7 @@ void rdr_freeseq(seq_t *seq) {
  */
 void rdr_freedat(dat_t *dat) {
 	for (int i = 0; i < dat->nseq; i++)
-		free(dat->seq[i]);
+		rdr_freeseq(dat->seq[i]);
 	free(dat->seq);
 	free(dat);
 }

@@ -99,9 +99,9 @@ grd_t *grd_new(mdl_t *mdl, double *g) {
 	grd->bnorm = xvm_new(T);
 	if (mdl->opt->sparse) {
 		grd->psiuni = xvm_new(T * Y);
-		grd->psiyp  = xmalloc(T * Y * Y);
-		grd->psiidx = xmalloc(T * Y);
-		grd->psioff = xmalloc(T);
+		grd->psiyp  = xmalloc(sizeof(size_t) * T * Y * Y);
+		grd->psiidx = xmalloc(sizeof(size_t) * T * Y);
+		grd->psioff = xmalloc(sizeof(size_t) * T);
 	}
 	return grd;
 }

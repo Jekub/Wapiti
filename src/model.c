@@ -94,6 +94,7 @@ void mdl_free(mdl_t *mdl) {
 		rdr_free(mdl->reader);
 	if (mdl->werr != NULL)
 		free(mdl->werr);
+	free(mdl);
 }
 
 /* mdl_sync:
