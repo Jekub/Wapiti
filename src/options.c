@@ -175,9 +175,22 @@ void opt_parse(int argc, char *argv[argc], opt_t *opt) {
 	}
 	argc--, argv++;
 	// Parse remaining arguments
-	while (argc > 0 && argv[0][0] == '-') {
+	opt->input  = NULL;
+	opt->output = NULL;
+	while (argc > 0) {
 		const char *arg = argv[0];
 		int idx;
+		// Check if this argument is a filename or an option
+		if (arg[0] != '-') {
+			if (opt->input == NULL)
+				opt->input = argv[0];
+			else if (opt->output == NULL)
+				opt->output = argv[0];
+			else
+				fatal("too much input files on command line");
+			argc--, argv++;
+			continue;
+		}
 		// Search the current switch in the table or fail if it cannot
 		// be found.
 		for (idx = 0; opt_switch[idx].mode != -1; idx++) {
@@ -217,11 +230,6 @@ void opt_parse(int argc, char *argv[argc], opt_t *opt) {
 				break;
 		}
 	}
-	// Remaining arguments are input and output files
-	if (argc > 0)
-		opt->input = argv[0];
-	if (argc > 1)
-		opt->output = argv[1];
 	// Small trick for the maxiter switch
 	if (opt->maxiter == 0)
 		opt->maxiter = INT_MAX;
