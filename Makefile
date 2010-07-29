@@ -23,7 +23,7 @@ debug: $(SRC) $(HDR)
 install: wapiti
 	@echo "CP: wapiti   --> $(DESTDIR)$(PREFIX)/bin"
 	@mkdir -p $(DESTDIR)$(PREFIX)/bin
-	@mkdir -p $(DESTDIR)$(PREFIX)/man/man1
+	@mkdir -p $(DESTDIR)$(PREFIX)/share/man/man1
 	@$(INSTALL_EXEC) wapiti       $(DESTDIR)$(PREFIX)/bin
 	@$(INSTALL_DATA) doc/wapiti.1 $(DESTDIR)$(PREFIX)/share/man/man1
 
