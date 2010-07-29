@@ -255,7 +255,7 @@ void mdl_compact(mdl_t *mdl) {
 	qrk_free(old_obs);
 	free(old_uoff);
 	free(old_boff);
-	free(old_theta);
+	xvm_free(old_theta);
 }
 
 /* mdl_save:
