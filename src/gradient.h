@@ -35,6 +35,7 @@
 typedef struct grd_s grd_t;
 struct grd_s {
 	mdl_t  *mdl;
+	int     len;
 	double *g;
 	double  lloss;
 	double *psi;
@@ -53,6 +54,7 @@ struct grd_s {
 
 grd_t *grd_new(mdl_t *mdl, double *g);
 void grd_free(grd_t *grd);
+void grd_check(grd_t *grd, int len);
 
 void grd_fldopsi(grd_t *grd, const seq_t *seq);
 void grd_flfwdbwd(grd_t *grd, const seq_t *seq);

@@ -361,6 +361,7 @@ void trn_bcd(mdl_t *mdl) {
 				const size_t id = idx_lst[o][s];
 				const seq_t *seq = mdl->train->seq[id];
 				bcd_actpos(mdl, bcd, seq, o);
+				grd_check(bcd->grd, seq->len);
 				if (mdl->opt->sparse) {
 					grd_spdopsi(bcd->grd, seq);
 					grd_spfwdbwd(bcd->grd, seq);

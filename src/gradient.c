@@ -81,28 +81,53 @@
  *   the worst case use as less as possible memory.
  ******************************************************************************/
 
-/* grd_new:
- *   Allocation memory for gradient computation state. This allocate memory for
- *   the longest sequence present in the data set.
- */
-grd_t *grd_new(mdl_t *mdl, double *g) {
-	const size_t Y = mdl->nlbl;
-	const int    T = mdl->train->mlen;
-	grd_t *grd = xmalloc(sizeof(grd_t));
-	grd->mdl   = mdl;
-	grd->g     = g;
+void grd_check(grd_t *grd, int len) {
+	if (len <= grd->len)
+		return;
+	fprintf(stderr, "Resize from %d to %d\n", grd->len, len);
+	if (len == 0 || (len > grd->len && grd->len != 0)) {
+		if (grd->mdl->opt->sparse) {
+			xvm_free(grd->psiuni); grd->psiuni = NULL;
+			free(grd->psiyp);      grd->psiyp  = NULL;
+			free(grd->psiidx);     grd->psiidx = NULL;
+			free(grd->psioff);     grd->psioff = NULL;
+		}
+		xvm_free(grd->psi);   grd->psi   = NULL;
+		xvm_free(grd->alpha); grd->alpha = NULL;
+		xvm_free(grd->beta);  grd->beta  = NULL;
+		xvm_free(grd->unorm); grd->unorm = NULL;
+		xvm_free(grd->bnorm); grd->bnorm = NULL;
+		xvm_free(grd->scale); grd->scale = NULL;
+		grd->len = 0;
+	}
+	if (len == 0)
+		return;
+	const size_t Y = grd->mdl->nlbl;
+	const int    T = len;
 	grd->psi   = xvm_new(T * Y * Y);
 	grd->alpha = xvm_new(T * Y);
 	grd->beta  = xvm_new(T * Y);
 	grd->scale = xvm_new(T);
 	grd->unorm = xvm_new(T);
 	grd->bnorm = xvm_new(T);
-	if (mdl->opt->sparse) {
+	if (grd->mdl->opt->sparse) {
 		grd->psiuni = xvm_new(T * Y);
 		grd->psiyp  = xmalloc(sizeof(size_t) * T * Y * Y);
 		grd->psiidx = xmalloc(sizeof(size_t) * T * Y);
 		grd->psioff = xmalloc(sizeof(size_t) * T);
 	}
+	grd->len = len;
+}
+
+/* grd_new:
+ *   Allocation memory for gradient computation state. This allocate memory for
+ *   the longest sequence present in the data set.
+ */
+grd_t *grd_new(mdl_t *mdl, double *g) {
+	grd_t *grd = xmalloc(sizeof(grd_t));
+	grd->mdl   = mdl;
+	grd->len   = 0;
+	grd->g     = g;
 	return grd;
 }
 
@@ -110,18 +135,7 @@ grd_t *grd_new(mdl_t *mdl, double *g) {
  *   Free all memory used by gradient computation.
  */
 void grd_free(grd_t *grd) {
-	if (grd->mdl->opt->sparse) {
-		xvm_free(grd->psiuni);
-		free(grd->psiyp);
-		free(grd->psiidx);
-		free(grd->psioff);
-	}
-	xvm_free(grd->psi);
-	xvm_free(grd->bnorm);
-	xvm_free(grd->unorm);
-	xvm_free(grd->scale);
-	xvm_free(grd->beta);
-	xvm_free(grd->alpha);
+	grd_check(grd, 0);
 	free(grd);
 }
 
@@ -607,6 +621,7 @@ void grd_logloss(grd_t *grd, const seq_t *seq) {
  */
 void grd_doseq(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
+	grd_check(grd, seq->len);
 	grd->first = 0;
 	grd->last  = seq->len - 1;
 	if (!mdl->opt->sparse) {
