@@ -35,11 +35,11 @@
 #include <sys/resource.h>
 
 #include "wapiti.h"
+#include "decoder.h"
 #include "model.h"
 #include "options.h"
 #include "progress.h"
 #include "tools.h"
-#include "viterbi.h"
 
 /*******************************************************************************
  * User interaction during training

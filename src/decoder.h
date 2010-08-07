@@ -25,8 +25,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef viterbi_h
-#define viterbi_h
+#ifndef decoder_h
+#define decoder_h
 
 #include <stddef.h>
 #include <stdio.h>

@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "decoder.h"
 #include "model.h"
 #include "options.h"
 #include "progress.h"
@@ -38,7 +39,6 @@
 #include "sequence.h"
 #include "tools.h"
 #include "trainers.h"
-#include "viterbi.h"
 #include "wapiti.h"
 
 #include <unistd.h>

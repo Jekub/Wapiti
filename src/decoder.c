@@ -36,7 +36,7 @@
 #include "reader.h"
 #include "sequence.h"
 #include "tools.h"
-#include "viterbi.h"
+#include "decoder.h"
 
 /******************************************************************************
  * Sequence tagging
