@@ -84,7 +84,6 @@
 void grd_check(grd_t *grd, int len) {
 	if (len <= grd->len)
 		return;
-	fprintf(stderr, "Resize from %d to %d\n", grd->len, len);
 	if (len == 0 || (len > grd->len && grd->len != 0)) {
 		if (grd->mdl->opt->sparse) {
 			xvm_free(grd->psiuni); grd->psiuni = NULL;

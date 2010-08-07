@@ -82,6 +82,7 @@ static void opt_help(const char *pname) {
 		"\t-l | --label            output only labels\n"
 		"\t-c | --check            input is already labeled\n"
 		"\t-s | --score            add scores to output\n"
+		"\t-p | --post             label using posteriors\n"
 		"\t-n | --nbest    INT     output n-best list\n"
 		"\n"
 		"Dumping mode\n"
@@ -102,7 +103,8 @@ const opt_t opt_defaults = {
 	.lbfgs = {.clip  = false, .histsz = 5, .maxls = 40},
 	.sgdl1 = {.eta0  = 0.8,   .alpha  = 0.85},
 	.bcd   = {.kappa = 1.5},
-	.label   = false,    .check   = false, .outsc = false,  .nbest = 1
+	.label   = false,    .check   = false, .outsc = false,
+	.lblpost = false,    .nbest = 1
 };
 
 /* opt_switch:
@@ -139,6 +141,7 @@ struct {
 	{1, "-l", "--label",   'B', offsetof(opt_t, label       )},
 	{1, "-c", "--check",   'B', offsetof(opt_t, check       )},
 	{1, "-s", "--score",   'B', offsetof(opt_t, outsc       )},
+	{1, "-p", "--post",    'B', offsetof(opt_t, lblpost     )},
 	{1, "-n", "--nbest",   'I', offsetof(opt_t, nbest       )},
 	{-1, NULL, NULL, '\0', 0}
 };

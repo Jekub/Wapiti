@@ -30,6 +30,7 @@
 #include <stdio.h>
 
 #include "wapiti.h"
+#include "gradient.h"
 #include "model.h"
 #include "quark.h"
 #include "reader.h"
@@ -58,7 +59,8 @@
  *   And like for the gradient, the caller is responsible to ensure there is
  *   enough stack space.
  */
-void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[], double *sc) {
+void tag_viterbi(const mdl_t *mdl, const seq_t *seq,
+	         size_t out[], double *sc, double psc[]) {
 	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
@@ -162,8 +164,12 @@ void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[], double *sc) {
 	if (sc != NULL)
 		*sc = cur[bst];
 	for (int t = T; t > 0; t--) {
-		out[t - 1] = bst;
-		bst = back[t - 1][bst];
+		const size_t yp = (t != 1) ? back[t - 1][bst] : 0;
+		const size_t y  = bst;
+		out[t - 1] = y;
+		if (psc != NULL)
+			psc[t - 1] = psi[t - 1][yp][y];
+		bst = yp;
 	}
 }
 
@@ -173,8 +179,8 @@ void tag_viterbi(const mdl_t *mdl, const seq_t *seq, size_t out[], double *sc) {
  *   compute only the best one and will return the same sequence than the
  *   previous function but will be slower to do it.
  */
-void tag_nbviterbi(const mdl_t *mdl, const seq_t *seq, size_t out[],
-                   double scs[], size_t N) {
+void tag_nbviterbi(const mdl_t *mdl, const seq_t *seq, size_t N,
+	           size_t out[][N], double sc[], double psc[][N]) {
 	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
@@ -260,19 +266,65 @@ void tag_nbviterbi(const mdl_t *mdl, const seq_t *seq, size_t out[],
 	// we have to search for the N bet ones and there is N time more
 	// possibles starts.
 	for (size_t n = 0; n < N; n++) {
-		size_t *o = &out[n * T];
 		int bst = 0;
 		for (size_t d = 1; d < Y * N; d++)
 			if (cur[d] > cur[bst])
 				bst = d;
-		if (scs != NULL)
-			scs[n] = cur[bst];
+		if (sc != NULL)
+			sc[n] = cur[bst];
 		cur[bst] = -DBL_MAX;
 		for (int t = T; t > 0; t--) {
-			o[t - 1] = bst / N;
+			const size_t yp = (t != 1) ? back[t - 1][bst] / N: 0;
+			const size_t y  = bst / N;
+			out[t - 1][n] = y;
+			if (psc != NULL)
+				psc[t - 1][n] = psi[t - 1][yp][y];
 			bst = back[t - 1][bst];
 		}
 	}
+}
+
+/* tag_posterior:
+ *   This function implements decoding through posteriors. This generally result
+ *   in a slightly best labelling and allow to output normalized score for the
+ *   sequence and for each labels but this is more costly as we have to perform
+ *   a full forward backward instead of just the forward pass.
+ */
+void tag_posterior(mdl_t *mdl, const seq_t *seq,
+	        size_t out[], double *sc, double psc[]) {
+	const size_t  Y = mdl->nlbl;
+	const int     T = seq->len;
+	grd_t *grd = grd_new(mdl, NULL);
+	grd->first = 0;
+	grd->last  = T - 1;
+	grd_check(grd, seq->len);
+	if (mdl->opt->sparse) {
+		grd_spdopsi(grd, seq);
+		grd_spfwdbwd(grd, seq);
+	} else {
+		grd_fldopsi(grd, seq);
+		grd_flfwdbwd(grd, seq);
+	}
+	double (*alpha)[T][Y] = (void *)grd->alpha;
+	double (*beta )[T][Y] = (void *)grd->beta;
+	double  *unorm        =         grd->unorm;
+	double gsc = 1.0;
+	for (int t = 0; t < T; t++) {
+		double bsc = -1.0;
+		size_t by  = -1;
+		for (size_t y = 0; y < Y; y++) {
+			double e = (*alpha)[t][y] * (*beta)[t][y] * unorm[t];
+			if (e > bsc)
+				bsc = e, by = y;
+		}
+		out[t] = by;
+		gsc *= bsc;
+		if (psc != NULL)
+			psc[t] = bsc;
+	}
+	grd_free(grd);
+	if (sc != NULL)
+		*sc = gsc;
 }
 
 /* tag_label:
@@ -283,7 +335,7 @@ void tag_nbviterbi(const mdl_t *mdl, const seq_t *seq, size_t out[],
  *   output error rates during the labelling and detailed statistics per label
  *   at the end.
  */
-void tag_label(const mdl_t *mdl, FILE *fin, FILE *fout) {
+void tag_label(mdl_t *mdl, FILE *fin, FILE *fout) {
 	qrk_t *lbls = mdl->reader->lbl;
 	const size_t Y = mdl->nlbl;
 	const size_t N = mdl->opt->nbest;
@@ -307,44 +359,49 @@ void tag_label(const mdl_t *mdl, FILE *fin, FILE *fout) {
 		if (raw == NULL)
 			break;
 		seq_t *seq = rdr_raw2seq(mdl->reader, raw, mdl->opt->check);
-		size_t out[seq->len * N];
+		const int T = seq->len;
+		size_t out[T][N];
+		double psc[T][N];
 		double scs[N];
-		if (N == 1)
-			tag_viterbi(mdl, seq, out, scs);
-		else
-			tag_nbviterbi(mdl, seq, out, scs, N);
-		// If requested, output the scores
-		if (mdl->opt->outsc) {
-			fprintf(fout, "#");
-			for (size_t n = 0; n < N; n++)
-				fprintf(fout, " %f", scs[n]);
-			fprintf(fout, "\n");
+		if (N == 1) {
+			if (mdl->opt->lblpost)
+				tag_posterior(mdl, seq, (size_t *)out, scs,
+					(double *)psc);
+			else
+				tag_viterbi(mdl, seq, (size_t *)out, scs,
+					(double *)psc);
+		} else {
+			tag_nbviterbi(mdl, seq, N, out, scs, psc);
 		}
 		// Next we output the raw sequence with an aditional column for
 		// the predicted labels
-		for (int t = 0; t < seq->len; t++) {
-			if (!mdl->opt->label)
-				fprintf(fout, "%s\t", raw->lines[t]);
-			for (size_t n = 0; n < N; n++) {
-				size_t lbl = out[n * seq->len + t];
+		for (size_t n = 0; n < N; n++) {
+			if (mdl->opt->outsc)
+				fprintf(fout, "# %f\n", scs[n]);
+			for (int t = 0; t < T; t++) {
+				if (!mdl->opt->label)
+					fprintf(fout, "%s\t", raw->lines[t]);
+				size_t lbl = out[t][n];
 				fprintf(fout, "%s", qrk_id2str(lbls, lbl));
-				fprintf(fout, "%c", n == N - 1 ? '\n' : '\t');
+				if (mdl->opt->outsc)
+					fprintf(fout, "\t%f", psc[t][n]);
+				fprintf(fout, "\n");
 			}
+			fprintf(fout, "\n");
 		}
-		fprintf(fout, "\n");
 		// If user provided reference labels, use them to collect
 		// statistics about how well we have performed here.
 		if (mdl->opt->check) {
 			bool err = false;
-			for (int t = 0; t < seq->len; t++) {
+			for (int t = 0; t < T; t++) {
 				stat[0][seq->pos[t].lbl]++;
-				stat[1][out[t * N]]++;
-				if (seq->pos[t].lbl != out[t])
+				stat[1][out[t][0]]++;
+				if (seq->pos[t].lbl != out[t][0])
 					terr++, err = true;
 				else
-					stat[2][out[t * N]]++;
+					stat[2][out[t][0]]++;
 			}
-			tcnt += seq->len;
+			tcnt += T;
 			serr += err;
 		}
 		// Cleanup memory used for this sequence

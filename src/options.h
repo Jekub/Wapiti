@@ -69,6 +69,7 @@ struct opt_s {
 	bool   label;
 	bool   check;
 	bool   outsc;
+	bool   lblpost;
 	int    nbest;
 };
 
