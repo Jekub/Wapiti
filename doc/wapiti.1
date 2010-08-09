@@ -90,10 +90,13 @@ With this switch, Wapiti will only output the predicted labels. Without, it outp
 Assume the data to be labeled are already labeled so during the labeling process we can check our own result displaying the error rates. This doesn't affect the labeling process and output data will remain exactly the same. However, progress will be more verbose and informative: at the end of the process, for each labels, the precision, recall, and f-measure will be displayed. If you ask for N-best output, statistics are computed only on the best sequence.
 .TP
 .B \-s | \-\-score
-Output a line with Viterbi score before the data. The line start with a '#' symbol followed by the score of each sequence of labels separated by spaces. Beware that this is a raw score not really meaningful, it is not normalized so it cannot be interpreted as a probability.
+Output a line with score before the data. The line start with a '#' symbol followed by the score of the sequence of labels. Also output a score for each label of the sequence. Beware that, if you use viterbi labelling, this is a raw score not really meaningful, it is not normalized so it cannot be interpreted as a probability. To get normalized scores, you must use posterior decoding.
+.TP
+.B \-p | \-\-post
+Use posterior decoding instead of the classical Viterbi decoding. This generally produce better results at the cost of slower decoding. This also allow to output normalized score for sequences and labels.
 .TP
 .B \-n | \-\-nbest <int>
-Output the N best sequences of labels instead of just the best one. Each sequence of labels is output as one column in the output file.
+Output the N best sequences of labels instead of just the best one. The N sequences of labels are output in order in the output file.
 
 .SS Dump mode
 For the moment, there is no switch specific to this mode.
