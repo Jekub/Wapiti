@@ -42,6 +42,7 @@ struct pat_s {
 		char  type;
 		bool  caps;
 		char *value;
+		bool  absolute;
 		int   offset;
 		int   column;
 	} items[];

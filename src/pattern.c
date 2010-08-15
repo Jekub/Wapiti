@@ -239,8 +239,12 @@ pat_t *pat_comp(char *p) {
 			pos += 2;
 			// Next we parse the offset and column and store them in
 			// the item.
+			const char *at = p + pos;
 			int off, col, nch;
-			if (sscanf(p + pos, "[%d,%d%n", &off, &col, &nch) != 2)
+			item->absolute = false;
+			if (sscanf(at, "[@%d,%d%n", &off, &col, &nch) == 2)
+				item->absolute = true;
+			else if (sscanf(at, "[%d,%d%n", &off, &col, &nch) != 2)
 				fatal("invalid pattern: %s", p);
 			if (col < 0)
 				fatal("invalid column number: %d", col);
@@ -316,7 +320,15 @@ char *pat_exec(const pat_t *pat, const tok_t *tok, int at) {
 		// position in the sequence. We store it in value and let the
 		// command handler do what it need with it.
 		if (item->type != 's') {
-			int pos = at + item->offset;
+			int pos = item->offset;
+			if (item->absolute) {
+				if (item->offset < 0)
+					pos += T;
+				else
+					pos--;
+			} else {
+				pos += at;
+			}
 			int col = item->column;
 			if (pos < 0)
 				value = bval[min(-pos - 1, 4)];
