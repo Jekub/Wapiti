@@ -155,8 +155,10 @@ void opt_parse(int argc, char *argv[argc], opt_t *opt) {
 	static const char *err_badval = "invalid value for switch '%s'";
 	const char *pname = argv[0];
 	argc--, argv++;
-	if (argc == 0)
+	if (argc == 0) {
+		opt_help(pname);
 		fatal("no mode specified");
+	}
 	// First special handling for help and version
 	if (!strcmp(argv[0], "-h") || !strcmp(argv[0], "--help")) {
 		opt_help(pname);
