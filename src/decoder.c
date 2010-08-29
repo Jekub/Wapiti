@@ -27,6 +27,7 @@
 
 #include <float.h>
 #include <stddef.h>
+#include <stdlib.h>
 #include <stdio.h>
 
 #include "wapiti.h"
@@ -161,21 +162,19 @@ void tag_viterbi(mdl_t *mdl, const seq_t *seq,
 	         size_t out[], double *sc, double psc[]) {
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
-	// Like for the gradient, we rely on stack storage and let the caller
-	// ensure there is enough free space there. This function will need
-	//   8 * ((T * Y * (1 + Y)) + 2 * Y)
-	// bytes of stack plus a bit more for variables.
-	double psi [T][Y][Y];
-	size_t back[T][Y];
-	double cur [Y];
-	double old [Y];
+	double  *vpsi  = xmalloc(sizeof(double) * T * Y * Y);
+	size_t  *vback = xmalloc(sizeof(size_t) * T * Y);
+	double (*psi) [T][Y][Y] = (void *)vpsi;
+	size_t (*back)[T][Y]    = (void *)vback;
+	double  *cur = xmalloc(sizeof(double) * Y);
+	double  *old = xmalloc(sizeof(double) * Y);
 	// We first compute the scores for each transitions in the lattice of
 	// labels.
 	int op;
 	if (mdl->opt->lblpost)
-		op = tag_postsc(mdl, seq, (double *)psi);
+		op = tag_postsc(mdl, seq, vpsi);
 	else
-		op = tag_expsc(mdl, seq, (double *)psi);
+		op = tag_expsc(mdl, seq, vpsi);
 	// Now we can do the Viterbi algorithm. This is very similar to the
 	// forward pass
 	//   | α_1(y) = Ψ_1(y,x_1)
@@ -190,7 +189,7 @@ void tag_viterbi(mdl_t *mdl, const seq_t *seq,
 	// we only need the current and previous value of the α vectors, not
 	// the full matrix.
 	for (size_t y = 0; y < Y; y++)
-		cur[y] = psi[0][0][y];
+		cur[y] = (*psi)[0][0][y];
 	for (int t = 1; t < T; t++) {
 		for (size_t y = 0; y < Y; y++)
 			old[y] = cur[y];
@@ -200,16 +199,16 @@ void tag_viterbi(mdl_t *mdl, const seq_t *seq,
 			for (size_t yp = 0; yp < Y; yp++) {
 				double val = old[yp];
 				if (op)
-					val *= psi[t][yp][y];
+					val *= (*psi)[t][yp][y];
 				else
-					val += psi[t][yp][y];
+					val += (*psi)[t][yp][y];
 				if (val > bst) {
 					bst = val;
 					idx = yp;
 				}
 			}
-			back[t][y] = idx;
-			cur[y]     = bst;
+			(*back)[t][y] = idx;
+			cur[y]        = bst;
 		}
 	}
 	// We can now build the sequence of labels predicted by the model. For
@@ -223,13 +222,17 @@ void tag_viterbi(mdl_t *mdl, const seq_t *seq,
 	if (sc != NULL)
 		*sc = cur[bst];
 	for (int t = T; t > 0; t--) {
-		const size_t yp = (t != 1) ? back[t - 1][bst] : 0;
+		const size_t yp = (t != 1) ? (*back)[t - 1][bst] : 0;
 		const size_t y  = bst;
 		out[t - 1] = y;
 		if (psc != NULL)
-			psc[t - 1] = psi[t - 1][yp][y];
+			psc[t - 1] = (*psi)[t - 1][yp][y];
 		bst = yp;
 	}
+	free(old);
+	free(cur);
+	free(vback);
+	free(vpsi);
 }
 
 /* tag_nbviterbi:
