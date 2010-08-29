@@ -365,13 +365,13 @@ void tag_label(mdl_t *mdl, FILE *fin, FILE *fout) {
 			break;
 		seq_t *seq = rdr_raw2seq(mdl->reader, raw, mdl->opt->check);
 		const int T = seq->len;
-		size_t out[T][N];
-		double psc[T][N];
-		double scs[N];
+		size_t *out = xmalloc(sizeof(size_t) * T * N);
+		double *psc = xmalloc(sizeof(double) * T * N);
+		double *scs = xmalloc(sizeof(double) * N);
 		if (N == 1)
-			tag_viterbi(mdl, seq, (size_t *)out, scs, (double*)psc);
+			tag_viterbi(mdl, seq, (size_t*)out, scs, (double*)psc);
 		else
-			tag_nbviterbi(mdl, seq, N, out, scs, psc);
+			tag_nbviterbi(mdl, seq, N, (void*)out, scs, (void*)psc);
 		// Next we output the raw sequence with an aditional column for
 		// the predicted labels
 		for (size_t n = 0; n < N; n++) {
@@ -380,12 +380,12 @@ void tag_label(mdl_t *mdl, FILE *fin, FILE *fout) {
 			for (int t = 0; t < T; t++) {
 				if (!mdl->opt->label)
 					fprintf(fout, "%s\t", raw->lines[t]);
-				size_t lbl = out[t][n];
+				size_t lbl = out[t * N + n];
 				const char *lblstr = qrk_id2str(lbls, lbl);
 				fprintf(fout, "%s", lblstr);
 				if (mdl->opt->outsc) {
 					fprintf(fout, "\t%s", lblstr);
-					fprintf(fout, "/%f", psc[t][n]);
+					fprintf(fout, "/%f", psc[t * N + n]);
 				}
 				fprintf(fout, "\n");
 			}
@@ -397,16 +397,19 @@ void tag_label(mdl_t *mdl, FILE *fin, FILE *fout) {
 			bool err = false;
 			for (int t = 0; t < T; t++) {
 				stat[0][seq->pos[t].lbl]++;
-				stat[1][out[t][0]]++;
-				if (seq->pos[t].lbl != out[t][0])
+				stat[1][out[t * N]]++;
+				if (seq->pos[t].lbl != out[t * N])
 					terr++, err = true;
 				else
-					stat[2][out[t][0]]++;
+					stat[2][out[t * N]]++;
 			}
 			tcnt += T;
 			serr += err;
 		}
 		// Cleanup memory used for this sequence
+		free(scs);
+		free(psc);
+		free(out);
 		rdr_freeseq(seq);
 		rdr_freeraw(raw);
 		// And report our progress, at regular interval we display how
