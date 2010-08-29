@@ -245,14 +245,12 @@ void tag_nbviterbi(mdl_t *mdl, const seq_t *seq, size_t N,
 	           size_t out[][N], double sc[], double psc[][N]) {
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
-	// Like for the gradient, we rely on stack storage and let the caller
-	// ensure there is enough free space there. This function will need
-	//   8 * (Y * N * (T + 2) + Y * Y * T)
-	// bytes of stack plus a bit more for variables.
-	double psi [T][Y    ][Y];
-	size_t back[T][Y * N];
-	double cur    [Y * N];
-	double old    [Y * N];
+	double  *vpsi  = xmalloc(sizeof(double) * T * Y * Y);
+	size_t  *vback = xmalloc(sizeof(size_t) * T * Y * N);
+	double (*psi) [T][Y    ][Y] = (void *)vpsi;
+	size_t (*back)[T][Y * N]    = (void *)vback;
+	double  *cur = xmalloc(sizeof(double) * Y * N);
+	double  *old = xmalloc(sizeof(double) * Y * N);
 	// We first compute the scores for each transitions in the lattice of
 	// labels.
 	int op;
@@ -269,7 +267,7 @@ void tag_nbviterbi(mdl_t *mdl, const seq_t *seq, size_t N,
 	// N-best nodes and next select the N-best one. There is a lot of room
 	// here for later optimisations if needed.
 	for (size_t y = 0, d = 0; y < Y; y++) {
-		cur[d++] = psi[0][0][y];
+		cur[d++] = (*psi)[0][0][y];
 		for (size_t n = 1; n < N; n++)
 			cur[d++] = -DBL_MAX;
 	}
@@ -283,13 +281,13 @@ void tag_nbviterbi(mdl_t *mdl, const seq_t *seq, size_t N,
 				for (size_t n = 0; n < N; n++, d++) {
 					lst[d] = old[d];
 					if (op)
-						lst[d] *= psi[t][yp][y];
+						lst[d] *= (*psi)[t][yp][y];
 					else
-						lst[d] += psi[t][yp][y];
+						lst[d] += (*psi)[t][yp][y];
 				}
 			}
 			// 2nd, init the back with the N first
-			size_t *bk = &back[t][y * N];
+			size_t *bk = &(*back)[t][y * N];
 			for (size_t n = 0; n < N; n++)
 				bk[n] = n;
 			// 3rd, search the N highest values
@@ -320,14 +318,18 @@ void tag_nbviterbi(mdl_t *mdl, const seq_t *seq, size_t N,
 			sc[n] = cur[bst];
 		cur[bst] = -DBL_MAX;
 		for (int t = T; t > 0; t--) {
-			const size_t yp = (t != 1) ? back[t - 1][bst] / N: 0;
+			const size_t yp = (t != 1) ? (*back)[t - 1][bst] / N: 0;
 			const size_t y  = bst / N;
 			out[t - 1][n] = y;
 			if (psc != NULL)
-				psc[t - 1][n] = psi[t - 1][yp][y];
-			bst = back[t - 1][bst];
+				psc[t - 1][n] = (*psi)[t - 1][yp][y];
+			bst = (*back)[t - 1][bst];
 		}
 	}
+	free(old);
+	free(cur);
+	free(vback);
+	free(vpsi);
 }
 
 /* tag_label:
