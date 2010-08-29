@@ -35,13 +35,10 @@
 #include "model.h"
 #include "sequence.h"
 
-void tag_viterbi(const mdl_t *mdl, const seq_t *seq,
+void tag_viterbi(mdl_t *mdl, const seq_t *seq,
 	         size_t out[], double *sc, double psc[]);
-void tag_nbviterbi(const mdl_t *mdl, const seq_t *seq, size_t N,
+void tag_nbviterbi(mdl_t *mdl, const seq_t *seq, size_t N,
 	           size_t out[][N], double sc[], double psc[][N]);
-
-void tag_posterior(mdl_t *mdl, const seq_t *seq,
-	        size_t out[], double *sc, double psc[]);
 
 void tag_label(mdl_t *mdl, FILE *fin, FILE *fout);
 

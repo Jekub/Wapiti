@@ -57,7 +57,7 @@
  *   we don't need to take the exponential of the scores as the Viterbi decoding
  *   works in log-space.
  */
-static void tag_expsc(const mdl_t *mdl, const seq_t *seq, double *vpsi) {
+static int tag_expsc(mdl_t *mdl, const seq_t *seq, double *vpsi) {
 	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
@@ -111,6 +111,42 @@ static void tag_expsc(const mdl_t *mdl, const seq_t *seq, double *vpsi) {
 			}
 		}
 	}
+	return 0;
+}
+
+/* tag_postsc:
+ *   This function compute score lattice with posteriors. This generally result
+ *   in a slightly best labelling and allow to output normalized score for the
+ *   sequence and for each labels but this is more costly as we have to perform
+ *   a full forward backward instead of just the forward pass.
+ */
+static int tag_postsc(mdl_t *mdl, const seq_t *seq, double *vpsi) {
+	const size_t  Y = mdl->nlbl;
+	const int     T = seq->len;
+	double (*psi)[T][Y][Y] = (void *)vpsi;
+	grd_t *grd = grd_new(mdl, NULL);
+	grd->first = 0;
+	grd->last  = T - 1;
+	grd_check(grd, seq->len);
+	if (mdl->opt->sparse) {
+		grd_spdopsi(grd, seq);
+		grd_spfwdbwd(grd, seq);
+	} else {
+		grd_fldopsi(grd, seq);
+		grd_flfwdbwd(grd, seq);
+	}
+	double (*alpha)[T][Y] = (void *)grd->alpha;
+	double (*beta )[T][Y] = (void *)grd->beta;
+	double  *unorm        =         grd->unorm;
+	for (int t = 0; t < T; t++) {
+		for (size_t y = 0; y < Y; y++) {
+			double e = (*alpha)[t][y] * (*beta)[t][y] * unorm[t];
+			for (size_t yp = 0; yp < Y; yp++)
+				(*psi)[t][yp][y] = e;
+		}
+	}
+	grd_free(grd);
+	return 1;
 }
 
 /* tag_viterbi:
@@ -121,7 +157,7 @@ static void tag_expsc(const mdl_t *mdl, const seq_t *seq, double *vpsi) {
  *   And like for the gradient, the caller is responsible to ensure there is
  *   enough stack space.
  */
-void tag_viterbi(const mdl_t *mdl, const seq_t *seq,
+void tag_viterbi(mdl_t *mdl, const seq_t *seq,
 	         size_t out[], double *sc, double psc[]) {
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
@@ -135,7 +171,11 @@ void tag_viterbi(const mdl_t *mdl, const seq_t *seq,
 	double old [Y];
 	// We first compute the scores for each transitions in the lattice of
 	// labels.
-	tag_expsc(mdl, seq, (double *)psi);
+	int op;
+	if (mdl->opt->lblpost)
+		op = tag_postsc(mdl, seq, (double *)psi);
+	else
+		op = tag_expsc(mdl, seq, (double *)psi);
 	// Now we can do the Viterbi algorithm. This is very similar to the
 	// forward pass
 	//   | α_1(y) = Ψ_1(y,x_1)
@@ -158,7 +198,11 @@ void tag_viterbi(const mdl_t *mdl, const seq_t *seq,
 			double bst = -1.0;
 			int    idx = 0;
 			for (size_t yp = 0; yp < Y; yp++) {
-				double val = psi[t][yp][y] + old[yp];
+				double val = old[yp];
+				if (op)
+					val *= psi[t][yp][y];
+				else
+					val += psi[t][yp][y];
 				if (val > bst) {
 					bst = val;
 					idx = yp;
@@ -194,7 +238,7 @@ void tag_viterbi(const mdl_t *mdl, const seq_t *seq,
  *   compute only the best one and will return the same sequence than the
  *   previous function but will be slower to do it.
  */
-void tag_nbviterbi(const mdl_t *mdl, const seq_t *seq, size_t N,
+void tag_nbviterbi(mdl_t *mdl, const seq_t *seq, size_t N,
 	           size_t out[][N], double sc[], double psc[][N]) {
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
@@ -208,7 +252,11 @@ void tag_nbviterbi(const mdl_t *mdl, const seq_t *seq, size_t N,
 	double old    [Y * N];
 	// We first compute the scores for each transitions in the lattice of
 	// labels.
-	tag_expsc(mdl, seq, (double *)psi);
+	int op;
+	if (mdl->opt->lblpost)
+		op = tag_postsc(mdl, seq, (double *)psi);
+	else
+		op = tag_expsc(mdl, seq, (double *)psi);
 	// Here also, it's classical but we have to keep the N best paths
 	// leading to each nodes of the lattice instead of only the best one.
 	// This mean that code is less trivial and the current implementation is
@@ -228,9 +276,15 @@ void tag_nbviterbi(const mdl_t *mdl, const seq_t *seq, size_t N,
 		for (size_t y = 0; y < Y; y++) {
 			// 1st, build the list of all incoming
 			double lst[Y * N];
-			for (size_t yp = 0, d = 0; yp < Y; yp++)
-				for (size_t n = 0; n < N; n++, d++)
-					lst[d] = psi[t][yp][y] + old[d];
+			for (size_t yp = 0, d = 0; yp < Y; yp++) {
+				for (size_t n = 0; n < N; n++, d++) {
+					lst[d] = old[d];
+					if (op)
+						lst[d] *= psi[t][yp][y];
+					else
+						lst[d] += psi[t][yp][y];
+				}
+			}
 			// 2nd, init the back with the N first
 			size_t *bk = &back[t][y * N];
 			for (size_t n = 0; n < N; n++)
@@ -273,49 +327,6 @@ void tag_nbviterbi(const mdl_t *mdl, const seq_t *seq, size_t N,
 	}
 }
 
-/* tag_posterior:
- *   This function implements decoding through posteriors. This generally result
- *   in a slightly best labelling and allow to output normalized score for the
- *   sequence and for each labels but this is more costly as we have to perform
- *   a full forward backward instead of just the forward pass.
- */
-void tag_posterior(mdl_t *mdl, const seq_t *seq,
-	        size_t out[], double *sc, double psc[]) {
-	const size_t  Y = mdl->nlbl;
-	const int     T = seq->len;
-	grd_t *grd = grd_new(mdl, NULL);
-	grd->first = 0;
-	grd->last  = T - 1;
-	grd_check(grd, seq->len);
-	if (mdl->opt->sparse) {
-		grd_spdopsi(grd, seq);
-		grd_spfwdbwd(grd, seq);
-	} else {
-		grd_fldopsi(grd, seq);
-		grd_flfwdbwd(grd, seq);
-	}
-	double (*alpha)[T][Y] = (void *)grd->alpha;
-	double (*beta )[T][Y] = (void *)grd->beta;
-	double  *unorm        =         grd->unorm;
-	double gsc = 1.0;
-	for (int t = 0; t < T; t++) {
-		double bsc = -1.0;
-		size_t by  = -1;
-		for (size_t y = 0; y < Y; y++) {
-			double e = (*alpha)[t][y] * (*beta)[t][y] * unorm[t];
-			if (e > bsc)
-				bsc = e, by = y;
-		}
-		out[t] = by;
-		gsc *= bsc;
-		if (psc != NULL)
-			psc[t] = bsc;
-	}
-	grd_free(grd);
-	if (sc != NULL)
-		*sc = gsc;
-}
-
 /* tag_label:
  *   Label a data file using the current model. This output an almost exact copy
  *   of the input file with an additional column with the predicted label. If
@@ -352,16 +363,10 @@ void tag_label(mdl_t *mdl, FILE *fin, FILE *fout) {
 		size_t out[T][N];
 		double psc[T][N];
 		double scs[N];
-		if (N == 1) {
-			if (mdl->opt->lblpost)
-				tag_posterior(mdl, seq, (size_t *)out, scs,
-					(double *)psc);
-			else
-				tag_viterbi(mdl, seq, (size_t *)out, scs,
-					(double *)psc);
-		} else {
+		if (N == 1)
+			tag_viterbi(mdl, seq, (size_t *)out, scs, (double*)psc);
+		else
 			tag_nbviterbi(mdl, seq, N, out, scs, psc);
-		}
 		// Next we output the raw sequence with an aditional column for
 		// the predicted labels
 		for (size_t n = 0; n < N; n++) {
