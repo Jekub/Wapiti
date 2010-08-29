@@ -51,27 +51,17 @@
  *   fixed in next version.
  ******************************************************************************/
 
-/* tag_viterbi:
- *   This function implement the Viterbi algorithm in order to decode the most
- *   probable sequence of labels according to the model. Some part of this code
- *   is very similar to the computation of the gradient as expected.
- *
- *   And like for the gradient, the caller is responsible to ensure there is
- *   enough stack space.
+/* tag_expsc:
+ *   Compute the score lattice for classical Viterbi decoding. This is the same
+ *   as for the first step of the gradient computation with the exception that
+ *   we don't need to take the exponential of the scores as the Viterbi decoding
+ *   works in log-space.
  */
-void tag_viterbi(const mdl_t *mdl, const seq_t *seq,
-	         size_t out[], double *sc, double psc[]) {
+static void tag_expsc(const mdl_t *mdl, const seq_t *seq, double *vpsi) {
 	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
-	// Like for the gradient, we rely on stack storage and let the caller
-	// ensure there is enough free space there. This function will need
-	//   8 * ((T * Y * (1 + Y)) + 2 * Y)
-	// bytes of stack plus a bit more for variables.
-	double psi [T][Y][Y];
-	size_t back[T][Y];
-	double cur [Y];
-	double old [Y];
+	double (*psi)[T][Y][Y] = (void *)vpsi;
 	// We first have to compute the Ψ_t(y',y,x_t) weights defined as
 	//   Ψ_t(y',y,x_t) = \exp( ∑_k θ_k f_k(y',y,x_t) )
 	// So at position 't' in the sequence, for each couple (y',y) we have
@@ -105,7 +95,7 @@ void tag_viterbi(const mdl_t *mdl, const seq_t *seq,
 				sum += x[mdl->uoff[o] + y];
 			}
 			for (size_t yp = 0; yp < Y; yp++)
-				psi[t][yp][y] = sum;
+				(*psi)[t][yp][y] = sum;
 		}
 	}
 	for (int t = 1; t < T; t++) {
@@ -117,10 +107,35 @@ void tag_viterbi(const mdl_t *mdl, const seq_t *seq,
 					const size_t o = pos->bobs[n];
 					sum += x[mdl->boff[o] + d];
 				}
-				psi[t][yp][y] += sum;
+				(*psi)[t][yp][y] += sum;
 			}
 		}
 	}
+}
+
+/* tag_viterbi:
+ *   This function implement the Viterbi algorithm in order to decode the most
+ *   probable sequence of labels according to the model. Some part of this code
+ *   is very similar to the computation of the gradient as expected.
+ *
+ *   And like for the gradient, the caller is responsible to ensure there is
+ *   enough stack space.
+ */
+void tag_viterbi(const mdl_t *mdl, const seq_t *seq,
+	         size_t out[], double *sc, double psc[]) {
+	const size_t  Y = mdl->nlbl;
+	const int     T = seq->len;
+	// Like for the gradient, we rely on stack storage and let the caller
+	// ensure there is enough free space there. This function will need
+	//   8 * ((T * Y * (1 + Y)) + 2 * Y)
+	// bytes of stack plus a bit more for variables.
+	double psi [T][Y][Y];
+	size_t back[T][Y];
+	double cur [Y];
+	double old [Y];
+	// We first compute the scores for each transitions in the lattice of
+	// labels.
+	tag_expsc(mdl, seq, (double *)psi);
 	// Now we can do the Viterbi algorithm. This is very similar to the
 	// forward pass
 	//   | α_1(y) = Ψ_1(y,x_1)
@@ -181,7 +196,6 @@ void tag_viterbi(const mdl_t *mdl, const seq_t *seq,
  */
 void tag_nbviterbi(const mdl_t *mdl, const seq_t *seq, size_t N,
 	           size_t out[][N], double sc[], double psc[][N]) {
-	const double *x = mdl->theta;
 	const size_t  Y = mdl->nlbl;
 	const int     T = seq->len;
 	// Like for the gradient, we rely on stack storage and let the caller
@@ -192,34 +206,9 @@ void tag_nbviterbi(const mdl_t *mdl, const seq_t *seq, size_t N,
 	size_t back[T][Y * N];
 	double cur    [Y * N];
 	double old    [Y * N];
-	// We first have to compute the Ψ_t(y',y,x_t) weights defined as
-	//   Ψ_t(y',y,x_t) = \exp( ∑_k θ_k f_k(y',y,x_t) )
-	// This is exactly the same as standard Viterbi so see comment above.
-	for (int t = 0; t < T; t++) {
-		const pos_t *pos = &(seq->pos[t]);
-		for (size_t y = 0; y < Y; y++) {
-			double sum = 0.0;
-			for (size_t n = 0; n < pos->ucnt; n++) {
-				const size_t o = pos->uobs[n];
-				sum += x[mdl->uoff[o] + y];
-			}
-			for (size_t yp = 0; yp < Y; yp++)
-				psi[t][yp][y] = sum;
-		}
-	}
-	for (int t = 1; t < T; t++) {
-		const pos_t *pos = &(seq->pos[t]);
-		for (size_t yp = 0, d = 0; yp < Y; yp++) {
-			for (size_t y = 0; y < Y; y++, d++) {
-				double sum = 0.0;
-				for (size_t n = 0; n < pos->bcnt; n++) {
-					const size_t o = pos->bobs[n];
-					sum += x[mdl->boff[o] + d];
-				}
-				psi[t][yp][y] += sum;
-			}
-		}
-	}
+	// We first compute the scores for each transitions in the lattice of
+	// labels.
+	tag_expsc(mdl, seq, (double *)psi);
 	// Here also, it's classical but we have to keep the N best paths
 	// leading to each nodes of the lattice instead of only the best one.
 	// This mean that code is less trivial and the current implementation is
@@ -377,14 +366,17 @@ void tag_label(mdl_t *mdl, FILE *fin, FILE *fout) {
 		// the predicted labels
 		for (size_t n = 0; n < N; n++) {
 			if (mdl->opt->outsc)
-				fprintf(fout, "# %f\n", scs[n]);
+				fprintf(fout, "# %d %f\n", (int)n, scs[n]);
 			for (int t = 0; t < T; t++) {
 				if (!mdl->opt->label)
 					fprintf(fout, "%s\t", raw->lines[t]);
 				size_t lbl = out[t][n];
-				fprintf(fout, "%s", qrk_id2str(lbls, lbl));
-				if (mdl->opt->outsc)
-					fprintf(fout, "\t%f", psc[t][n]);
+				const char *lblstr = qrk_id2str(lbls, lbl);
+				fprintf(fout, "%s", lblstr);
+				if (mdl->opt->outsc) {
+					fprintf(fout, "\t%s", lblstr);
+					fprintf(fout, "/%f", psc[t][n]);
+				}
 				fprintf(fout, "\n");
 			}
 			fprintf(fout, "\n");
