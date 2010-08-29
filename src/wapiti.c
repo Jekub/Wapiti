@@ -62,6 +62,7 @@ static const struct {
 	{"l-bfgs", trn_lbfgs},
 	{"sgd-l1", trn_sgdl1},
 	{"bcd",    trn_bcd  },
+	{"rprop",  trn_rprop},
 	{"auto",   trn_auto }
 };
 static const int trn_cnt = sizeof(trn_lst) / sizeof(trn_lst[0]);

@@ -75,6 +75,10 @@ static void opt_help(const char *pname) {
 		"\t   | --eta0     FLOAT   (sgd-l1) learning rate\n"
 		"\t   | --alpha    FLOAT   (sgd-l1) exp decay parameter\n"
 		"\t   | --kappa    FLOAT   (bcd)    stability parameter\n"
+		"\t   | --stpmin   FLOAT   (rprop)  minimum step size\n"
+		"\t   | --stpmax   FLOAT   (rprop)  maximum step size\n"
+		"\t   | --stpinc   FLOAT   (rprop)  step increment factor\n"
+		"\t   | --stpdec   FLOAT   (rprop)  step decrement factor\n"
 		"\n"
 		"Labelling mode:\n"
 		"    %1$s label [options] [input data] [output data]\n"
@@ -100,9 +104,10 @@ const opt_t opt_defaults = {
 	.compact = false,    .sparse  = false, .nthread = 1,    .maxiter = 0,
 	.rho1    = 0.5,      .rho2    = 0.0001,
 	.objwin  = 5,        .stopwin = 5,     .stopeps = 0.02,
-	.lbfgs = {.clip  = false, .histsz = 5, .maxls = 40},
-	.sgdl1 = {.eta0  = 0.8,   .alpha  = 0.85},
-	.bcd   = {.kappa = 1.5},
+	.lbfgs = {.clip   = false, .histsz = 5, .maxls = 40},
+	.sgdl1 = {.eta0   = 0.8,   .alpha  = 0.85},
+	.bcd   = {.kappa  = 1.5},
+	.rprop = {.stpmin = 1e-8, .stpmax = 50.0, .stpinc = 1.2, .stpdec = 0.5},
 	.label   = false,    .check   = false, .outsc = false,
 	.lblpost = false,    .nbest = 1
 };
@@ -137,6 +142,10 @@ struct {
 	{0, "##", "--eta0",    'F', offsetof(opt_t, sgdl1.eta0  )},
 	{0," ##", "--alpha",   'F', offsetof(opt_t, sgdl1.alpha )},
 	{0, "##", "--kappa",   'F', offsetof(opt_t, bcd.kappa   )},
+	{0, "##", "--stpmin",  'F', offsetof(opt_t, rprop.stpmin)},
+	{0, "##", "--stpmax",  'F', offsetof(opt_t, rprop.stpmax)},
+	{0, "##", "--stpinc",  'F', offsetof(opt_t, rprop.stpinc)},
+	{0, "##", "--stpdec",  'F', offsetof(opt_t, rprop.stpdec)},
 	{1, "-m", "--model",   'S', offsetof(opt_t, model       )},
 	{1, "-l", "--label",   'B', offsetof(opt_t, label       )},
 	{1, "-c", "--check",   'B', offsetof(opt_t, check       )},

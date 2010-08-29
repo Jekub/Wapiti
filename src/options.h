@@ -65,6 +65,13 @@ struct opt_s {
 	struct {
 		double kappa;
 	} bcd;
+	// Options specific to RPROP
+	struct {
+		double stpmin;
+		double stpmax;
+		double stpinc;
+		double stpdec;
+	} rprop;
 	// Options for labelling
 	bool   label;
 	bool   check;
