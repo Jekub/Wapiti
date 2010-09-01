@@ -41,6 +41,60 @@
 #include "vmath.h"
 
 /******************************************************************************
+ * Maxent optimized gradient computation
+ *
+ *   Maxent or maximum entropy models are a specific case of CRF where the
+ *   output graph is reduced to a single node. In this specific case, the
+ *   computation of the gradient can be simplified a lot as it is done in this
+ *   part of the code.
+ *
+ *   This code will be used to compute gradient for sequences of length one and
+ *   without actives bigrams features. All other case are handled by the next
+ *   section.
+ ******************************************************************************/
+void grd_dosingle(grd_t *grd, const seq_t *seq) {
+	const mdl_t *mdl = grd->mdl;
+	const double *x = mdl->theta;
+	const size_t  Y = mdl->nlbl;
+	const pos_t *pos = &(seq->pos[0]);
+	double *g = grd->g;
+	// We first compute for each Y the sum of weights of all features
+	// actives in the sample:
+	//     Ψ(y,x^i) = \exp( ∑_k θ_k f_k(y,x^i) )
+	//     Z_θ(x^i) = ∑_y Ψ(y,x^i)
+	double psi[Y], Z = 0.0;
+	for (unsigned y = 0; y < Y; y++)
+		psi[y] = 0.0;
+	for (unsigned n = 0; n < pos->ucnt; n++) {
+		const double *wgh = x + mdl->uoff[pos->uobs[n]];
+		for (unsigned y = 0; y < Y; y++)
+			psi[y] += wgh[y];
+	}
+	double lloss = psi[pos->lbl];
+	for (unsigned y = 0; y < Y; y++) {
+		psi[y] = (psi[y] == 0.0) ? 1.0 : exp(psi[y]);
+		Z += psi[y];
+	}
+	// Now, we can compute the gradient update, for each active feature
+	// in the sample the update is the expectation over the current model
+	// minus the expectation over the observed distribution:
+	//     E_{q_θ}(x,y) - E_{p}(x,y)
+	// and we can compute the expectation over the model with:
+	//     E_{q_θ}(x,y) = f_k(y,x^i) * ψ(y,x) / Z_θ(x)
+	for (unsigned y = 0; y < Y; y++)
+		psi[y] /= Z;
+	for (unsigned n = 0; n < pos->ucnt; n++) {
+		double *grd = g + mdl->uoff[pos->uobs[n]];
+		for (unsigned y = 0; y < Y; y++)
+			grd[y] += psi[y];
+		grd[pos->lbl] -= 1.0;
+	}
+	// And finally the log-likelihood with:
+	//     L_θ(x^i,y^i) = log(Z_θ(x^i)) - log(ψ(y^i,x^i))
+	grd->lloss += log(Z) - lloss;
+}
+
+/******************************************************************************
  * Single sequence gradient computation
  *
  *   This section is responsible for computing the gradient of the
@@ -81,6 +135,10 @@
  *   the worst case use as less as possible memory.
  ******************************************************************************/
 
+/* grd_check:
+ *   Check that enough memory is allocated in the gradient object so that the
+ *   linear-chain codepath can be computed for a sequence of the given length.
+ */
 void grd_check(grd_t *grd, int len) {
 	if (len <= grd->len)
 		return;
@@ -568,7 +626,7 @@ void grd_subemp(grd_t *grd, const seq_t *seq) {
  *                - ∑_{i=1..t} log(α-scale_i)
  *                - ∑_{i=t..T} log(β-scale_i)
  *   for any value of t.
- * 
+ *
  *   So we can compute it at any position in the sequence but the last one is
  *   easier as the value of β_T(y) and β-scale_T are constant and cancel out.
  *   This is why we have just keep the α-scale_t values.
@@ -656,6 +714,17 @@ void grd_doseq(grd_t *grd, const seq_t *seq) {
  *   cores, or to more thread than you have memory to hold vectors.
  ******************************************************************************/
 
+/* grd_dospl:
+ *   Compute the gradient of a single sample choosing between the maxent
+ *   optimised codepath and classical one depending of the sample.
+ */
+void grd_dospl(grd_t *grd, const seq_t *seq) {
+	if (seq->len == 1 && seq->pos[0].bcnt == 0)
+		grd_dosingle(grd, seq);
+	else
+		grd_doseq(grd, seq);
+}
+
 /* grd_worker:
  *   This is a simple function who compute the gradient over a subset of the
  *   training set. It is mean to be called by the thread spawner in order to
@@ -673,7 +742,7 @@ static void grd_worker(int id, int cnt, grd_t *grd) {
 	// Now all is ready, we can process our sequences and accumulate the
 	// gradient and inverse log-likelihood
 	for (int s = id; !uit_stop && s < dat->nseq; s += cnt)
-		grd_doseq(grd, dat->seq[s]);
+		grd_dospl(grd, dat->seq[s]);
 }
 
 /* grd_gradient:

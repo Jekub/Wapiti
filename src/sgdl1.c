@@ -166,7 +166,7 @@ void trn_sgdl1(mdl_t *mdl) {
 		for (int sp = 0; sp < S && !uit_stop; sp++, i++) {
 			const int s = perm[sp];
 			const seq_t *seq = mdl->train->seq[s];
-			grd_doseq(grd, seq);
+			grd_dospl(grd, seq);
 			// Before applying the gradient, we have to compute the
 			// learning rate to apply to this sequence. For this we
 			// use an exponential decay [1, pp 481(5)]
