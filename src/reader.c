@@ -256,10 +256,12 @@ static seq_t *rdr_rawtok2seq(rdr_t *rdr, const tok_t *tok) {
 	int size = 0;
 	for (int t = 0; t < T; t++) {
 		for (int n = 0; n < tok->cnts[t]; n++) {
-			switch (tok->toks[t][n][0]) {
+			const char *obs = tok->toks[t][n];
+			switch (obs[0]) {
 				case 'u': size += 1; break;
 				case 'b': size += 2; break;
 				case '*': size += 3; break;
+				default: fatal("invalid feature: %s", obs);
 			}
 		}
 	}
