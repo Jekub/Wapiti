@@ -39,6 +39,22 @@
 #include "thread.h"
 #include "vmath.h"
 
+#define sign(v) ((v) < 0.0 ? -1.0 : ((v) > 0.0 ? 1.0 : 0.0))
+
+/******************************************************************************
+ * Resilient propagation optimizer
+ *
+ *   This is an implementation of the RPROP algorithm (resilient propagation)
+ *   described by Riedmiller and Braun in [1] with an adaptation to be useable
+ *   with l1 regularization.
+ *   The adaptation consiste of using a pseudo-gradient similar to the one used
+ *   in OWL-QN to choose an orthant at iterations steps and projecting the step
+ *   in this orthant before the weight update.
+ *
+ *   [1] A direct adaptive method for faster backpropagation learning: The RPROP
+ *       algorithm, Martin Riedmiller and Heinrich Braun, IEEE International
+ *       Conference on Neural Networks, San Francisco, USA, 586-591, March 1993.
+ ******************************************************************************/
 void trn_rprop(mdl_t *mdl) {
 	const size_t F = mdl->nftr;
 	const int    K = mdl->opt->maxiter;
@@ -47,6 +63,8 @@ void trn_rprop(mdl_t *mdl) {
 	const double stpmax = mdl->opt->rprop.stpmax;
 	const double stpinc = mdl->opt->rprop.stpinc;
 	const double stpdec = mdl->opt->rprop.stpdec;
+	const double rho1   = mdl->opt->rho1;
+	const bool   l1     = rho1 != 0.0;
 	double *x   = mdl->theta;
 	double *g   = xvm_new(F), *gp  = xvm_new(F);
 	double *stp = xvm_new(F), *dlt = xvm_new(F);
@@ -61,20 +79,34 @@ void trn_rprop(mdl_t *mdl) {
 	for (int k = 0; !uit_stop && k < K; k++) {
 		double fx = grd_gradient(mdl, g, grds);
 		for (unsigned f = 0; f < F; f++) {
+			// If there is a l1 component in the regularization
+			// component, we project the gradient in the current
+			// orthant.
+			if (l1) {
+				if (x[f] < 0.0)        g[f] -= rho1;
+				else if (x[f] > 0.0)   g[f] += rho1;
+				else if (g[f] < -rho1) g[f] += rho1;
+				else if (g[f] > rho1)  g[f] -= rho1;
+				else                   g[f]  = 0.0;
+			}
+			// Next we adjust the step depending of the new and
+			// previous gradient values and update the weight. if
+			// there is l1 penalty, we have to project back the
+			// update in the choosen orthant.
 			if (gp[f] * g[f] > 0.0) {
 				stp[f] = min(stp[f] * stpinc, stpmax);
-				     if (g[f] > 0.0) dlt[f] = -stp[f];
-				else if (g[f] < 0.0) dlt[f] =  stp[f];
-				else                 dlt[f] =  0.0;
+				dlt[f] = stp[f] * -sign(g[f]);
+				if (l1 && dlt[f] * g[f] >= 0.0)
+					dlt[f] = 0.0;
 				x[f] += dlt[f];
 			} else if (gp[f] * g[f] < 0.0) {
 				stp[f] = max(stp[f] * stpdec, stpmin);
 				x[f]   = x[f] - dlt[f];
 				g[f]   = 0.0;
 			} else {
-				     if (g[f] > 0.0) dlt[f] =  stp[f];
-				else if (g[f] < 0.0) dlt[f] = -stp[f];
-				else                 dlt[f] =  0.0;
+				dlt[f] = stp[f] * -sign(g[f]);
+				if (l1 && dlt[f] * g[f] >= 0.0)
+					dlt[f] = 0.0;
 				x[f] += dlt[f];
 			}
 			gp[f] = g[f];
