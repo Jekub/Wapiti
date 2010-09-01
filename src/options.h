@@ -39,6 +39,7 @@ typedef struct opt_s opt_t;
 struct opt_s {
 	int    mode;
 	char  *input,  *output;
+	bool   maxent;
 	// Options for training
 	char  *algo,   *pattern;
 	char  *model,  *devel;

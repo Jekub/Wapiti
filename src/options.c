@@ -56,6 +56,7 @@ static void opt_help(const char *pname) {
 		"\n"
 		"Training mode:\n"
 		"    %1$s train [options] [input data] [model file]\n"
+		"     | --me               force maxent mode\n"
 		"\t-a | --algo     STRING  training algorithm to use\n"
 		"\t-p | --pattern  FILE    patterns for extracting features\n"
 		"\t-m | --model    FILE    model file to preload\n"
@@ -82,6 +83,7 @@ static void opt_help(const char *pname) {
 		"\n"
 		"Labelling mode:\n"
 		"    %1$s label [options] [input data] [output data]\n"
+		"     | --me               force maxent mode\n"
 		"\t-m | --model    FILE    model file to load\n"
 		"\t-l | --label            output only labels\n"
 		"\t-c | --check            input is already labeled\n"
@@ -100,6 +102,7 @@ static void opt_help(const char *pname) {
 const opt_t opt_defaults = {
 	.mode    = -1,
 	.input   = NULL,     .output  = NULL,
+	.maxent  = false,
 	.algo    = "l-bfgs", .pattern = NULL,  .model   = NULL, .devel   = NULL,
 	.compact = false,    .sparse  = false, .nthread = 1,    .maxiter = 0,
 	.rho1    = 0.5,      .rho2    = 0.0001,
@@ -123,6 +126,7 @@ struct {
 	char    kind;
 	size_t  offset;
 } opt_switch[] = {
+	{0, "##", "--me",      'B', offsetof(opt_t, maxent      )},
 	{0, "-a", "--algo",    'S', offsetof(opt_t, algo        )},
 	{0, "-p", "--pattern", 'S', offsetof(opt_t, pattern     )},
 	{0, "-m", "--model",   'S', offsetof(opt_t, model       )},
@@ -146,6 +150,7 @@ struct {
 	{0, "##", "--stpmax",  'F', offsetof(opt_t, rprop.stpmax)},
 	{0, "##", "--stpinc",  'F', offsetof(opt_t, rprop.stpinc)},
 	{0, "##", "--stpdec",  'F', offsetof(opt_t, rprop.stpdec)},
+	{1, "##", "--me",      'B', offsetof(opt_t, maxent      )},
 	{1, "-m", "--model",   'S', offsetof(opt_t, model       )},
 	{1, "-l", "--label",   'B', offsetof(opt_t, label       )},
 	{1, "-c", "--check",   'B', offsetof(opt_t, check       )},

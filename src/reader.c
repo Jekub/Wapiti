@@ -62,8 +62,9 @@
  *   Create a new empty reader object. You mut load patterns in it or a
  *   previously saved reader if you want to use it for reading sequences.
  */
-rdr_t *rdr_new(void) {
+rdr_t *rdr_new(bool maxent) {
 	rdr_t *rdr = xmalloc(sizeof(rdr_t));
+	rdr->maxent = maxent;
 	rdr->npats = rdr->nuni = rdr->nbi = 0;
 	rdr->ntoks = 0;
 	rdr->pats = NULL;
@@ -197,11 +198,8 @@ void rdr_loadpat(rdr_t *rdr, FILE *file) {
  *   Read a raw sequence from given file: a set of lines terminated by end of
  *   file or by an empty line. Return NULL if file end was reached before any
  *   sequence was read.
- *   The reader object is not used in this function but is specified as a
- *   parameter to be more coherent.
  */
 raw_t *rdr_readraw(rdr_t *rdr, FILE *file) {
-	unused(rdr);
 	if (feof(file))
 		return NULL;
 	// Prepare the raw sequence object
@@ -234,6 +232,10 @@ raw_t *rdr_readraw(rdr_t *rdr, FILE *file) {
 			                + sizeof(char *) * size);
 		}
 		raw->lines[cnt++] = line;
+		// In maxent mode, we only have to load one line for each sample
+		// so we can stop here.
+		if (rdr->maxent)
+			break;
 	}
 	// If no lines was read, we just free allocated memory and return NULL
 	// to signal the end of file to the caller. Else, we adjust the object
@@ -247,6 +249,20 @@ raw_t *rdr_readraw(rdr_t *rdr, FILE *file) {
 	return raw;
 }
 
+/* rdr_mapobs:
+ *   Map an observation to its identifier, automatically adding a 'u' prefix in
+ *   pure maxent mode.
+ */
+static size_t rdr_mapobs(rdr_t *rdr, const char *str) {
+	if (!rdr->maxent)
+		return qrk_str2id(rdr->obs, str);
+	size_t len = strlen(str) + 2;
+	char tmp[len];
+	tmp[0] = 'u';
+	strcpy(tmp + 1, str);
+	return qrk_str2id(rdr->obs, tmp);
+}
+
 /* rdr_rawtok2seq:
  *   Convert a tok_t to a seq_t object taking each tokens as a feature without
  *   applying patterns.
@@ -254,14 +270,19 @@ raw_t *rdr_readraw(rdr_t *rdr, FILE *file) {
 static seq_t *rdr_rawtok2seq(rdr_t *rdr, const tok_t *tok) {
 	const int T = tok->len;
 	int size = 0;
-	for (int t = 0; t < T; t++) {
-		for (int n = 0; n < tok->cnts[t]; n++) {
-			const char *obs = tok->toks[t][n];
-			switch (obs[0]) {
-				case 'u': size += 1; break;
-				case 'b': size += 2; break;
-				case '*': size += 3; break;
-				default: fatal("invalid feature: %s", obs);
+	if (rdr->maxent) {
+		size = tok->cnts[0];
+	} else {
+		for (int t = 0; t < T; t++) {
+			for (int n = 0; n < tok->cnts[t]; n++) {
+				const char *o = tok->toks[t][n];
+				switch (o[0]) {
+					case 'u': size += 1; break;
+					case 'b': size += 2; break;
+					case '*': size += 3; break;
+					default:
+						fatal("invalid feature: %s", o);
+				}
 			}
 		}
 	}
@@ -276,18 +297,20 @@ static seq_t *rdr_rawtok2seq(rdr_t *rdr, const tok_t *tok) {
 		for (int n = 0; n < tok->cnts[t]; n++) {
 			if (tok->toks[t][n][0] == 'b')
 				continue;
-			size_t id = qrk_str2id(rdr->obs, tok->toks[t][n]);
+			size_t id = rdr_mapobs(rdr, tok->toks[t][n]);
 			if (id != none) {
 				(*raw++) = id;
 				seq->pos[t].ucnt++;
 			}
 		}
 		seq->pos[t].bcnt = 0;
+		if (rdr->maxent)
+			continue;
 		seq->pos[t].bobs = raw;
 		for (int n = 0; n < tok->cnts[t]; n++) {
 			if (tok->toks[t][n][0] == 'u')
 				continue;
-			size_t id = qrk_str2id(rdr->obs, tok->toks[t][n]);
+			size_t id = rdr_mapobs(rdr, tok->toks[t][n]);
 			if (id != none) {
 				(*raw++) = id;
 				seq->pos[t].bcnt++;
@@ -331,7 +354,7 @@ static seq_t *rdr_pattok2seq(rdr_t *rdr, const tok_t *tok) {
 		for (int x = 0; x < rdr->npats; x++) {
 			// Get the observation and map it to an identifier
 			char *obs = pat_exec(rdr->pats[x], tok, t);
-			size_t id = qrk_str2id(rdr->obs, obs);
+			size_t id = rdr_mapobs(rdr, obs);
 			if (id == none) {
 				free(obs);
 				continue;

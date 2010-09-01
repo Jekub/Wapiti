@@ -272,7 +272,7 @@ int main(int argc, char *argv[argc]) {
 	opt_t opt = opt_defaults;
 	opt_parse(argc, argv, &opt);
 	// Next we prepare the model
-	mdl_t *mdl = mdl_new(rdr_new());
+	mdl_t *mdl = mdl_new(rdr_new(opt.maxent));
 	mdl->opt = &opt;
 	// And switch to requested mode
 	switch (opt.mode) {
