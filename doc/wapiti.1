@@ -6,7 +6,7 @@ wapiti
 .RB mode\ [options]\ [input]\ [output]
 .SH DESCRIPTION
 .SS Overview
-Wapiti is a program for training and using linear-chain CRF models with various algorithms using an elastic penalty.
+Wapiti is a program for training and using maxent models or linear-chain CRF models with various algorithms using an elastic penalty.
 .P
 It can work in different mode depending on the first argument you give to it, either training a model, labeling new data, or dumping a model in readable form.
 .P
@@ -20,6 +20,9 @@ Output a short help message.
 Output version and revision numbers.
 
 .SS Train mode
+.TP
+.B \-\-me
+Activate the pure maxent mode, see below for more details.
 .TP
 .B \-a | \-\-algo <string>
 Select the algorithm used to train the CRF model, specify "list" for a list of available algorithms. The first algorithm in this list is used as default.
@@ -87,6 +90,9 @@ Set the minimum/maximum step size allowed for the RPROP trainer. Defaults are 1e
 Set the increment/decrement factor used to update the steps in the RPROP trainer. Defaults values are 1.2 and 0.5. Increment must be greater than 1.0 and decrement must be between 0 and 1.0.
 
 .SS Label mode
+.TP
+.B \-\-me
+Activate the pure maxent mode, see below for more details.
 .TP
 .B \-m | \-\-model <file>
 Specifies a model file to load and to use for labeling. This switch is mandatory.
@@ -176,7 +182,7 @@ Data files are plain text files containing sequence separated by empty lines. Ea
 
 Each lines are made of tokens separated either by spaces or by tabulations. All tokens are observations available for training or labeling, except the last one in training mode which is assumed to be the label to predict.
 
-If no patterns are specified, each tokens are interpreted directly as an observation and is combined with label in order to generate features. If patterns are specified, they are used in combination with the tokens to generate the features.
+If no patterns are specified, each tokens are interpreted directly as an observation and is combined with label in order to generate features. If patterns are specified, they are used in combination with the tokens to generate the features.The observations must be prefixed by either 'u', 'b' or '*' in order to specify if it is unigram, bigram or both.
 
 .SH PATTERNS
 Pattern files are almost compatible with CRF++ templates. Empty lines as well as all characters appearing after a '#' are discarded. The remaining lines are interpreted as patterns.
@@ -213,6 +219,13 @@ And the constructs :
 So, for example, the regexp "^.?.?.?.?" will match a prefix of at most four characters and "^\u\u*$" will match only on data composed solely of uppercase characters.
 
 For the commands, %x, %t, and %m, if the command name is given in uppercase, the case is removed from the string before being added to the observation.
+
+.SH PURE MAXENT MODE
+If you don't make anything special, Wapiti will automatically choose between the maxent codepath and the linear-chain codepath for each sequence. If a sequence have a length of one and no bigram features, it will switch to the maxent codepath.
+
+This imply that, if you want to train a maxent only model, you still have to prefix all your features/patterns with 'u' to indicate a unigram feature, and separate all line in your input file with empty lines to make sure they are all length one.
+
+The pure maxent mode, activated by the \-\-me switch in train and label mode, take care of the two problems. When activated, all lines in input files are used independantly as a single sample, and blank lines are ignored. Additionally, all features are automatically prefixed with 'u' forcing them as unigram features, so you don't to put te prefix yourself.
 
 .SH MODEL COMPACTION
 If you specify the \-\-compact switch for training, when the model is optimized all the observations which generate only inactive features are removed from the model. In case of l1-penalty this can dramatically reduce the model size.
