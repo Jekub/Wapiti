@@ -747,11 +747,9 @@ static void grd_worker(int id, int cnt, grd_t *grd) {
 
 /* grd_gradient:
  *   Compute the gradient and value of the negative log-likelihood of the model
- *   at current point. It will also compute the pseudo gradient for owl-qn if
- *   the 'pg' vector is not NULL.
- *   The computation is done in parallel taking profit of the fact that the
- *   gradient over the full training set is just the sum of the gradient of
- *   each sequence.
+ *   at current point. The computation is done in parallel taking profit of
+ *   the fact that the gradient over the full training set is just the sum of
+ *   the gradient of each sequence.
  */
 double grd_gradient(mdl_t *mdl, double *g, grd_t *grds[]) {
 	const double *x = mdl->theta;

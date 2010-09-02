@@ -78,6 +78,8 @@ void trn_rprop(mdl_t *mdl) {
 		grds[w] = grd_new(mdl, xvm_new(F));
 	for (int k = 0; !uit_stop && k < K; k++) {
 		double fx = grd_gradient(mdl, g, grds);
+		if (uit_stop)
+			break;
 		for (unsigned f = 0; f < F; f++) {
 			// If there is a l1 component in the regularization
 			// component, we project the gradient in the current
