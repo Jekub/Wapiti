@@ -47,7 +47,7 @@
  *   This is an implementation of the RPROP algorithm (resilient propagation)
  *   described by Riedmiller and Braun in [1] with an adaptation to be useable
  *   with l1 regularization.
- *   The adaptation consiste of using a pseudo-gradient similar to the one used
+ *   The adaptation consist of using a pseudo-gradient similar to the one used
  *   in OWL-QN to choose an orthant at iterations steps and projecting the step
  *   in this orthant before the weight update.
  *
@@ -84,30 +84,31 @@ void trn_rprop(mdl_t *mdl) {
 			// If there is a l1 component in the regularization
 			// component, we project the gradient in the current
 			// orthant.
+			double pg = g[f];
 			if (l1) {
-				if (x[f] < 0.0)        g[f] -= rho1;
-				else if (x[f] > 0.0)   g[f] += rho1;
-				else if (g[f] < -rho1) g[f] += rho1;
-				else if (g[f] > rho1)  g[f] -= rho1;
-				else                   g[f]  = 0.0;
+				if (x[f] < 0.0)        pg -= rho1;
+				else if (x[f] > 0.0)   pg += rho1;
+				else if (g[f] < -rho1) pg += rho1;
+				else if (g[f] > rho1)  pg -= rho1;
+				else                   pg  = 0.0;
 			}
 			// Next we adjust the step depending of the new and
 			// previous gradient values and update the weight. if
 			// there is l1 penalty, we have to project back the
 			// update in the choosen orthant.
-			if (gp[f] * g[f] > 0.0) {
+			if (gp[f] * pg > 0.0) {
 				stp[f] = min(stp[f] * stpinc, stpmax);
 				dlt[f] = stp[f] * -sign(g[f]);
-				if (l1 && dlt[f] * g[f] >= 0.0)
+				if (l1 && dlt[f] * pg >= 0.0)
 					dlt[f] = 0.0;
 				x[f] += dlt[f];
-			} else if (gp[f] * g[f] < 0.0) {
+			} else if (gp[f] * pg < 0.0) {
 				stp[f] = max(stp[f] * stpdec, stpmin);
 				x[f]   = x[f] - dlt[f];
 				g[f]   = 0.0;
 			} else {
-				dlt[f] = stp[f] * -sign(g[f]);
-				if (l1 && dlt[f] * g[f] >= 0.0)
+				dlt[f] = stp[f] * -sign(pg);
+				if (l1 && dlt[f] * pg >= 0.0)
 					dlt[f] = 0.0;
 				x[f] += dlt[f];
 			}
