@@ -189,7 +189,7 @@ Pattern files are almost compatible with CRF++ templates. Empty lines as well as
 
 The first char must be either 'u', 'b' or '*' (in upper or lower case). This indicates the type of feature: respectively unigram, bigrams and both, must be generated from this pattern.
 
-The remaining of the pattern is used to build an observation string. Each marker of the kind "%x[col,off]" is replaced by the token in the column "col" from the data file at current position plus the offset "off".
+The remaining of the pattern is used to build an observation string. Each marker of the kind "%x[off,col]" is replaced by the token in the column "col" from the data file at current position plus the offset "off".
 The "off" value can be prefixed with an "@" to make it an absolute position from the start of the sequence if it is positive and from the end if it is negative. An offset of "@1" will refer to the first line of data and "@-1" to the last line.
 
 For example, if your data is
@@ -197,11 +197,11 @@ For example, if your data is
     a2    b2    c2
     a3    b3    c3
 .br
-The pattern "u:%x[0,-1]/%x[1,+1]" applied at position 2 in the sequence will produce the observation "u:a1/c3".
+The pattern "u:%x[-1,0]/%x[+1,2]" applied at position 2 in the sequence will produce the observation "u:a1/c3".
 
 The sequence is extended in front and back with special tokens like "_X-1" or "_X+2" in order to apply markers with any offset at all position in the sequence.
 
-Wapiti also supports a simple kind of matching, very useful, for example, in natural language processing. This is done using two other commands of the form %m[col,off,"regexp"] and %t[col,off,"regexp"]. Both commands will get data the %same way the %x command using the "col" and "off" values but apply a regular expression to it before substituting it. The %t will replace the data by "true" or "false" depending if the expression match on the data or not. The %m command replace the data by the substring matched by the expression.
+Wapiti also supports a simple kind of matching, very useful, for example, in natural language processing. This is done using two other commands of the form %m[off,col,"regexp"] and %t[off,col,"regexp"]. Both commands will get data the %same way the %x command using the "col" and "off" values but apply a regular expression to it before substituting it. The %t will replace the data by "true" or "false" depending if the expression match on the data or not. The %m command replace the data by the substring matched by the expression.
 
 The regular expression implemented is just a subset of classical regular expression found in classical unix system but is generally enough for most tasks. The recognized subset is quite simple. First for matching characters:
      .  -> match any characters
