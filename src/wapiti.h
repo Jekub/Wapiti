@@ -31,10 +31,15 @@
 
 /* XVM_ANSI:
  *   By uncomenting the following define, you can force wapiti to not use SSE2
- *   even if available. This is the first step for a full C99 compliant version
- *   of Wapiti.  Next thing will be to make the threading code also optional.
+ *   even if available.
  */
 //#define XVM_ANSI
+
+/* MTH_ANSI:
+ *  By uncomenting the following define, you can disable the use of POSIX
+ *  threads in the multi-threading part of Wapiti, for non-POSIX systems.
+ */
+//#define MTH_ANSI
 
 #endif
 

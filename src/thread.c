@@ -25,10 +25,9 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <pthread.h>
-
 #include "tools.h"
 #include "thread.h"
+#include "wapiti.h"
 
 /******************************************************************************
  * Multi-threading code
@@ -37,7 +36,18 @@
  *   non-POSIX systems you will have to rewrite this using your systems threads.
  *   all code who depend on threads is located here so this process must not be
  *   too difficult.
+ *   If you don't want to use multithreading on non-POSIX system, just enable
+ *   the definition of MTH_ANSI in wapiti.h. This will disable multithreading.
  ******************************************************************************/
+#ifdef MTH_ANSI
+void mth_spawn(func_t *f, int W, void *ud[W]) {
+	for (int w = 0; w < W; w++)
+		f(w, W, ud[w]);
+}
+
+#else
+
+#include <pthread.h>
 
 typedef struct mth_s mth_t;
 struct mth_s {
@@ -84,4 +94,5 @@ void mth_spawn(func_t *f, int W, void *ud[W]) {
 			fatal("failed to join thread");
 	pthread_attr_destroy(&attr);
 }
+#endif
 
