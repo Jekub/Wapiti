@@ -730,7 +730,7 @@ void grd_dospl(grd_t *grd, const seq_t *seq) {
  *   training set. It is mean to be called by the thread spawner in order to
  *   compute the gradient over the full training set.
  */
-static void grd_worker(int id, int cnt, grd_t *grd) {
+static void grd_worker(job_t *job, int id, int cnt, grd_t *grd) {
 	mdl_t *mdl = grd->mdl;
 	const dat_t *dat = mdl->train;
 	const size_t F = mdl->nftr;
@@ -760,7 +760,7 @@ double grd_gradient(mdl_t *mdl, double *g, grd_t *grds[]) {
 	// log-likelihood are additive, computing the final values will be
 	// trivial.
 	if (W == 1)
-		grd_worker(1, 1, grds[0]);
+		grd_worker(NULL, 1, 1, grds[0]);
 	else
 		mth_spawn((func_t *)grd_worker, W, (void **)grds);
 	if (uit_stop)

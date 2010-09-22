@@ -28,7 +28,12 @@
 #ifndef thread_h
 #define thread_h
 
-typedef void (func_t)(int id, int cnt, void *ud);
+typedef struct job_s job_t;
+struct job_s {
+	int foo;
+};
+
+typedef void (func_t)(job_t *job, int id, int cnt, void *ud);
 
 void mth_spawn(func_t *f, int W, void *ud[W]);
 

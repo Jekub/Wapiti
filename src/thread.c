@@ -41,6 +41,7 @@
 
 typedef struct mth_s mth_t;
 struct mth_s {
+	job_t  *job;
 	int     id;
 	int     cnt;
 	func_t *f;
@@ -49,7 +50,7 @@ struct mth_s {
 
 static void *mth_stub(void *ud) {
 	mth_t *mth = (mth_t *)ud;
-	mth->f(mth->id, mth->cnt, mth->ud);
+	mth->f(mth->job, mth->id, mth->cnt, mth->ud);
 	return NULL;
 }
 
@@ -63,10 +64,13 @@ void mth_spawn(func_t *f, int W, void *ud[W]) {
 	pthread_attr_init(&attr);
 	pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+	// First prepare the jobs scheduler
+	job_t job;
 	// We prepare the parameters structures that will be send to the threads
 	// with informations for calling the user function.
 	mth_t p[W];
 	for (int w = 0; w < W; w++) {
+		p[w].job = &job;
 		p[w].id  = w;
 		p[w].cnt = W;
 		p[w].f   = f;
