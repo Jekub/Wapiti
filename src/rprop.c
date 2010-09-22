@@ -83,7 +83,7 @@ static void trn_rpropsub(job_t *job, int id, int cnt, rprop_t *st) {
 	double *x = mdl->theta;
 	double *g   = st->g,   *gp  = st->gp;
 	double *stp = st->stp, *dlt = st->dlt;
-	const size_t from = F * id / cnt + 1;
+	const size_t from = F * id / cnt;
 	const size_t to   = F * (id + 1) / cnt;
 	for (size_t f = from; f < to; f++) {
 		// If there is a l1 component in the regularization
