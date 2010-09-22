@@ -55,73 +55,114 @@
  *       algorithm, Martin Riedmiller and Heinrich Braun, IEEE International
  *       Conference on Neural Networks, San Francisco, USA, 586-591, March 1993.
  ******************************************************************************/
-void trn_rprop(mdl_t *mdl) {
+typedef struct rprop_s rprop_t;
+struct rprop_s {
+	mdl_t *mdl;
+	double *g;
+	double *gp;
+	double *stp;
+	double *dlt;
+};
+
+/* trn_rpropsub:
+ *   Partial update of the weight vector including partial gradient in case of
+ *   l1 regularisation. The sub vector updated depend on the id and cnt
+ *   parameter given, the job scheduling system is not used here as we can
+ *   easily split processing in equals parts.
+ */
+static void trn_rpropsub(job_t *job, int id, int cnt, rprop_t *st) {
+	unused(job);
+	mdl_t *mdl = st->mdl;
 	const size_t F = mdl->nftr;
-	const int    K = mdl->opt->maxiter;
-	const size_t W = mdl->opt->nthread;
 	const double stpmin = mdl->opt->rprop.stpmin;
 	const double stpmax = mdl->opt->rprop.stpmax;
 	const double stpinc = mdl->opt->rprop.stpinc;
 	const double stpdec = mdl->opt->rprop.stpdec;
 	const double rho1   = mdl->opt->rho1;
 	const bool   l1     = rho1 != 0.0;
-	double *x   = mdl->theta;
+	double *x = mdl->theta;
+	double *g   = st->g,   *gp  = st->gp;
+	double *stp = st->stp, *dlt = st->dlt;
+	const size_t from = F * id / cnt + 1;
+	const size_t to   = F * (id + 1) / cnt;
+	for (size_t f = from; f < to; f++) {
+		// If there is a l1 component in the regularization
+		// component, we project the gradient in the current
+		// orthant.
+		double pg = g[f];
+		if (l1) {
+			if (x[f] < 0.0)        pg -= rho1;
+			else if (x[f] > 0.0)   pg += rho1;
+			else if (g[f] < -rho1) pg += rho1;
+			else if (g[f] > rho1)  pg -= rho1;
+			else                   pg  = 0.0;
+		}
+		// Next we adjust the step depending of the new and
+		// previous gradient values and update the weight. if
+		// there is l1 penalty, we have to project back the
+		// update in the choosen orthant.
+		if (gp[f] * pg > 0.0) {
+			stp[f] = min(stp[f] * stpinc, stpmax);
+			dlt[f] = stp[f] * -sign(g[f]);
+			if (l1 && dlt[f] * pg >= 0.0)
+				dlt[f] = 0.0;
+			x[f] += dlt[f];
+		} else if (gp[f] * pg < 0.0) {
+			stp[f] = max(stp[f] * stpdec, stpmin);
+			x[f]   = x[f] - dlt[f];
+			g[f]   = 0.0;
+		} else {
+			dlt[f] = stp[f] * -sign(pg);
+			if (l1 && dlt[f] * pg >= 0.0)
+				dlt[f] = 0.0;
+			x[f] += dlt[f];
+		}
+		gp[f] = g[f];
+	}
+}
+
+void trn_rprop(mdl_t *mdl) {
+	const size_t F = mdl->nftr;
+	const int    K = mdl->opt->maxiter;
+	const size_t W = mdl->opt->nthread;
+	// Allocate state memory and initialize it
 	double *g   = xvm_new(F), *gp  = xvm_new(F);
 	double *stp = xvm_new(F), *dlt = xvm_new(F);
 	for (unsigned f = 0; f < F; f++) {
 		gp[f]  = 0.0;
 		stp[f] = 0.1;
 	}
+	// Prepare the rprop state used to send information to the rprop worker
+	// about updating weight using the gradient.
+	rprop_t *st = xmalloc(sizeof(rprop_t));
+	st->mdl = mdl;
+	st->g   = g;   st->gp  = gp;
+	st->stp = stp; st->dlt = dlt;
+	rprop_t *rprop[W];
+	for (size_t w = 0; w < W; w++)
+		rprop[w] = st;
+	// Prepare the gradient state for the distributed gradient computation.
 	grd_t *grds[W];
 	grds[0] = grd_new(mdl, g);
 	for (size_t w = 1; w < W; w++)
 		grds[w] = grd_new(mdl, xvm_new(F));
+	// And iterate the gradient computation / weight update process until
+	// convergence or stop request
 	for (int k = 0; !uit_stop && k < K; k++) {
 		double fx = grd_gradient(mdl, g, grds);
 		if (uit_stop)
 			break;
-		for (unsigned f = 0; f < F; f++) {
-			// If there is a l1 component in the regularization
-			// component, we project the gradient in the current
-			// orthant.
-			double pg = g[f];
-			if (l1) {
-				if (x[f] < 0.0)        pg -= rho1;
-				else if (x[f] > 0.0)   pg += rho1;
-				else if (g[f] < -rho1) pg += rho1;
-				else if (g[f] > rho1)  pg -= rho1;
-				else                   pg  = 0.0;
-			}
-			// Next we adjust the step depending of the new and
-			// previous gradient values and update the weight. if
-			// there is l1 penalty, we have to project back the
-			// update in the choosen orthant.
-			if (gp[f] * pg > 0.0) {
-				stp[f] = min(stp[f] * stpinc, stpmax);
-				dlt[f] = stp[f] * -sign(g[f]);
-				if (l1 && dlt[f] * pg >= 0.0)
-					dlt[f] = 0.0;
-				x[f] += dlt[f];
-			} else if (gp[f] * pg < 0.0) {
-				stp[f] = max(stp[f] * stpdec, stpmin);
-				x[f]   = x[f] - dlt[f];
-				g[f]   = 0.0;
-			} else {
-				dlt[f] = stp[f] * -sign(pg);
-				if (l1 && dlt[f] * pg >= 0.0)
-					dlt[f] = 0.0;
-				x[f] += dlt[f];
-			}
-			gp[f] = g[f];
-		}
+		mth_spawn((func_t *)trn_rpropsub, W, (void **)rprop, 0, 0);
 		if (uit_progress(mdl, k + 1, fx) == false)
 			break;
 	}
+	// Free all allocated memory
 	xvm_free(g);   xvm_free(gp);
 	xvm_free(stp); xvm_free(dlt);
 	for (size_t w = 1; w < W; w++)
 		xvm_free(grds[w]->g);
 	for (size_t w = 0; w < W; w++)
 		grd_free(grds[w]);
+	free(st);
 }
 
