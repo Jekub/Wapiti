@@ -448,3 +448,29 @@ void tag_label(mdl_t *mdl, FILE *fin, FILE *fout) {
 	}
 }
 
+/* tag_eval:
+ *   Compute the token error rate and sequence error rate over the devel set (or
+ *   taining set if not available).
+ */
+void tag_eval(mdl_t *mdl, double *te, double *se) {
+	dat_t *dat = (mdl->devel == NULL) ? mdl->train : mdl->devel;
+	int tcnt = 0, terr = 0;
+	int scnt = 0, serr = 0;
+	for (int s = 0; s < dat->nseq; s++) {
+		// Tag the sequence with the viterbi
+		const seq_t *seq = dat->seq[s];
+		const int    T   = seq->len;
+		size_t out[T];
+		tag_viterbi(mdl, seq, out, NULL, NULL);
+		// And check for eventual (probable ?) errors
+		bool err = false;
+		for (int t = 0; t < T; t++)
+			if (seq->pos[t].lbl != out[t])
+				terr++, err = true;
+		tcnt += T, scnt += 1;
+		serr += err;
+	}
+	*te = (double)terr / tcnt * 100.0;
+	*se = (double)serr / scnt * 100.0;
+}
+

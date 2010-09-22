@@ -117,28 +117,9 @@ void uit_cleanup(mdl_t *mdl) {
  *   independant stoping criterion.
  */
 bool uit_progress(mdl_t *mdl, int it, double obj) {
-	// We first evaluate the current model performances on the devel dataset
-	// if available, else on the training dataset. We compute tokens and
-	// sequence error rate.
-	dat_t *dat = (mdl->devel == NULL) ? mdl->train : mdl->devel;
-	int tcnt = 0, terr = 0;
-	int scnt = 0, serr = 0;
-	for (int s = 0; s < dat->nseq; s++) {
-		// Tag the sequence with the viterbi
-		const seq_t *seq = dat->seq[s];
-		const int    T   = seq->len;
-		size_t out[T];
-		tag_viterbi(mdl, seq, out, NULL, NULL);
-		// And check for eventual (probable ?) errors
-		bool err = false;
-		for (int t = 0; t < T; t++)
-			if (seq->pos[t].lbl != out[t])
-				terr++, err = true;
-		tcnt += T, scnt += 1;
-		serr += err;
-	}
-	const double te = (double)terr / tcnt * 100.0;
-	const double se = (double)serr / scnt * 100.0;
+	// First we just compute the error rate on devel or train data
+	double te, se;
+	tag_eval(mdl, &te, &se);
 	// Next, we compute the number of active features
 	size_t act = 0;
 	for (size_t f = 0; f < mdl->nftr; f++)
