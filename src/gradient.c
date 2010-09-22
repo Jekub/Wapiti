@@ -731,6 +731,7 @@ void grd_dospl(grd_t *grd, const seq_t *seq) {
  *   compute the gradient over the full training set.
  */
 static void grd_worker(job_t *job, int id, int cnt, grd_t *grd) {
+	unused(id && cnt);
 	mdl_t *mdl = grd->mdl;
 	const dat_t *dat = mdl->train;
 	const size_t F = mdl->nftr;
@@ -741,8 +742,18 @@ static void grd_worker(job_t *job, int id, int cnt, grd_t *grd) {
 		grd->g[f] = 0.0;
 	// Now all is ready, we can process our sequences and accumulate the
 	// gradient and inverse log-likelihood
-	for (int s = id; !uit_stop && s < dat->nseq; s += cnt)
-		grd_dospl(grd, dat->seq[s]);
+	if (job == NULL) {
+		for (int s = 0; !uit_stop && s < dat->nseq; s++)
+			grd_dospl(grd, dat->seq[s]);
+		return;
+	}
+	size_t count, pos;
+	while (mth_getjob(job, &count, &pos)) {
+		for (size_t s = pos; !uit_stop && s < pos + count; s++)
+			grd_dospl(grd, dat->seq[s]);
+		if (uit_stop)
+			break;
+	}
 }
 
 /* grd_gradient:
@@ -762,7 +773,7 @@ double grd_gradient(mdl_t *mdl, double *g, grd_t *grds[]) {
 	if (W == 1)
 		grd_worker(NULL, 1, 1, grds[0]);
 	else
-		mth_spawn((func_t *)grd_worker, W, (void **)grds);
+		mth_spawn(mdl, (func_t *)grd_worker, W, (void **)grds);
 	if (uit_stop)
 		return -1.0;
 	// All computations are done, it just remain to add all the gradients

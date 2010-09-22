@@ -27,6 +27,7 @@
 
 #include <pthread.h>
 
+#include "model.h"
 #include "tools.h"
 #include "thread.h"
 
@@ -38,6 +39,12 @@
  *   all code who depend on threads is located here so this process must not be
  *   too difficult.
  ******************************************************************************/
+struct job_s {
+	size_t size;
+	size_t send;
+	size_t batch;
+	pthread_mutex_t lock;
+};
 
 typedef struct mth_s mth_t;
 struct mth_s {
@@ -47,6 +54,24 @@ struct mth_s {
 	func_t *f;
 	void   *ud;
 };
+
+/* mth_getjob:
+ *   Get a new bunch of sequence to process. This function will return a new
+ *   batch of sequence to process starting at position <pos> and with size
+ *   <cnt> and return true. If no more batch are available, return false.
+ *   This function use a lock to ensure thread safety as it will be called by
+ *   the multiple workers threads.
+ */
+bool mth_getjob(job_t *job, size_t *cnt, size_t *pos) {
+	if (job->send == job->size)
+		return false;
+	pthread_mutex_lock(&job->lock);
+	*cnt = min(job->batch, job->size - job->send);
+	*pos = job->send;
+	job->send += *cnt;
+	pthread_mutex_unlock(&job->lock);
+	return true;
+}
 
 static void *mth_stub(void *ud) {
 	mth_t *mth = (mth_t *)ud;
@@ -59,13 +84,18 @@ static void *mth_stub(void *ud) {
  *   will get a unique identifier between 0 and W-1 and a user data from the
  *   'ud' array.
  */
-void mth_spawn(func_t *f, int W, void *ud[W]) {
+void mth_spawn(mdl_t *mdl, func_t *f, int W, void *ud[W]) {
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
 	pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 	// First prepare the jobs scheduler
 	job_t job;
+	job.size = mdl->train->nseq;
+	job.send = 0;
+	job.batch = 64;
+	if (pthread_mutex_init(&job.lock, NULL) != 0)
+		fatal("failed to create mutex");
 	// We prepare the parameters structures that will be send to the threads
 	// with informations for calling the user function.
 	mth_t p[W];

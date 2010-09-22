@@ -28,13 +28,15 @@
 #ifndef thread_h
 #define thread_h
 
+#include <pthread.h>
+
+#include "model.h"
+
 typedef struct job_s job_t;
-struct job_s {
-	int foo;
-};
 
 typedef void (func_t)(job_t *job, int id, int cnt, void *ud);
 
-void mth_spawn(func_t *f, int W, void *ud[W]);
+bool mth_getjob(job_t *job, size_t *cnt, size_t *pos);
+void mth_spawn(mdl_t *mdl, func_t *f, int W, void *ud[W]);
 
 #endif
