@@ -742,11 +742,6 @@ static void grd_worker(job_t *job, int id, int cnt, grd_t *grd) {
 		grd->g[f] = 0.0;
 	// Now all is ready, we can process our sequences and accumulate the
 	// gradient and inverse log-likelihood
-	if (job == NULL) {
-		for (int s = 0; !uit_stop && s < dat->nseq; s++)
-			grd_dospl(grd, dat->seq[s]);
-		return;
-	}
 	size_t count, pos;
 	while (mth_getjob(job, &count, &pos)) {
 		for (size_t s = pos; !uit_stop && s < pos + count; s++)

@@ -36,6 +36,7 @@
 #include "quark.h"
 #include "reader.h"
 #include "sequence.h"
+#include "thread.h"
 #include "tools.h"
 #include "decoder.h"
 
@@ -448,27 +449,67 @@ void tag_label(mdl_t *mdl, FILE *fin, FILE *fout) {
 	}
 }
 
+typedef struct eval_s eval_t;
+struct eval_s {
+	mdl_t *mdl;
+	dat_t *dat;
+	int    tcnt;
+	int    terr;
+	int    scnt;
+	int    serr;
+};
+
+static void tag_evalsub(job_t *job, int id, int cnt, eval_t *eval) {
+	unused(id && cnt);
+	mdl_t *mdl = eval->mdl;
+	dat_t *dat = eval->dat;
+	int tcnt = 0, terr = 0;
+	int scnt = 0, serr = 0;
+	size_t count, pos;
+	while (mth_getjob(job, &count, &pos)) {
+		for (int s = 0; s < dat->nseq; s++) {
+			// Tag the sequence with the viterbi
+			const seq_t *seq = dat->seq[s];
+			const int    T   = seq->len;
+			size_t out[T];
+			tag_viterbi(mdl, seq, out, NULL, NULL);
+			// And check for eventual (probable ?) errors
+			bool err = false;
+			for (int t = 0; t < T; t++)
+				if (seq->pos[t].lbl != out[t])
+					terr++, err = true;
+			tcnt += T, scnt += 1;
+			serr += err;
+		}
+	}
+	eval->tcnt = tcnt;
+	eval->terr = terr;
+	eval->scnt = scnt;
+	eval->serr = serr;
+}
+
 /* tag_eval:
  *   Compute the token error rate and sequence error rate over the devel set (or
  *   taining set if not available).
  */
 void tag_eval(mdl_t *mdl, double *te, double *se) {
+	const size_t W = mdl->opt->nthread;
 	dat_t *dat = (mdl->devel == NULL) ? mdl->train : mdl->devel;
+	eval_t *eval[W];
+	for (size_t w = 0; w < W; w++) {
+		eval[w] = xmalloc(sizeof(eval_t));
+		eval[w]->mdl = mdl;
+		eval[w]->dat = dat;
+	}
+	mth_spawn((func_t *)tag_evalsub, W, (void *)eval, dat->nseq, 64);
 	int tcnt = 0, terr = 0;
 	int scnt = 0, serr = 0;
-	for (int s = 0; s < dat->nseq; s++) {
-		// Tag the sequence with the viterbi
-		const seq_t *seq = dat->seq[s];
-		const int    T   = seq->len;
-		size_t out[T];
-		tag_viterbi(mdl, seq, out, NULL, NULL);
-		// And check for eventual (probable ?) errors
-		bool err = false;
-		for (int t = 0; t < T; t++)
-			if (seq->pos[t].lbl != out[t])
-				terr++, err = true;
-		tcnt += T, scnt += 1;
-		serr += err;
+	for (size_t w = 0; w < W; w++) {
+		tcnt += eval[w]->tcnt;
+		terr += eval[w]->terr;
+		scnt += eval[w]->scnt;
+		serr += eval[w]->serr;
+		free(eval[w]);
 	}
 	*te = (double)terr / tcnt * 100.0;
 	*se = (double)serr / scnt * 100.0;
