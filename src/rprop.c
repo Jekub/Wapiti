@@ -64,6 +64,12 @@ struct rprop_s {
 	double *dlt;
 };
 
+/* trn_rpropsub:
+ *   Partial update of the weight vector including partial gradient in case of
+ *   l1 regularisation. The sub vector updated depend on the id and cnt
+ *   parameter given, the job scheduling system is not used here as we can
+ *   easily split processing in equals parts.
+ */
 static void trn_rpropsub(job_t *job, int id, int cnt, rprop_t *st) {
 	unused(job);
 	mdl_t *mdl = st->mdl;
