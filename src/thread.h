@@ -37,6 +37,6 @@ typedef struct job_s job_t;
 typedef void (func_t)(job_t *job, int id, int cnt, void *ud);
 
 bool mth_getjob(job_t *job, size_t *cnt, size_t *pos);
-void mth_spawn(mdl_t *mdl, func_t *f, int W, void *ud[W]);
+void mth_spawn(func_t *f, int W, void *ud[W], size_t size, size_t batch);
 
 #endif

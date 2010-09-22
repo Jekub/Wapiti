@@ -39,20 +39,38 @@
  *   too difficult.
  *   If you don't want to use multithreading on non-POSIX system, just enable
  *   the definition of MTH_ANSI in wapiti.h. This will disable multithreading.
+ *
+ *   The jobs system is a simple scheduling system, you have to provide the
+ *   number of jobs to be done and the size of each batch, a call to getjob will
+ *   return the index of the first available and the size of the batch, and mark
+ *   these jobs as done. This is usefull if your jobs are numbered but you can't
+ *   do a trivial split as each of them may require different amount of time to
+ *   be completed like gradient computation which depend on the length of the
+ *   sequences.
+ *   If you provide a count of 0, the job system is disabled.
  ******************************************************************************/
 #ifdef MTH_ANSI
 struct job_s {
-	int foo;
+	size_t size;
 };
 
 bool mth_getjob(job_t *job, size_t *cnt, size_t *pos) {
-	unused(job && cnt && pos);
-	return false;
+	if (job->size == 0)
+		return false;
+	*cnt = job->size;
+	*pos = 0;
+	job->size = 0;
+	return true;
 }
 
-void mth_spawn(mdl_t *mdl, func_t *f, int W, void *ud[W]) {
-	unused(mdl);
-	f(NULL, 0, 1, ud[0]);
+void mth_spawn(func_t *f, int W, void *ud[W], size_t size, size_t batch) {
+	unused(batch);
+	if (size == 0) {
+		f(NULL, 0, 1, ud[0]);
+	} else {
+		job_t job = {size};
+		f(&job, 0, 1, ud[0]);
+	}
 }
 
 #else
@@ -83,6 +101,8 @@ struct mth_s {
  *   the multiple workers threads.
  */
 bool mth_getjob(job_t *job, size_t *cnt, size_t *pos) {
+	if (job == NULL)
+		return false;
 	if (job->send == job->size)
 		return false;
 	pthread_mutex_lock(&job->lock);
@@ -104,23 +124,26 @@ static void *mth_stub(void *ud) {
  *   will get a unique identifier between 0 and W-1 and a user data from the
  *   'ud' array.
  */
-void mth_spawn(mdl_t *mdl, func_t *f, int W, void *ud[W]) {
+void mth_spawn(func_t *f, int W, void *ud[W], size_t size, size_t batch) {
 	pthread_attr_t attr;
 	pthread_attr_init(&attr);
 	pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 	// First prepare the jobs scheduler
-	job_t job;
-	job.size = mdl->train->nseq;
-	job.send = 0;
-	job.batch = 64;
-	if (pthread_mutex_init(&job.lock, NULL) != 0)
-		fatal("failed to create mutex");
+	job_t job, *pjob = NULL;
+	if (size != 0) {
+		pjob = &job;
+		job.size = size;
+		job.send = 0;
+		job.batch = batch;
+		if (pthread_mutex_init(&job.lock, NULL) != 0)
+			fatal("failed to create mutex");
+	}
 	// We prepare the parameters structures that will be send to the threads
 	// with informations for calling the user function.
 	mth_t p[W];
 	for (int w = 0; w < W; w++) {
-		p[w].job = &job;
+		p[w].job = pjob;
 		p[w].id  = w;
 		p[w].cnt = W;
 		p[w].f   = f;

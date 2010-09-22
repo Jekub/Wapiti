@@ -770,10 +770,13 @@ double grd_gradient(mdl_t *mdl, double *g, grd_t *grds[]) {
 	// workers, each one working on a part of the data. As the gradient and
 	// log-likelihood are additive, computing the final values will be
 	// trivial.
-	if (W == 1)
+	if (W == 1) {
 		grd_worker(NULL, 1, 1, grds[0]);
-	else
-		mth_spawn(mdl, (func_t *)grd_worker, W, (void **)grds);
+	} else {
+		const size_t size  = mdl->train->nseq;
+		const size_t batch = 64;
+		mth_spawn((func_t *)grd_worker, W, (void **)grds, size, batch);
+	}
 	if (uit_stop)
 		return -1.0;
 	// All computations are done, it just remain to add all the gradients
