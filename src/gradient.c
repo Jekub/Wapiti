@@ -142,6 +142,9 @@ void grd_dosingle(grd_t *grd, const seq_t *seq) {
 void grd_check(grd_t *grd, int len) {
 	if (len <= grd->len)
 		return;
+	// Check if user ask for clearing the state tracker or if he requested a
+	// bigger tracker. In this case we have to free the previous allocated
+	// memory.
 	if (len == 0 || (len > grd->len && grd->len != 0)) {
 		if (grd->mdl->opt->sparse) {
 			xvm_free(grd->psiuni); grd->psiuni = NULL;
@@ -159,6 +162,8 @@ void grd_check(grd_t *grd, int len) {
 	}
 	if (len == 0)
 		return;
+	// If we are here, we have to allocate a new state. This is simple, we
+	// just have to take care of the special case for sparse mode.
 	const size_t Y = grd->mdl->nlbl;
 	const int    T = len;
 	grd->psi   = xvm_new(T * Y * Y);
@@ -765,13 +770,7 @@ double grd_gradient(mdl_t *mdl, double *g, grd_t *grds[]) {
 	// workers, each one working on a part of the data. As the gradient and
 	// log-likelihood are additive, computing the final values will be
 	// trivial.
-	if (W == 1) {
-		grd_worker(NULL, 1, 1, grds[0]);
-	} else {
-		const size_t size  = mdl->train->nseq;
-		const size_t batch = 64;
-		mth_spawn((func_t *)grd_worker, W, (void **)grds, size, batch);
-	}
+	mth_spawn((func_t *)grd_worker, W, (void **)grds, mdl->train->nseq, 64);
 	if (uit_stop)
 		return -1.0;
 	// All computations are done, it just remain to add all the gradients
@@ -782,7 +781,7 @@ double grd_gradient(mdl_t *mdl, double *g, grd_t *grds[]) {
 			g[f] += grds[w]->g[f];
 		fx += grds[w]->lloss;
 	}
-	// If needed we clip the gradient: setting to 0.0 all coordinate where
+	// If needed we clip the gradient: setting to 0.0 all coordinates where
 	// the function is 0.0.
 	if (mdl->opt->lbfgs.clip == true)
 		for (size_t f = 0; f < F; f++)

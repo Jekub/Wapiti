@@ -32,24 +32,32 @@
 #include "model.h"
 #include "sequence.h"
 
+/* grd_t:
+ *   State tracker for the gradient computation. To compute the gradient we need
+ *   to perform several steps and communicate between them a lot of intermediate
+ *   values, all these temporary are store in this object.
+ *   A tracker can be used to compute sequence of length <len> at most, before
+ *   using it you must call grd_check to ensure that the tracker is big enough
+ *   for your sequence.
+ */
 typedef struct grd_s grd_t;
 struct grd_s {
 	mdl_t  *mdl;
-	int     len;
-	double *g;
-	double  lloss;
-	double *psi;
-	double *psiuni;
-	size_t *psiyp;
-	size_t *psiidx;
-	size_t *psioff;
-	double *alpha;
-	double *beta;
-	double *scale;
-	double *unorm;
-	double *bnorm;
-	int     first;
-	int     last;
+	int     len;     // =T        max length of sequence
+	double *g;       // [F]       vector where to put gradient updates
+	double  lloss;   //           loss value for the sequence
+	double *psi;     // [T][Y][Y] the transitions scores
+	double *psiuni;  // [T][Y]    | Same as psi in sparse format
+	size_t *psiyp;   // [T][Y][Y] |
+	size_t *psiidx;  // [T][Y]    |
+	size_t *psioff;  // [T]
+	double *alpha;   // [T][Y]    forward scores
+	double *beta;    // [T][Y]    backward scores
+	double *scale;   // [T]       scaling factors of forward scores
+	double *unorm;   // [T]       normalization factors for unigrams
+	double *bnorm;   // [T]       normalization factors for bigrams
+	int     first;   //           first position where gradient is needed
+	int     last;    //           last position where gradient is needed
 };
 
 grd_t *grd_new(mdl_t *mdl, double *g);

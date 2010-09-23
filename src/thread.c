@@ -125,10 +125,6 @@ static void *mth_stub(void *ud) {
  *   'ud' array.
  */
 void mth_spawn(func_t *f, int W, void *ud[W], size_t size, size_t batch) {
-	pthread_attr_t attr;
-	pthread_attr_init(&attr);
-	pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
-	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 	// First prepare the jobs scheduler
 	job_t job, *pjob = NULL;
 	if (size != 0) {
@@ -138,6 +134,12 @@ void mth_spawn(func_t *f, int W, void *ud[W], size_t size, size_t batch) {
 		job.batch = batch;
 		if (pthread_mutex_init(&job.lock, NULL) != 0)
 			fatal("failed to create mutex");
+	}
+	// We handle differently the case where user requested a single thread
+	// for efficiency.
+	if (W == 1) {
+		f(&job, 0, 1, ud[0]);
+		return;
 	}
 	// We prepare the parameters structures that will be send to the threads
 	// with informations for calling the user function.
@@ -152,6 +154,10 @@ void mth_spawn(func_t *f, int W, void *ud[W], size_t size, size_t batch) {
 	// We are now ready to spawn the threads and wait for them to finish
 	// their jobs. So we just create all the thread and try to join them
 	// waiting for there return.
+	pthread_attr_t attr;
+	pthread_attr_init(&attr);
+	pthread_attr_setscope(&attr, PTHREAD_SCOPE_SYSTEM);
+	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 	pthread_t th[W];
 	for (int w = 0; w < W; w++)
 		if (pthread_create(&th[w], &attr, &mth_stub, &p[w]) != 0)
