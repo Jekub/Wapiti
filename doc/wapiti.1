@@ -225,7 +225,9 @@ If you don't make anything special, Wapiti will automatically choose between the
 
 This imply that, if you want to train a maxent only model, you still have to prefix all your features/patterns with 'u' to indicate a unigram feature, and separate all line in your input file with empty lines to make sure they are all length one.
 
-The pure maxent mode, activated by the \-\-me switch in train and label mode, take care of the two problems. When activated, all lines in input files are used independantly as a single sample, and blank lines are ignored. Additionally, all features are automatically prefixed with 'u' forcing them as unigram features, so you don't to put te prefix yourself.
+The pure maxent mode, activated by the \-\-me switch in train and label mode, take care of the two problems. When activated, all lines in input files are used independantly as a single sample, and blank lines are ignored. Additionally, all features are automatically prefixed with 'u' forcing them as unigram features, so you don't have to put the prefix yourself.
+
+Be carefull that you have to specify the pure maxent mode both during training and labelling.
 
 .SH MODEL COMPACTION
 If you specify the \-\-compact switch for training, when the model is optimized all the observations which generate only inactive features are removed from the model. In case of l1-penalty this can dramatically reduce the model size.
