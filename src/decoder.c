@@ -449,22 +449,36 @@ void tag_label(mdl_t *mdl, FILE *fin, FILE *fout) {
 	}
 }
 
+/* eval_t:
+ *   This a state tracker used to communicate between the main eval function and
+ *   its workers threads, the <mdl> and <dat> fields are used to transmit to the
+ *   workers informations needed to make the computation, the other fields are
+ *   for returning the partial results.
+ */
 typedef struct eval_s eval_t;
 struct eval_s {
 	mdl_t *mdl;
 	dat_t *dat;
-	int    tcnt;
-	int    terr;
-	int    scnt;
-	int    serr;
+	int    tcnt;  // Processed tokens count
+	int    terr;  // Tokens error found
+	int    scnt;  // Processes sequences count
+	int    serr;  // Sequence error found
 };
 
+/* tag_evalsub:
+ *   This is where the real evaluation is done by the workers, we process data
+ *   by batch and for each batch do a simple Viterbi and scan the result to find
+ *   errors.
+ */
 static void tag_evalsub(job_t *job, int id, int cnt, eval_t *eval) {
 	unused(id && cnt);
 	mdl_t *mdl = eval->mdl;
 	dat_t *dat = eval->dat;
-	int tcnt = 0, terr = 0;
-	int scnt = 0, serr = 0;
+	eval->tcnt = 0;
+	eval->terr = 0;
+	eval->scnt = 0;
+	eval->serr = 0;
+	// We just get a job a process all the squence in it.
 	size_t count, pos;
 	while (mth_getjob(job, &count, &pos)) {
 		for (int s = 0; s < dat->nseq; s++) {
@@ -477,15 +491,12 @@ static void tag_evalsub(job_t *job, int id, int cnt, eval_t *eval) {
 			bool err = false;
 			for (int t = 0; t < T; t++)
 				if (seq->pos[t].lbl != out[t])
-					terr++, err = true;
-			tcnt += T, scnt += 1;
-			serr += err;
+					eval->terr++, err = true;
+			eval->tcnt += T;
+			eval->scnt += 1;
+			eval->serr += err;
 		}
 	}
-	eval->tcnt = tcnt;
-	eval->terr = terr;
-	eval->scnt = scnt;
-	eval->serr = serr;
 }
 
 /* tag_eval:
@@ -495,12 +506,17 @@ static void tag_evalsub(job_t *job, int id, int cnt, eval_t *eval) {
 void tag_eval(mdl_t *mdl, double *te, double *se) {
 	const size_t W = mdl->opt->nthread;
 	dat_t *dat = (mdl->devel == NULL) ? mdl->train : mdl->devel;
+	// First we prepare the eval state for all the workers threads, we just
+	// have to give them the model and dataset to use. This state will be
+	// used to retrieve partial result they computed.
 	eval_t *eval[W];
 	for (size_t w = 0; w < W; w++) {
 		eval[w] = xmalloc(sizeof(eval_t));
 		eval[w]->mdl = mdl;
 		eval[w]->dat = dat;
 	}
+	// And next, we call the workers to do the job and reduce the partial
+	// result by summing them and computing the final error rates.
 	mth_spawn((func_t *)tag_evalsub, W, (void *)eval, dat->nseq, 64);
 	int tcnt = 0, terr = 0;
 	int scnt = 0, serr = 0;
