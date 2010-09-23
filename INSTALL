@@ -8,3 +8,7 @@ switch to super user for the second. If you want to install somewhere else than
 in /usr/local you will have to edit the variable definitions at the head of the
 Makefile.
 
+You can disable the non C99 compliant features by modifying the wapiti.h in the
+src/ directory. This should allow you to compile Wapiti on almost any platform
+who have a C99 compiler.
+

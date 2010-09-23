@@ -1,0 +1,34 @@
+??/??/????
+  Release v?.?.?: Mainly multi-threading improvements
+
+    RPROP algorithm is now fully multi-threaded.
+    Error rate estimation during training is now multi-threaded.
+    Better jobs scheduling in multi-threaded gradient.
+    Multi-threading code can be disabled (compilation on Windows should be simpler).
+    Fixed bug in L1 optimization with RPROP (should improve stability).
+
+08/09/2010
+  Release v1.1.0: A few new features
+
+    Added maxent mode.
+    Added decoding through posteriors, this should improve accuracy
+      at the price of computational time.
+    Added the RPROP optimization algorithm.
+    Added absolute indexing in patterns.
+    Changed the scored output format as the posterior decoding
+      provide normalized score at each position. The output is now
+      compatible with CRF++.
+      Some code cleanup.
+
+29/07/2010
+  Release v1.0.2: Mainly a bug fix version.
+
+    Fixed some memory leaks, thanks to David Keeler
+    Fixed argument processing to be more user friendly
+    Fixed small bug in model compaction
+    Added reading of raw files
+    Spell corrections in man page
+
+18/06/2010
+  Release v1.0.0: Initial public version.
+
