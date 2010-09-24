@@ -1,5 +1,5 @@
-??/??/????
-  Release v?.?.?: Mainly multi-threading improvements
+24/09/2010
+  Release v1.1.1: Mainly multi-threading improvements
 
     RPROP algorithm is now fully multi-threaded.
     Error rate estimation during training is now multi-threaded.
