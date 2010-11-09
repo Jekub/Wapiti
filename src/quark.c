@@ -76,7 +76,7 @@ struct qrk_node_s {
  */
 struct qrk_s {
 	qrk_node_t  *tree;    //       The tree for direct mapping
-	char       **vector;  // [N']  The array for the reverse mapping
+	qrk_node_t **vector;  // [N']  The array for the reverse mapping
 	size_t       count;   //  N    The number of items in the database
 	size_t       size;    //  N'   The real size of <vector>
 	bool         lock;    //       Are new keys added to the dictionnary ?
@@ -127,12 +127,9 @@ qrk_t *qrk_new(void) {
  *   become invalid and must not be used anymore.
  */
 void qrk_free(qrk_t *qrk) {
-	if (qrk->count != 0) {
-		qrk_freenode(qrk->tree);
-		free(qrk->vector);
-	} else if (qrk->vector != NULL) {
-		free(qrk->vector);
-	}
+	for (size_t n = 0; n < qrk->count; n++)
+		free(qrk->vector[n]);
+	free(qrk->vector);
 	free(qrk);
 }
 
@@ -199,7 +196,7 @@ static int qrk_splay(qrk_t *qrk, const char *key) {
 const char *qrk_id2str(const qrk_t *qrk, size_t id) {
 	if (id >= qrk->count)
 		fatal("invalid identifier");
-	return qrk->vector[id];
+	return qrk->vector[id]->key;
 }
 
 /* qrk_str2id:
@@ -220,7 +217,7 @@ size_t qrk_str2id(qrk_t *qrk, const char *key) {
 		qrk_node_t *nd = qrk_newnode(key, 0);
 		qrk->tree = nd;
 		qrk->count = 1;
-		qrk->vector[0] = nd->key;
+		qrk->vector[0] = nd;
 		return 0;
 	}
 	// else if key is already there, return his value
@@ -241,7 +238,7 @@ size_t qrk_str2id(qrk_t *qrk, const char *key) {
 	nd->child[1 - side] = qrk->tree;
 	qrk->tree->child[side] = NULL;
 	qrk->tree = nd;
-	qrk->vector[id] = nd->key;
+	qrk->vector[id] = nd;
 	qrk->count++;
 	return id;
 }
@@ -274,6 +271,6 @@ void qrk_save(const qrk_t *qrk, FILE *file) {
 	if (qrk->count == 0)
 		return;
 	for (size_t n = 0; n < qrk->count; ++n)
-		ns_writestr(file, qrk->vector[n]);
+		ns_writestr(file, qrk->vector[n]->key);
 }
 
