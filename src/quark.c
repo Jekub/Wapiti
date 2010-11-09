@@ -210,6 +210,8 @@ const char *qrk_id2str(const qrk_t *qrk, size_t id) {
 size_t qrk_str2id(qrk_t *qrk, const char *key) {
 	// if tree is empty, directly add a root
 	if (qrk->count == 0) {
+		if (qrk->lock == true)
+			return none;
 		if (qrk->size == 0) {
 			const size_t size = 128;
 			qrk->vector = xmalloc(sizeof(char *) * size);
