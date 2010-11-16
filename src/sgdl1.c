@@ -211,6 +211,7 @@ void trn_sgdl1(mdl_t *mdl) {
 		free(idx[s].uobs);
 		free(idx[s].bobs);
 	}
+	free(idx);
 	free(perm);
 	free(g);
 	free(q);
