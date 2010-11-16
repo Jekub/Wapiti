@@ -136,7 +136,7 @@ void trn_lbfgs(mdl_t *mdl) {
 			// α_i = ρ_j s_j^T q_{i+1}
 			// q_i = q_{i+1} - α_i y_i
 			for (int i = bnd; i > 0; i--) {
-				const int j = (k - i + M) % M;
+				const int j = (k - i + M + 1) % M;
 				alpha[i - 1] = p[j] * xvm_dot(s[j], d, F);
 				xvm_axpy(d, -alpha[i - 1], y[j], d, F);
 			}
@@ -152,7 +152,7 @@ void trn_lbfgs(mdl_t *mdl) {
 			// β_j     = ρ_j y_j^T r_i
 			// r_{i+1} = r_i + s_j (α_i - β_i)
 			for (int i = 0; i < bnd; i++) {
-				const int j = (k - i - 1 + M) % M;
+				const int j = (k - i + M) % M;
 				beta = p[j] * xvm_dot(y[j], d, F);
 				xvm_axpy(d, alpha[i] - beta, s[j], d, F);
 			}
