@@ -350,9 +350,9 @@ void tag_label(mdl_t *mdl, FILE *fin, FILE *fout) {
 	//   [0] # of reference with this label
 	//   [1] # of token we have taged with this label
 	//   [2] # of match of the two preceding
-	int tcnt = 0, terr = 0;
-	int scnt = 0, serr = 0;
-	int stat[3][Y];
+	size_t tcnt = 0, terr = 0;
+	size_t scnt = 0, serr = 0;
+	size_t stat[3][Y];
 	for (size_t y = 0; y < Y; y++)
 		stat[0][y] = stat[1][y] = stat[2][y] = 0;
 	// Next read the input file sequence by sequence and label them, we have
@@ -404,7 +404,7 @@ void tag_label(mdl_t *mdl, FILE *fin, FILE *fout) {
 				else
 					stat[2][out[t * N]]++;
 			}
-			tcnt += T;
+			tcnt += (size_t)T;
 			serr += err;
 		}
 		// Cleanup memory used for this sequence
@@ -457,12 +457,12 @@ void tag_label(mdl_t *mdl, FILE *fin, FILE *fout) {
  */
 typedef struct eval_s eval_t;
 struct eval_s {
-	mdl_t *mdl;
-	dat_t *dat;
-	int    tcnt;  // Processed tokens count
-	int    terr;  // Tokens error found
-	int    scnt;  // Processes sequences count
-	int    serr;  // Sequence error found
+	mdl_t  *mdl;
+	dat_t  *dat;
+	size_t  tcnt;  // Processed tokens count
+	size_t  terr;  // Tokens error found
+	size_t  scnt;  // Processes sequences count
+	size_t  serr;  // Sequence error found
 };
 
 /* tag_evalsub:
@@ -481,7 +481,7 @@ static void tag_evalsub(job_t *job, int id, int cnt, eval_t *eval) {
 	// We just get a job a process all the squence in it.
 	size_t count, pos;
 	while (mth_getjob(job, &count, &pos)) {
-		for (int s = 0; s < dat->nseq; s++) {
+		for (size_t s = pos; s < pos + count; s++) {
 			// Tag the sequence with the viterbi
 			const seq_t *seq = dat->seq[s];
 			const int    T   = seq->len;
@@ -492,7 +492,7 @@ static void tag_evalsub(job_t *job, int id, int cnt, eval_t *eval) {
 			for (int t = 0; t < T; t++)
 				if (seq->pos[t].lbl != out[t])
 					eval->terr++, err = true;
-			eval->tcnt += T;
+			eval->tcnt += (size_t)T;
 			eval->scnt += 1;
 			eval->serr += err;
 		}
@@ -518,8 +518,8 @@ void tag_eval(mdl_t *mdl, double *te, double *se) {
 	// And next, we call the workers to do the job and reduce the partial
 	// result by summing them and computing the final error rates.
 	mth_spawn((func_t *)tag_evalsub, W, (void *)eval, dat->nseq, 64);
-	int tcnt = 0, terr = 0;
-	int scnt = 0, serr = 0;
+	size_t tcnt = 0, terr = 0;
+	size_t scnt = 0, serr = 0;
 	for (size_t w = 0; w < W; w++) {
 		tcnt += eval[w]->tcnt;
 		terr += eval[w]->terr;
