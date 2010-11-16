@@ -140,8 +140,6 @@ void grd_dosingle(grd_t *grd, const seq_t *seq) {
  *   linear-chain codepath can be computed for a sequence of the given length.
  */
 void grd_check(grd_t *grd, int len) {
-	if (len <= grd->len)
-		return;
 	// Check if user ask for clearing the state tracker or if he requested a
 	// bigger tracker. In this case we have to free the previous allocated
 	// memory.
@@ -160,7 +158,7 @@ void grd_check(grd_t *grd, int len) {
 		xvm_free(grd->scale); grd->scale = NULL;
 		grd->len = 0;
 	}
-	if (len == 0)
+	if (len == 0 || len <= grd->len)
 		return;
 	// If we are here, we have to allocate a new state. This is simple, we
 	// just have to take care of the special case for sparse mode.
