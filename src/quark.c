@@ -97,17 +97,6 @@ static qrk_node_t *qrk_newnode(const char *key, size_t value) {
 	return nd;
 }
 
-/* qrk_freenode:
- *   Free a qrk_node_t object and all his childs recursively.
- */
-static void qrk_freenode(qrk_node_t *nd) {
-	if (nd->child[0] != NULL)
-		qrk_freenode(nd->child[0]);
-	if (nd->child[1] != NULL)
-		qrk_freenode(nd->child[1]);
-	free(nd);
-}
-
 /* qrk_new:
  *   Create a new qrk_t object ready for doing mappings. This object must be
  *   freed with qrk_free when not used anymore.
