@@ -1,10 +1,21 @@
+12/11/2010
+  Release v1.1.2: Bug fix release
+
+    Fix a small bug in L-BFGS/OWL-QN, should improve a bit
+      convergence speed in some case.
+    Fix a bug in multi-thread job system thanks to Alexander Fraser,
+      should fix error rates and training speed on large dataset.
+    Fix two small memory leaks.
+    Some improvment in quark database handling.
+
 24/09/2010
   Release v1.1.1: Mainly multi-threading improvements
 
     RPROP algorithm is now fully multi-threaded.
     Error rate estimation during training is now multi-threaded.
     Better jobs scheduling in multi-threaded gradient.
-    Multi-threading code can be disabled (compilation on Windows should be simpler).
+    Multi-threading code can be disabled (compilation on Windows should
+      be simpler).
     Fixed bug in L1 optimization with RPROP (should improve stability).
 
 08/09/2010
