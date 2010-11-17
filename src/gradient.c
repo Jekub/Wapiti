@@ -63,15 +63,15 @@ void grd_dosingle(grd_t *grd, const seq_t *seq) {
 	//     Ψ(y,x^i) = \exp( ∑_k θ_k f_k(y,x^i) )
 	//     Z_θ(x^i) = ∑_y Ψ(y,x^i)
 	double psi[Y], Z = 0.0;
-	for (unsigned y = 0; y < Y; y++)
+	for (size_t y = 0; y < Y; y++)
 		psi[y] = 0.0;
-	for (unsigned n = 0; n < pos->ucnt; n++) {
+	for (size_t n = 0; n < pos->ucnt; n++) {
 		const double *wgh = x + mdl->uoff[pos->uobs[n]];
-		for (unsigned y = 0; y < Y; y++)
+		for (size_t y = 0; y < Y; y++)
 			psi[y] += wgh[y];
 	}
 	double lloss = psi[pos->lbl];
-	for (unsigned y = 0; y < Y; y++) {
+	for (size_t y = 0; y < Y; y++) {
 		psi[y] = (psi[y] == 0.0) ? 1.0 : exp(psi[y]);
 		Z += psi[y];
 	}
@@ -81,11 +81,11 @@ void grd_dosingle(grd_t *grd, const seq_t *seq) {
 	//     E_{q_θ}(x,y) - E_{p}(x,y)
 	// and we can compute the expectation over the model with:
 	//     E_{q_θ}(x,y) = f_k(y,x^i) * ψ(y,x) / Z_θ(x)
-	for (unsigned y = 0; y < Y; y++)
+	for (size_t y = 0; y < Y; y++)
 		psi[y] /= Z;
-	for (unsigned n = 0; n < pos->ucnt; n++) {
+	for (size_t n = 0; n < pos->ucnt; n++) {
 		double *grd = g + mdl->uoff[pos->uobs[n]];
-		for (unsigned y = 0; y < Y; y++)
+		for (size_t y = 0; y < Y; y++)
 			grd[y] += psi[y];
 		grd[pos->lbl] -= 1.0;
 	}

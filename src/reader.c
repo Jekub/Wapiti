@@ -107,7 +107,7 @@ void rdr_freeseq(seq_t *seq) {
  *   Free all memory used by a dat_t object.
  */
 void rdr_freedat(dat_t *dat) {
-	for (int i = 0; i < dat->nseq; i++)
+	for (size_t i = 0; i < dat->nseq; i++)
 		rdr_freeseq(dat->seq[i]);
 	free(dat->seq);
 	free(dat);
@@ -477,7 +477,7 @@ seq_t *rdr_readseq(rdr_t *rdr, FILE *file, bool lbl) {
  */
 dat_t *rdr_readdat(rdr_t *rdr, FILE *file, bool lbl) {
 	// Prepare dataset
-	int size = 1000;
+	size_t size = 1000;
 	dat_t *dat = xmalloc(sizeof(dat_t));
 	dat->nseq = 0;
 	dat->mlen = 0;

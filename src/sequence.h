@@ -139,10 +139,10 @@ struct seq_s {
  */
 typedef struct dat_s dat_t;
 struct dat_s {
-	bool    lbl;   //         True iff sequences are labelled
-	int     mlen;  //         Length of the longest sequence in the set
-	int     nseq;  //   S     Number of sequences in the set
-	seq_t **seq;   //  [S]    List of sequences
+	bool     lbl;   //         True iff sequences are labelled
+	int      mlen;  //         Length of the longest sequence in the set
+	size_t   nseq;  //   S     Number of sequences in the set
+	seq_t  **seq;   //  [S]    List of sequences
 };
 
 #endif
