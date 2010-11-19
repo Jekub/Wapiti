@@ -71,13 +71,30 @@ typedef struct sgd_idx_s {
 	q[f] += w[f] - z;                                  \
 } while (false)
 
+/* sgd_add:
+ *   Add the <new> value in the array <obs> of size <cnt>. If the value is
+ *   already present, we do nothing, else we add it.
+ */
+static void sgd_add(size_t *obs, size_t *cnt, size_t new) {
+	// First check if value is already in the array, we do a linear probing
+	// as it is simpler and since these array will be very short in
+	// practice, it's efficient enough.
+	for (size_t p = 0; p < *cnt; p++)
+		if (obs[p] == new)
+			return;
+	// Insert the new value at the end since we have not found it.
+	obs[*cnt] = new;
+	*cnt = *cnt + 1;
+}
+
 /* trn_sgdl1:
  *   Train the model with the SGD-l1 algorithm described by tsurukoa et al.
  */
 void trn_sgdl1(mdl_t *mdl) {
 	const size_t  Y = mdl->nlbl;
-	const size_t  O = mdl->nobs;
 	const size_t  F = mdl->nftr;
+	const int     U = mdl->reader->nuni;
+	const int     B = mdl->reader->nbi;
 	const int     S = mdl->train->nseq;
 	const int     K = mdl->opt->maxiter;
 	      double *w = mdl->theta;
@@ -88,44 +105,25 @@ void trn_sgdl1(mdl_t *mdl) {
 	// unigrams obss and one for bigrams obss.
 	info("    - Build the index\n");
 	sgd_idx_t *idx  = xmalloc(sizeof(sgd_idx_t) * S);
-	int       *mark = xmalloc(sizeof(int) * O);
-	for (size_t o = 0; o < O; o++)
-		mark[o] = -1;
 	for (int s = 0; s < S; s++) {
 		const seq_t *seq = mdl->train->seq[s];
-		// Listing active observations in sequence is easy, we scan
-		// unigrams and bigrams observations list and mark the actives
-		// one in the <mark> array with the sequence number. Next we
-		// can scan this array to search the marked obss.
+		const int T = seq->len;
+		size_t uobs[U * T + 1], ucnt = 0;
+		size_t bobs[B * T + 1], bcnt = 0;
 		for (int t = 0; t < seq->len; t++) {
 			const pos_t *pos = &seq->pos[t];
 			for (size_t p = 0; p < pos->ucnt; p++)
-				mark[pos->uobs[p]] = s;
+				sgd_add(uobs, &ucnt, pos->uobs[p]);
 			for (size_t p = 0; p < pos->bcnt; p++)
-				mark[pos->bobs[p]] = s;
+				sgd_add(bobs, &bcnt, pos->bobs[p]);
 		}
-		// We scan the <mark> array a first time to count the number of
-		// active sequences and allocate memory.
-		size_t ucnt = 1, bcnt = 1;
-		for (size_t o = 0; o < O; o++) {
-			ucnt += (mark[o] == s) && (mdl->kind[o] & 1);
-			bcnt += (mark[o] == s) && (mdl->kind[o] & 2);
-		}
+		uobs[ucnt++] = none;
+		bobs[bcnt++] = none;
 		idx[s].uobs = xmalloc(sizeof(size_t) * ucnt);
 		idx[s].bobs = xmalloc(sizeof(size_t) * bcnt);
-		// And a second time to fill the allocated array without
-		// forgetting to set the end marker.
-		size_t upos = 0, bpos = 0;
-		for (size_t o = 0; o < O; o++) {
-			if ((mark[o] == s) && (mdl->kind[o] & 1))
-				idx[s].uobs[upos++] = o;
-			if ((mark[o] == s) && (mdl->kind[o] & 2))
-				idx[s].bobs[bpos++] = o;
-		}
-		idx[s].uobs[upos] = none;
-		idx[s].bobs[bpos] = none;
+		memcpy(idx[s].uobs, uobs, ucnt * sizeof(size_t));
+		memcpy(idx[s].bobs, bobs, bcnt * sizeof(size_t));
 	}
-	free(mark);
 	info("      Done\n");
 	// We will process sequences in random order in each iteration, so we
 	// will have to permute them. The current permutation is stored in a
