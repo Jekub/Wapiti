@@ -188,6 +188,12 @@ grd_t *grd_new(mdl_t *mdl, double *g) {
 	grd->mdl   = mdl;
 	grd->len   = 0;
 	grd->g     = g;
+	grd->psi   = NULL;
+	grd->alpha = NULL;
+	grd->beta  = NULL;
+	grd->unorm = NULL;
+	grd->bnorm = NULL;
+	grd->scale = NULL;
 	return grd;
 }
 
