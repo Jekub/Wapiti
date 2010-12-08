@@ -517,7 +517,8 @@ void tag_eval(mdl_t *mdl, double *te, double *se) {
 	}
 	// And next, we call the workers to do the job and reduce the partial
 	// result by summing them and computing the final error rates.
-	mth_spawn((func_t *)tag_evalsub, W, (void *)eval, dat->nseq, 64);
+	mth_spawn((func_t *)tag_evalsub, W, (void *)eval, dat->nseq,
+		mdl->opt->jobsize);
 	size_t tcnt = 0, terr = 0;
 	size_t scnt = 0, serr = 0;
 	for (size_t w = 0; w < W; w++) {

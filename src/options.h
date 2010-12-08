@@ -45,6 +45,7 @@ struct opt_s {
 	char  *model,  *devel;
 	bool   compact, sparse;
 	int    nthread;
+	int    jobsize;
 	int    maxiter;
 	double rho1,    rho2;
 	// Window size criterion

@@ -63,6 +63,7 @@ static void opt_help(const char *pname) {
 		"\t-d | --devel    FILE    development dataset\n"
 		"\t-c | --compact          compact model after training\n"
 		"\t-t | --nthread  INT     number of worker threads\n"
+		"\t-j | --jobsize  INT     job size for worker threads\n"
 		"\t-s | --sparse           enable sparse forward/backward\n"
 		"\t-i | --maxiter  INT     maximum number of iterations\n"
 		"\t-1 | --rho1     FLOAT   l1 penalty parameter\n"
@@ -104,7 +105,8 @@ const opt_t opt_defaults = {
 	.input   = NULL,     .output  = NULL,
 	.maxent  = false,
 	.algo    = "l-bfgs", .pattern = NULL,  .model   = NULL, .devel   = NULL,
-	.compact = false,    .sparse  = false, .nthread = 1,    .maxiter = 0,
+	.compact = false,    .sparse  = false,
+	.nthread = 1,        .jobsize = 64,    .maxiter = 0,
 	.rho1    = 0.5,      .rho2    = 0.0001,
 	.objwin  = 5,        .stopwin = 5,     .stopeps = 0.02,
 	.lbfgs = {.clip   = false, .histsz = 5, .maxls = 40},
@@ -134,6 +136,7 @@ struct {
 	{0, "-c", "--compact", 'B', offsetof(opt_t, compact     )},
 	{0, "-s", "--sparse",  'B', offsetof(opt_t, sparse      )},
 	{0, "-t", "--nthread", 'I', offsetof(opt_t, nthread     )},
+	{0, "-j", "--josize",  'I', offsetof(opt_t, jobsize     )},
 	{0, "-i", "--maxiter", 'I', offsetof(opt_t, maxiter     )},
 	{0, "-1", "--rho1",    'F', offsetof(opt_t, rho1        )},
 	{0, "-2", "--rho2",    'F', offsetof(opt_t, rho2        )},
@@ -256,14 +259,15 @@ void opt_parse(int argc, char *argv[argc], opt_t *opt) {
 	#define argchecksub(name, test)                      \
 		if (!(test))                                 \
 			fatal("invalid value for <"name">");
-	argchecksub("--thread", opt->nthread      >  0  );
-	argchecksub("--rho1",   opt->rho1         >= 0.0);
-	argchecksub("--rho2",   opt->rho2         >= 0.0);
-	argchecksub("--histsz", opt->lbfgs.histsz >  0  );
-	argchecksub("--maxls",  opt->lbfgs.maxls  >  0  );
-	argchecksub("--eta0",   opt->sgdl1.eta0   >  0.0);
-	argchecksub("--alpha",  opt->sgdl1.alpha  >  0.0);
-	argchecksub("--nbest",  opt->nbest        >  0  );
+	argchecksub("--thread",  opt->nthread      >  0  );
+	argchecksub("--jobsize", opt->jobsize      >  0  );
+	argchecksub("--rho1",    opt->rho1         >= 0.0);
+	argchecksub("--rho2",    opt->rho2         >= 0.0);
+	argchecksub("--histsz",  opt->lbfgs.histsz >  0  );
+	argchecksub("--maxls",   opt->lbfgs.maxls  >  0  );
+	argchecksub("--eta0",    opt->sgdl1.eta0   >  0.0);
+	argchecksub("--alpha",   opt->sgdl1.alpha  >  0.0);
+	argchecksub("--nbest",   opt->nbest        >  0  );
 	#undef argchecksub
 }
 

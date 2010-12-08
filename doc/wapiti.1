@@ -42,6 +42,8 @@ Enable model compaction at the end of the training. This will remove all inactiv
 .B \-t | \-\-nthread <integer>
 Set the number of thread to use, this can drastically improve performance but is very algorithm dependent. Best value is to set it to the number of core you have. Default is 1.
 .TP
+.B \-j | \-\-jobsize <integer>
+Set the size of the job a thread will get each time it have nothing more to do. This is the number of sequences to proceed and default to 64. Increasing it will reduce communication overhead but can lead to a bad ballancing between threads, reducing it increase the communication overhead but can ballance work better between threads in case of small datasets.
 .B \-s | \-\-sparse
 Enable the computation of the forward/backward in sparse mode.
 .TP
