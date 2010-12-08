@@ -184,16 +184,20 @@ void grd_check(grd_t *grd, int len) {
  *   the longest sequence present in the data set.
  */
 grd_t *grd_new(mdl_t *mdl, double *g) {
-	grd_t *grd = xmalloc(sizeof(grd_t));
-	grd->mdl   = mdl;
-	grd->len   = 0;
-	grd->g     = g;
-	grd->psi   = NULL;
-	grd->alpha = NULL;
-	grd->beta  = NULL;
-	grd->unorm = NULL;
-	grd->bnorm = NULL;
-	grd->scale = NULL;
+	grd_t *grd  = xmalloc(sizeof(grd_t));
+	grd->mdl    = mdl;
+	grd->len    = 0;
+	grd->g      = g;
+	grd->psi    = NULL;
+	grd->psiuni = NULL;
+	grd->psiyp  = NULL;
+	grd->psiidx = NULL;
+	grd->psioff = NULL;
+	grd->alpha  = NULL;
+	grd->beta   = NULL;
+	grd->unorm  = NULL;
+	grd->bnorm  = NULL;
+	grd->scale  = NULL;
 	return grd;
 }
 
