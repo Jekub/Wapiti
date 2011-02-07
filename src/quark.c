@@ -28,98 +28,227 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
 
 #include "quark.h"
 #include "tools.h"
 
 /******************************************************************************
- * Quark database
+ * Map object
  *
- *   Implement quark database: mapping between strings and identifiers in both
- *   directions.
+ *   Implement quark object for mapping strings to identifiers through crit-bit
+ *   tree (also known as PATRICIA tries). In fact it only store a compressed
+ *   version of the trie to reduce memory footprint. The special trick of using
+ *   the last bit of the reference to differenciate between nodes and leafs come
+ *   from Daniel J. Bernstein implementation of crit-bit tree that can be found
+ *   on his web site.
  *
- *   The mapping between strings to identifiers is done with splay tree, a kind
- *   of self balancing search tree. They are simpler to implement than a lot of
- *   other data-structures and very cache friendly. For most use they are at
- *   least as efficient as red-black tree or B-tree. See [1] for more
- *   informations. The strings are interned directly in the node for easier
- *   memory managment.
- *
- *   The identifier to string mapping is done with a simple vector with pointer
- *   to the key interned in the tree node, so pointer returned are always
- *   constant.
- *
- *   [1] Sleator, Daniel D. and Tarjan, Robert E. ; Self-adjusting binary search
- *   trees, Journal of the ACM 32 (3): pp. 652--686, 1985. DOI:10.1145/3828.3835
- *
- *   This code is copyright 2002-2010 Thomas Lavergne and licenced under the BSD
- *   Licence like the remaining of Wapiti.
+ *   [1] Morrison, Donald R. ; PATRICIA-Practical Algorithm To Retrieve
+ *   Information Coded in Alphanumeric, Journal of the ACM 15 (4): pp. 514--534,
+ *   1968. DOI:10.1145/321479.321481
  ******************************************************************************/
 
-/* qrk_node_t:
- *   Node of the splay tree whoe hold a (key, value) pair. The left and right
- *   childs are stored in an array so code for each side can be factorized.
- */
-typedef struct qrk_node_s qrk_node_t;
-struct qrk_node_s {
-	qrk_node_t *child[2]; // Left and right childs of the node
-	size_t      value;    // Value stored in the node
-	char        key[];    // The key directly stored in the node
-};
-
-/* qrk_t:
- *   The quark database with his <tree> and <vector>. The database hold <count>
- *   (key, value) pairs, but the vector is of size <size>, it will grow as
- *   needed. If <lock> is true, new key will not be added to the quark and
- *   none will be returned as an identifier.
- */
+typedef struct node_s node_t;
+typedef struct leaf_s leaf_t;
 struct qrk_s {
-	qrk_node_t  *tree;    //       The tree for direct mapping
-	qrk_node_t **vector;  // [N']  The array for the reverse mapping
-	size_t       count;   //  N    The number of items in the database
-	size_t       size;    //  N'   The real size of <vector>
-	bool         lock;    //       Are new keys added to the dictionnary ?
+	struct node_s {
+		node_t   *child[2];
+		uint32_t  pos;
+		uint8_t   byte;
+	} *root;
+	struct leaf_s {
+		uint64_t  id;
+		char      key[];
+	} **leafs;
+	bool     lock;
+	uint64_t count;
+	uint64_t size;
 };
 
-/* qrk_newnode:
- *   Create a new qrk_node_t object with given key, value and no childs. The key
- *   is interned in the node so no reference is kept to the given string. The
- *   object must be freed with qrk_freenode when not needed anymore.
- */
-static qrk_node_t *qrk_newnode(const char *key, size_t value) {
-	const int len = strlen(key) + 1;
-	qrk_node_t *nd = xmalloc(sizeof(qrk_node_t) + len);
-	memcpy(nd->key, key, len);
-	nd->value = value;
-	nd->child[0] = NULL;
-	nd->child[1] = NULL;
-	return nd;
-}
+#define qrk_none ((uint64_t)-1)
+
+#define qrk_lf2nd(lf)  ((node_t *)((intptr_t)(lf) |  1))
+#define qrk_nd2lf(nd)  ((leaf_t *)((intptr_t)(nd) & ~1))
+#define qrk_isleaf(nd) ((intptr_t)(nd) & 1)
 
 /* qrk_new:
- *   Create a new qrk_t object ready for doing mappings. This object must be
- *   freed with qrk_free when not used anymore.
+ *   This initialize the object for holding a new empty trie, with some pre-
+ *   allocations. The returned object must be freed with a call to qrk_free when
+ *   not needed anymore.
  */
 qrk_t *qrk_new(void) {
+	const uint64_t size = 128;
 	qrk_t *qrk = xmalloc(sizeof(qrk_t));
-	qrk->tree   = NULL;
-	qrk->vector = NULL;
-	qrk->count  = 0;
-	qrk->size   = 0;
-	qrk->lock   = false;
+	qrk->root  = NULL;
+	qrk->count = 0;
+	qrk->lock  = false;
+	qrk->size  = size;
+	qrk->leafs = xmalloc(sizeof(leaf_t) * size);
 	return qrk;
 }
 
 /* qrk_free:
- *   Free all memory used by the given quark. All strings returned by qrk_unmap
- *   become invalid and must not be used anymore.
+ *   Release all the memory used by a qrk_t object allocated with qrk_new. This
+ *   will release all key string stored internally so all key returned by
+ *   qrk_unmap become invalid and must not be used anymore.
  */
 void qrk_free(qrk_t *qrk) {
-	for (size_t n = 0; n < qrk->count; n++)
-		free(qrk->vector[n]);
-	free(qrk->vector);
+	const size_t stkmax = 1024;
+	if (qrk->count != 0) {
+		node_t *stk[stkmax];
+		int cnt = 0;
+		stk[cnt++] = qrk->root;
+		while (cnt != 0) {
+			node_t *nd = stk[--cnt];
+			if (qrk_isleaf(nd)) {
+				free(qrk_nd2lf(nd));
+				continue;
+			}
+			stk[cnt++] = nd->child[0];
+			stk[cnt++] = nd->child[1];
+			free(nd);
+		}
+	}
+	free(qrk->leafs);
 	free(qrk);
+}
+
+/* qrk_insert:
+ *   Map a key to a uniq identifier. If the key already exist in the map, return
+ *   its identifier, else allocate a new identifier and insert the new (key,id)
+ *   pair inside the quark. This function is not thread safe and should not be
+ *   called on the same map from different thread without locking.
+ */
+size_t qrk_str2id(qrk_t *qrk, const char *key) {
+	const uint8_t *raw = (void *)key;
+	const size_t   len = strlen(key);
+	// We first take care of the empty trie case so later we can safely
+	// assume that the trie is well formed and so there is no NULL pointers
+	// in it.
+	if (qrk->count == 0) {
+		if (qrk->lock == true)
+			return none;
+		const size_t size = sizeof(char) * (len + 1);
+		leaf_t *lf = xmalloc(sizeof(leaf_t) + size);
+		memcpy(lf->key, key, size);
+		lf->id = 0;
+		qrk->root = qrk_lf2nd(lf);
+		qrk->leafs[0] = lf;
+		qrk->count = 1;
+		return 0;
+	}
+	// If the trie is not empty, we first go down the trie to the leaf like
+	// if we are searching for the key. When at leaf there is two case,
+	// either we have found our key or we have found another key with all
+	// its critical bit identical to our one. So we search for the first
+	// differing bit between them to know where we have to add the new node.
+	const node_t *nd = qrk->root;
+	while (!qrk_isleaf(nd)) {
+		const uint8_t chr = nd->pos < len ? raw[nd->pos] : 0;
+		const int side = ((chr | nd->byte) + 1) >> 8;
+		nd = nd->child[side];
+	}
+	const char *bst = qrk_nd2lf(nd)->key;
+	size_t pos;
+	for (pos = 0; pos < len; pos++)
+		if (key[pos] != bst[pos])
+			break;
+	uint8_t byte;
+	if (pos != len)
+		byte = key[pos] ^ bst[pos];
+	else if (bst[pos] != '\0')
+		byte = bst[pos];
+	else
+		return qrk_nd2lf(nd)->id;
+	if (qrk->lock == true)
+		return none;
+	// Now we known the two key are different and we know in which byte. It
+	// remain to build the mask for the new critical bit and build the new
+	// internal node and leaf.
+	while (byte & (byte - 1))
+		byte &= byte - 1;
+	byte ^= 255;
+	const uint8_t chr = bst[pos];
+	const int side = ((chr | byte) + 1) >> 8;
+	const size_t size = sizeof(char) * (len + 1);
+	node_t *nx = xmalloc(sizeof(node_t));
+	leaf_t *lf = xmalloc(sizeof(leaf_t) + size);
+	memcpy(lf->key, key, size);
+	lf->id   = qrk->count++;
+	nx->pos  = pos;
+	nx->byte = byte;
+	nx->child[1 - side] = qrk_lf2nd(lf);
+	if (lf->id == qrk->size) {
+		qrk->size *= 1.4;
+		const size_t size = sizeof(leaf_t *) * qrk->size;
+		qrk->leafs = xrealloc(qrk->leafs, size);
+	}
+	qrk->leafs[lf->id] = lf;
+	// And last thing to do: inserting the new node in the trie. We have to
+	// walk down the trie again as we have to keep the ordering of nodes. So
+	// we search for the good position to insert it.
+	node_t **trg = &qrk->root;
+	while (true) {
+		node_t *nd = *trg;
+		if (qrk_isleaf(nd) || nd->pos > pos)
+			break;
+		if (nd->pos == pos && nd->byte > byte)
+			break;
+		const uint8_t chr = nd->pos < len ? raw[nd->pos] : 0;
+		const int side = ((chr | nd->byte) + 1) >> 8;
+		trg = &nd->child[side];
+	}
+	nx->child[side] = *trg;
+	*trg = nx;
+	return lf->id;
+}
+
+/* qrk_id2str:
+ *    Retrieve the key associated to an identifier. The key is returned as a
+ *    constant string that should not be modified or freed by the caller, it is
+ *    a pointer to the internal copy of the key kept by the map object and
+ *    remain valid only for the life time of the quark, a call to qrk_free will
+ *    make this pointer invalid.
+ */
+const char *qrk_id2str(const qrk_t *qrk, size_t id) {
+	if (id >= qrk->count)
+		fatal("invalid identifier");
+	return qrk->leafs[id]->key;
+}
+
+/* qrk_save:
+ *   Save list of keys present in the map object in the id order to the given
+ *   file. We put one key per line so, if no key contains a new line, the line
+ *   number correspond to the id.
+ */
+void qrk_save(const qrk_t *qrk, FILE *file) {
+	if (fprintf(file, "#qrk#%zu\n", (size_t)qrk->count) < 0)
+		pfatal("cannot write to file");
+	if (qrk->count == 0)
+		return;
+	for (uint64_t n = 0; n < qrk->count; n++)
+		fprintf(file, "%s\n", qrk->leafs[n]->key);
+}
+
+/* qrk_load:
+ *   Load a list of key from the given file and add them to the map. Each lines
+ *   of the file is taken as a single key and mapped to the next available id if
+ *   not already present. If all keys are single lines and the given map is
+ *   initilay empty, this will load a map exactly as saved by qrk_save.
+ */
+void qrk_load(qrk_t *qrk, FILE *file) {
+	size_t cnt = 0;
+	if (fscanf(file, "#qrk#%zu\n", &cnt) != 1) {
+		if (ferror(file) != 0)
+			pfatal("cannot read from file");
+		pfatal("invalid format");
+	}
+	for (size_t n = 0; n < cnt; ++n) {
+		char *str = ns_readstr(file);
+		qrk_str2id(qrk, str);
+		free(str);
+	}
 }
 
 /* qrk_count:
@@ -138,128 +267,4 @@ bool qrk_lock(qrk_t *qrk, bool lock) {
 	return old;
 }
 
-/* qrk_splay:
- *   Do a splay operation on the tree part of the quark with the given key.
- *   Return -1 if the key is in the quark, so if it has been move at the top,
- *   else return the side wether the key should go.
- */
-static int qrk_splay(qrk_t *qrk, const char *key) {
-	qrk_node_t  nil = {{NULL, NULL}, 0};
-	qrk_node_t *root[2] = {&nil, &nil};
-	qrk_node_t *nd = qrk->tree;
-	int side;
-	while (true) {
-		side = strcmp(key, nd->key);
-		side = (side == 0) ? -1 : (side < 0) ? 0 : 1;
-		if (side == -1 || nd->child[side] == NULL)
-			break;
-		const int tst = (side == 0)
-			? strcmp(key, nd->child[side]->key) < 0
-			: strcmp(key, nd->child[side]->key) > 0;
-		if (tst) {
-			qrk_node_t *tmp = nd->child[side];
-			nd->child[side] = tmp->child[1 - side];
-			tmp->child[1 - side] = nd;
-			nd = tmp;
-			if (nd->child[side] == NULL)
-				break;
-		}
-		root[1 - side]->child[side] = nd;
-		root[1 - side] = nd;
-		nd = nd->child[side];
-	}
-	root[0]->child[1] = nd->child[0];
-	root[1]->child[0] = nd->child[1];
-	nd->child[0] = nil.child[1];
-	nd->child[1] = nil.child[0];
-	qrk->tree = nd;
-	return side;
-}
-
-/* qrk_id2str:
- *   Return the key associated with the given identifier. The key must not be
- *   modified nor freed by the caller and remain valid for the lifetime of the
- *   quark object.
- *   Raise a fatal error if the indentifier is invalid.
- */
-const char *qrk_id2str(const qrk_t *qrk, size_t id) {
-	if (id >= qrk->count)
-		fatal("invalid identifier");
-	return qrk->vector[id]->key;
-}
-
-/* qrk_str2id:
- *   Return the identifier corresponding to the given key in the quark object.
- *   If the key is not already present, it is inserted unless the quark is
- *   locked, in which case none is returned.
- */
-size_t qrk_str2id(qrk_t *qrk, const char *key) {
-	// if tree is empty, directly add a root
-	if (qrk->count == 0) {
-		if (qrk->lock == true)
-			return none;
-		if (qrk->size == 0) {
-			const size_t size = 128;
-			qrk->vector = xmalloc(sizeof(char *) * size);
-			qrk->size = size;
-		}
-		qrk_node_t *nd = qrk_newnode(key, 0);
-		qrk->tree = nd;
-		qrk->count = 1;
-		qrk->vector[0] = nd;
-		return 0;
-	}
-	// else if key is already there, return his value
-	int side = qrk_splay(qrk, key);
-	if (side == -1)
-		return qrk->tree->value;
-	if (qrk->lock == true)
-		return none;
-	// else, add the key to the quark
-	if (qrk->count == qrk->size) {
-		qrk->size *= 1.4;
-		const size_t size = sizeof(char **) * qrk->size;
-		qrk->vector = xrealloc(qrk->vector, size);
-	}
-	size_t id = qrk->count;
-	qrk_node_t *nd = qrk_newnode(key, id);
-	nd->child[    side] = qrk->tree->child[side];
-	nd->child[1 - side] = qrk->tree;
-	qrk->tree->child[side] = NULL;
-	qrk->tree = nd;
-	qrk->vector[id] = nd;
-	qrk->count++;
-	return id;
-}
-
-/* qrk_load:
- *   Load a quark object preivously saved with a call to qrk_load. The given
- *   quark must be empty.
- */
-void qrk_load(qrk_t *qrk, FILE *file) {
-	size_t cnt = 0;
-	if (fscanf(file, "#qrk#%zu\n", &cnt) != 1) {
-		if (ferror(file) != 0)
-			pfatal("cannot read from file");
-		pfatal("invalid format");
-	}
-	for (size_t n = 0; n < cnt; ++n) {
-		char *str = ns_readstr(file);
-		qrk_str2id(qrk, str);
-		free(str);
-	}
-}
-
-/* qrk_save:
- *   Save all the content of a quark object in the given file. The format is
- *   plain text and portable across platforms.
- */
-void qrk_save(const qrk_t *qrk, FILE *file) {
-	if (fprintf(file, "#qrk#%zu\n", qrk->count) < 0)
-		pfatal("cannot write to file");
-	if (qrk->count == 0)
-		return;
-	for (size_t n = 0; n < qrk->count; ++n)
-		ns_writestr(file, qrk->vector[n]->key);
-}
 
