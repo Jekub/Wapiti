@@ -1,7 +1,7 @@
 /*
  *      Wapiti - A linear-chain CRF tool
  *
- * Copyright (c) 2009-2010  CNRS
+ * Copyright (c) 2009-2011  CNRS
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -53,7 +53,7 @@
  *   [1] Sleator, Daniel D. and Tarjan, Robert E. ; Self-adjusting binary search
  *   trees, Journal of the ACM 32 (3): pp. 652--686, 1985. DOI:10.1145/3828.3835
  *
- *   This code is copyright 2002-2010 Thomas Lavergne and licenced under the BSD
+ *   This code is copyright 2002-2011 Thomas Lavergne and licenced under the BSD
  *   Licence like the remaining of Wapiti.
  ******************************************************************************/
 
