@@ -48,6 +48,7 @@
  *       \x -> match a character class (in uppercase, match the complement)
  *               \d : digit       \a : alpha      \w : alpha + digit
  *               \l : lowercase   \u : uppercase  \p : punctuation
+ *               \s : space
  *             or escape a character
  *       x  -> any other character match itself
  *   And the constructs :
@@ -79,12 +80,14 @@ static bool rex_matchit(const char *ch, const char *str) {
 			case 'd': return  isdigit(str[0]);
 			case 'l': return  islower(str[0]);
 			case 'p': return  ispunct(str[0]);
+			case 's': return  isspace(str[0]);
 			case 'u': return  isupper(str[0]);
 			case 'w': return  isalnum(str[0]);
 			case 'A': return !isalpha(str[0]);
 			case 'D': return !isdigit(str[0]);
 			case 'L': return !islower(str[0]);
 			case 'P': return !ispunct(str[0]);
+			case 'S': return !isspace(str[0]);
 			case 'U': return !isupper(str[0]);
 			case 'W': return !isalnum(str[0]);
 		}
