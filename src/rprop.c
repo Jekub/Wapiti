@@ -78,6 +78,7 @@ static void trn_rpropsub(job_t *job, int id, int cnt, rprop_t *st) {
 	const double stpmax = mdl->opt->rprop.stpmax;
 	const double stpinc = mdl->opt->rprop.stpinc;
 	const double stpdec = mdl->opt->rprop.stpdec;
+	const bool   wbt    = st->dlt != NULL;
 	const double rho1   = mdl->opt->rho1;
 	const bool   l1     = rho1 != 0.0;
 	double *x = mdl->theta;
@@ -101,14 +102,19 @@ static void trn_rpropsub(job_t *job, int id, int cnt, rprop_t *st) {
 		// previous gradient values and update the weight. if
 		// there is l1 penalty, we have to project back the
 		// update in the choosen orthant.
-		if (gp[f] * pg > 0.0) {
+		if (gp[f] * pg > 0.0)
 			stp[f] = min(stp[f] * stpinc, stpmax);
+		else if (gp[f] * pg < 0.0)
+			stp[f] = max(stp[f] * stpdec, stpmin);
+
+		if (!wbt) {
+			x[f] -= stp[f] * sign(g[f]);
+		} else if (gp[f] * pg > 0.0) {
 			dlt[f] = stp[f] * -sign(g[f]);
 			if (l1 && dlt[f] * pg >= 0.0)
 				dlt[f] = 0.0;
 			x[f] += dlt[f];
 		} else if (gp[f] * pg < 0.0) {
-			stp[f] = max(stp[f] * stpdec, stpmin);
 			x[f]   = x[f] - dlt[f];
 			g[f]   = 0.0;
 		} else {
@@ -125,9 +131,11 @@ void trn_rprop(mdl_t *mdl) {
 	const size_t F = mdl->nftr;
 	const int    K = mdl->opt->maxiter;
 	const size_t W = mdl->opt->nthread;
+	const bool   wbt = strcmp(mdl->opt->algo, "rprop-");
 	// Allocate state memory and initialize it
 	double *g   = xvm_new(F), *gp  = xvm_new(F);
-	double *stp = xvm_new(F), *dlt = xvm_new(F);
+	double *stp = xvm_new(F);
+	double *dlt = wbt ? xvm_new(F) : NULL;
 	for (unsigned f = 0; f < F; f++) {
 		gp[f]  = 0.0;
 		stp[f] = 0.1;
@@ -158,7 +166,9 @@ void trn_rprop(mdl_t *mdl) {
 	}
 	// Free all allocated memory
 	xvm_free(g);   xvm_free(gp);
-	xvm_free(stp); xvm_free(dlt);
+	xvm_free(stp);
+	if (wbt)
+		xvm_free(dlt);
 	for (size_t w = 1; w < W; w++)
 		xvm_free(grds[w]->g);
 	for (size_t w = 0; w < W; w++)
