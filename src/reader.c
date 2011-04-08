@@ -278,8 +278,8 @@ static seq_t *rdr_rawtok2seq(rdr_t *rdr, const tok_t *tok) {
 				const char *o = tok->toks[t][n];
 				switch (o[0]) {
 					case 'u': size += 1; break;
-					case 'b': size += 2; break;
-					case '*': size += 3; break;
+					case 'b': size += 1; break;
+					case '*': size += 2; break;
 					default:
 						fatal("invalid feature: %s", o);
 				}
