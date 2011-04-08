@@ -269,5 +269,7 @@ void opt_parse(int argc, char *argv[argc], opt_t *opt) {
 	argchecksub("--alpha",   opt->sgdl1.alpha  >  0.0);
 	argchecksub("--nbest",   opt->nbest        >  0  );
 	#undef argchecksub
+	if (opt->maxent && !strcmp(opt->algo, "bcd"))
+		fatal("BCD not supported for training maxent models");
 }
 
