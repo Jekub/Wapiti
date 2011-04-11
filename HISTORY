@@ -1,4 +1,12 @@
-19/03/2010
+??/??/????
+  Release v?.?.?:
+
+    Switch from splay-trees to critbit-tries
+    Add RProp+ and RProp- variants of the RProp algorithm
+    Add space matching in regexp
+    Fix a few small bugs
+
+19/03/2011
   Release v1.1.3: Some small improvements
 
     New option --jobsize for fine grained multi threading
