@@ -230,7 +230,7 @@ void qrk_save(const qrk_t *qrk, FILE *file) {
 	if (qrk->count == 0)
 		return;
 	for (uint64_t n = 0; n < qrk->count; n++)
-		fprintf(file, "%s\n", qrk->leafs[n]->key);
+		ns_writestr(file, qrk->leafs[n]->key);
 }
 
 /* qrk_load:
