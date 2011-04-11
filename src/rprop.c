@@ -40,6 +40,7 @@
 #include "vmath.h"
 
 #define sign(v) ((v) < 0.0 ? -1.0 : ((v) > 0.0 ? 1.0 : 0.0))
+#define sqr(v)  ((v) * (v))
 
 /******************************************************************************
  * Resilient propagation optimizer
@@ -58,10 +59,10 @@
 typedef struct rprop_s rprop_t;
 struct rprop_s {
 	mdl_t *mdl;
+	double *xp;
+	double *stp;
 	double *g;
 	double *gp;
-	double *stp;
-	double *dlt;
 };
 
 /* trn_rpropsub:
@@ -78,50 +79,43 @@ static void trn_rpropsub(job_t *job, int id, int cnt, rprop_t *st) {
 	const double stpmax = mdl->opt->rprop.stpmax;
 	const double stpinc = mdl->opt->rprop.stpinc;
 	const double stpdec = mdl->opt->rprop.stpdec;
-	const bool   wbt    = st->dlt != NULL;
+	const bool   wbt    = strcmp(mdl->opt->algo, "rprop-");
 	const double rho1   = mdl->opt->rho1;
 	const bool   l1     = rho1 != 0.0;
 	double *x = mdl->theta;
-	double *g   = st->g,   *gp  = st->gp;
-	double *stp = st->stp, *dlt = st->dlt;
+	double *xp  = st->xp,   *stp = st->stp;
+	double *g   = st->g,    *gp  = st->gp;
 	const size_t from = F * id / cnt;
 	const size_t to   = F * (id + 1) / cnt;
 	for (size_t f = from; f < to; f++) {
 		// If there is a l1 component in the regularization
-		// component, we project the gradient in the current
-		// orthant.
-		double pg = g[f];
-		if (l1) {
-			if (x[f] < 0.0)        pg -= rho1;
-			else if (x[f] > 0.0)   pg += rho1;
-			else if (g[f] < -rho1) pg += rho1;
-			else if (g[f] > rho1)  pg -= rho1;
-			else                   pg  = 0.0;
+		// component, we check for cutdown.
+		if (l1 && sqr(g[f] + rho1 * sign(x[f])) < sqr(rho1)) {
+			if (x[f] == 0.0 || (   gp[f] * g[f] < 0.0
+			                    && xp[f] * x[f] < 0.0)) {
+				xp[f] = x[f];
+				x[f]  = 0.0;
+				gp[f] = g[f];
+				continue;
+			}
 		}
 		// Next we adjust the step depending of the new and
-		// previous gradient values and update the weight. if
-		// there is l1 penalty, we have to project back the
-		// update in the choosen orthant.
-		if (gp[f] * pg > 0.0)
+		// previous gradient values and update the weight.
+		if (gp[f] * g[f] > 0.0)
 			stp[f] = min(stp[f] * stpinc, stpmax);
-		else if (gp[f] * pg < 0.0)
+		else if (gp[f] * g[f] < 0.0)
 			stp[f] = max(stp[f] * stpdec, stpmin);
-
-		if (!wbt) {
-			x[f] -= stp[f] * sign(g[f]);
-		} else if (gp[f] * pg > 0.0) {
-			dlt[f] = stp[f] * -sign(g[f]);
-			if (l1 && dlt[f] * pg >= 0.0)
-				dlt[f] = 0.0;
-			x[f] += dlt[f];
-		} else if (gp[f] * pg < 0.0) {
-			x[f]   = x[f] - dlt[f];
-			g[f]   = 0.0;
+		if (!wbt || gp[f] * g[f] > 0.0) {
+			xp[f]  = x[f];
+			x[f]  += stp[f] * -sign(g[f]);
+		} else if (gp[f] * g[f] < 0.0) {
+			const double tmp = xp[f];
+			xp[f] = x[f];
+			x[f]  = tmp;
+			g[f]  = 0.0;
 		} else {
-			dlt[f] = stp[f] * -sign(pg);
-			if (l1 && dlt[f] * pg >= 0.0)
-				dlt[f] = 0.0;
-			x[f] += dlt[f];
+			xp[f]  = x[f];
+			x[f]  += stp[f] * -sign(g[f]);
 		}
 		gp[f] = g[f];
 	}
@@ -131,12 +125,11 @@ void trn_rprop(mdl_t *mdl) {
 	const size_t F = mdl->nftr;
 	const int    K = mdl->opt->maxiter;
 	const size_t W = mdl->opt->nthread;
-	const bool   wbt = strcmp(mdl->opt->algo, "rprop-");
 	// Allocate state memory and initialize it
+	double *xp  = xvm_new(F), *stp = xvm_new(F);
 	double *g   = xvm_new(F), *gp  = xvm_new(F);
-	double *stp = xvm_new(F);
-	double *dlt = wbt ? xvm_new(F) : NULL;
 	for (unsigned f = 0; f < F; f++) {
+		xp[f]  = 0.0;
 		gp[f]  = 0.0;
 		stp[f] = 0.1;
 	}
@@ -144,8 +137,8 @@ void trn_rprop(mdl_t *mdl) {
 	// about updating weight using the gradient.
 	rprop_t *st = xmalloc(sizeof(rprop_t));
 	st->mdl = mdl;
+	st->xp  = xp;  st->stp = stp;
 	st->g   = g;   st->gp  = gp;
-	st->stp = stp; st->dlt = dlt;
 	rprop_t *rprop[W];
 	for (size_t w = 0; w < W; w++)
 		rprop[w] = st;
@@ -165,10 +158,9 @@ void trn_rprop(mdl_t *mdl) {
 			break;
 	}
 	// Free all allocated memory
-	xvm_free(g);   xvm_free(gp);
-	xvm_free(stp);
-	if (wbt)
-		xvm_free(dlt);
+	xvm_free(xp);
+	xvm_free(g);
+	xvm_free(gp);
 	for (size_t w = 1; w < W; w++)
 		xvm_free(grds[w]->g);
 	for (size_t w = 0; w < W; w++)
