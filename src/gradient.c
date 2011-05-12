@@ -55,43 +55,47 @@
 void grd_dosingle(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
 	const double *x = mdl->theta;
+	const int     T = seq->len;
 	const size_t  Y = mdl->nlbl;
-	const pos_t *pos = &(seq->pos[0]);
 	double *g = grd->g;
-	// We first compute for each Y the sum of weights of all features
-	// actives in the sample:
-	//     Ψ(y,x^i) = \exp( ∑_k θ_k f_k(y,x^i) )
-	//     Z_θ(x^i) = ∑_y Ψ(y,x^i)
-	double psi[Y], Z = 0.0;
-	for (size_t y = 0; y < Y; y++)
-		psi[y] = 0.0;
-	for (size_t n = 0; n < pos->ucnt; n++) {
-		const double *wgh = x + mdl->uoff[pos->uobs[n]];
+	for (int t = 0; t < T; t++) {
+		const pos_t *pos = &(seq->pos[t]);
+		// We first compute for each Y the sum of weights of all
+		// features actives in the sample:
+		//     Ψ(y,x^i) = \exp( ∑_k θ_k f_k(y,x^i) )
+		//     Z_θ(x^i) = ∑_y Ψ(y,x^i)
+		double psi[Y], Z = 0.0;
 		for (size_t y = 0; y < Y; y++)
-			psi[y] += wgh[y];
-	}
-	double lloss = psi[pos->lbl];
-	for (size_t y = 0; y < Y; y++) {
-		psi[y] = (psi[y] == 0.0) ? 1.0 : exp(psi[y]);
+			psi[y] = 0.0;
+		for (size_t n = 0; n < pos->ucnt; n++) {
+			const double *wgh = x + mdl->uoff[pos->uobs[n]];
+			for (size_t y = 0; y < Y; y++)
+				psi[y] += wgh[y];
+		}
+		double lloss = psi[pos->lbl];
+		for (size_t y = 0; y < Y; y++) {
+			psi[y] = (psi[y] == 0.0) ? 1.0 : exp(psi[y]);
 		Z += psi[y];
-	}
-	// Now, we can compute the gradient update, for each active feature
-	// in the sample the update is the expectation over the current model
-	// minus the expectation over the observed distribution:
-	//     E_{q_θ}(x,y) - E_{p}(x,y)
-	// and we can compute the expectation over the model with:
-	//     E_{q_θ}(x,y) = f_k(y,x^i) * ψ(y,x) / Z_θ(x)
-	for (size_t y = 0; y < Y; y++)
-		psi[y] /= Z;
-	for (size_t n = 0; n < pos->ucnt; n++) {
-		double *grd = g + mdl->uoff[pos->uobs[n]];
+		}
+		// Now, we can compute the gradient update, for each active
+		// feature in the sample the update is the expectation over the
+		// current model minus the expectation over the observed
+		// distribution:
+		//     E_{q_θ}(x,y) - E_{p}(x,y)
+		// and we can compute the expectation over the model with:
+		//     E_{q_θ}(x,y) = f_k(y,x^i) * ψ(y,x) / Z_θ(x)
 		for (size_t y = 0; y < Y; y++)
-			grd[y] += psi[y];
-		grd[pos->lbl] -= 1.0;
+			psi[y] /= Z;
+		for (size_t n = 0; n < pos->ucnt; n++) {
+			double *grd = g + mdl->uoff[pos->uobs[n]];
+			for (size_t y = 0; y < Y; y++)
+				grd[y] += psi[y];
+			grd[pos->lbl] -= 1.0;
+		}
+		// And finally the log-likelihood with:
+		//     L_θ(x^i,y^i) = log(Z_θ(x^i)) - log(ψ(y^i,x^i))
+		grd->lloss += log(Z) - lloss;
 	}
-	// And finally the log-likelihood with:
-	//     L_θ(x^i,y^i) = log(Z_θ(x^i)) - log(ψ(y^i,x^i))
-	grd->lloss += log(Z) - lloss;
 }
 
 /******************************************************************************
@@ -732,7 +736,7 @@ void grd_doseq(grd_t *grd, const seq_t *seq) {
  *   optimised codepath and classical one depending of the sample.
  */
 void grd_dospl(grd_t *grd, const seq_t *seq) {
-	if (seq->len == 1 && seq->pos[0].bcnt == 0)
+	if (seq->len == 1 || grd->mdl->reader->nbi == 0)
 		grd_dosingle(grd, seq);
 	else
 		grd_doseq(grd, seq);

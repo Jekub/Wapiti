@@ -4,6 +4,7 @@
     Switch from splay-trees to critbit-tries
     Add RProp+ and RProp- variants of the RProp algorithm
     Add a new projection scheme for RProp with l1
+    Make maxent work with sequences
     Add space matching in regexp
     Fix a few small bugs
 
