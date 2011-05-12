@@ -73,6 +73,7 @@ struct opt_s {
 		double stpmax;
 		double stpinc;
 		double stpdec;
+		bool   cutoff;
 	} rprop;
 	// Options for labelling
 	bool   label;

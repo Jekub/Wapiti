@@ -81,6 +81,7 @@ static void opt_help(const char *pname) {
 		"\t   | --stpmax   FLOAT   (rprop)  maximum step size\n"
 		"\t   | --stpinc   FLOAT   (rprop)  step increment factor\n"
 		"\t   | --stpdec   FLOAT   (rprop)  step decrement factor\n"
+		"\t   | --cutoff           (rprop)  alternate projection\n"
 		"\n"
 		"Labelling mode:\n"
 		"    %1$s label [options] [input data] [output data]\n"
@@ -112,7 +113,8 @@ const opt_t opt_defaults = {
 	.lbfgs = {.clip   = false, .histsz = 5, .maxls = 40},
 	.sgdl1 = {.eta0   = 0.8,   .alpha  = 0.85},
 	.bcd   = {.kappa  = 1.5},
-	.rprop = {.stpmin = 1e-8, .stpmax = 50.0, .stpinc = 1.2, .stpdec = 0.5},
+	.rprop = {.stpmin = 1e-8, .stpmax = 50.0, .stpinc = 1.2, .stpdec = 0.5,
+	          .cutoff = false},
 	.label   = false,    .check   = false, .outsc = false,
 	.lblpost = false,    .nbest = 1
 };
@@ -153,6 +155,7 @@ struct {
 	{0, "##", "--stpmax",  'F', offsetof(opt_t, rprop.stpmax)},
 	{0, "##", "--stpinc",  'F', offsetof(opt_t, rprop.stpinc)},
 	{0, "##", "--stpdec",  'F', offsetof(opt_t, rprop.stpdec)},
+	{0, "##", "--cutoff",  'B', offsetof(opt_t, rprop.cutoff)},
 	{1, "##", "--me",      'B', offsetof(opt_t, maxent      )},
 	{1, "-m", "--model",   'S', offsetof(opt_t, model       )},
 	{1, "-l", "--label",   'B', offsetof(opt_t, label       )},

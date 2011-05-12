@@ -81,16 +81,24 @@ static void trn_rpropsub(job_t *job, int id, int cnt, rprop_t *st) {
 	const double stpdec = mdl->opt->rprop.stpdec;
 	const bool   wbt    = strcmp(mdl->opt->algo, "rprop-");
 	const double rho1   = mdl->opt->rho1;
-	const bool   l1     = rho1 != 0.0;
+	const int    l1     = (rho1 != 0.0) ? mdl->opt->rprop.cutoff + 1: 0;
 	double *x = mdl->theta;
 	double *xp  = st->xp,   *stp = st->stp;
 	double *g   = st->g,    *gp  = st->gp;
 	const size_t from = F * id / cnt;
 	const size_t to   = F * (id + 1) / cnt;
 	for (size_t f = from; f < to; f++) {
-		// If there is a l1 component in the regularization
-		// component, we check for cutdown.
-		if (l1 && sqr(g[f] + rho1 * sign(x[f])) < sqr(rho1)) {
+		double pg = g[f];
+		// If there is a l1 component in the regularization component,
+		// we either project the gradient in the current orthant or
+		// check for cutdown depending on the projection scheme wanted.
+		if (l1 == 1) {
+			if (x[f] < 0.0)        pg -= rho1;
+			else if (x[f] > 0.0)   pg += rho1;
+			else if (g[f] < -rho1) pg += rho1;
+			else if (g[f] > rho1)  pg -= rho1;
+			else                   pg  = 0.0;
+		} else if (l1 && sqr(g[f] + rho1 * sign(x[f])) < sqr(rho1)) {
 			if (x[f] == 0.0 || (   gp[f] * g[f] < 0.0
 			                    && xp[f] * x[f] < 0.0)) {
 				xp[f] = x[f];
@@ -100,22 +108,27 @@ static void trn_rpropsub(job_t *job, int id, int cnt, rprop_t *st) {
 			}
 		}
 		// Next we adjust the step depending of the new and
-		// previous gradient values and update the weight.
-		if (gp[f] * g[f] > 0.0)
+		// previous gradient values.
+		if (gp[f] * pg > 0.0)
 			stp[f] = min(stp[f] * stpinc, stpmax);
-		else if (gp[f] * g[f] < 0.0)
+		else if (gp[f] * pg < 0.0)
 			stp[f] = max(stp[f] * stpdec, stpmin);
-		if (!wbt || gp[f] * g[f] > 0.0) {
-			xp[f]  = x[f];
-			x[f]  += stp[f] * -sign(g[f]);
-		} else if (gp[f] * g[f] < 0.0) {
-			const double tmp = xp[f];
+		// Finally update the weight. if there is l1 penalty
+		// and the pseudo gradient projection is used, we have to
+		// project back the update in the choosen orthant.
+		if (!wbt || gp[f] * pg > 0.0) {
+			double dlt = stp[f] * -sign(g[f]);
+			if (l1 == 1 && dlt * pg >= 0.0)
+				dlt = 0.0;
 			xp[f] = x[f];
-			x[f]  = tmp;
-			g[f]  = 0.0;
+			x[f] += dlt;
+		} else if (gp[f] * pg < 0.0) {
+			x[f]   = xp[f];
+			g[f]   = 0.0;
 		} else {
-			xp[f]  = x[f];
-			x[f]  += stp[f] * -sign(g[f]);
+			xp[f] = x[f];
+			if (l1 != 1)
+				x[f] += stp[f] * -sign(pg);
 		}
 		gp[f] = g[f];
 	}
