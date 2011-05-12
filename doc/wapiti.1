@@ -90,6 +90,9 @@ Set the minimum/maximum step size allowed for the RPROP trainer. Defaults are 1e
 .B \-\-stpinc <float>
 .B \-\-stpdec <float>
 Set the increment/decrement factor used to update the steps in the RPROP trainer. Defaults values are 1.2 and 0.5. Increment must be greater than 1.0 and decrement must be between 0 and 1.0.
+.TP
+.B \-\-cutoff
+Select the alternate projection scheme for RPROP with l1-regularization, this can lead to better model depending on your task.
 
 .SS Label mode
 .TP
