@@ -101,7 +101,8 @@ static void trn_rpropsub(job_t *job, int id, int cnt, rprop_t *st) {
 		} else if (l1 && sqr(g[f] + rho1 * sign(x[f])) < sqr(rho1)) {
 			if (x[f] == 0.0 || (   gp[f] * g[f] < 0.0
 			                    && xp[f] * x[f] < 0.0)) {
-				xp[f] = x[f];
+				if (wbt)
+					xp[f] = x[f];
 				x[f]  = 0.0;
 				gp[f] = g[f];
 				continue;
@@ -120,11 +121,12 @@ static void trn_rpropsub(job_t *job, int id, int cnt, rprop_t *st) {
 			double dlt = stp[f] * -sign(g[f]);
 			if (l1 == 1 && dlt * pg >= 0.0)
 				dlt = 0.0;
-			xp[f] = x[f];
+			if (wbt)
+				xp[f] = x[f];
 			x[f] += dlt;
 		} else if (gp[f] * pg < 0.0) {
-			x[f]   = xp[f];
-			g[f]   = 0.0;
+			x[f] = xp[f];
+			g[f] = 0.0;
 		} else {
 			xp[f] = x[f];
 			if (l1 != 1)
@@ -135,14 +137,19 @@ static void trn_rpropsub(job_t *job, int id, int cnt, rprop_t *st) {
 }
 
 void trn_rprop(mdl_t *mdl) {
-	const size_t F = mdl->nftr;
-	const int    K = mdl->opt->maxiter;
-	const size_t W = mdl->opt->nthread;
+	const size_t F   = mdl->nftr;
+	const int    K   = mdl->opt->maxiter;
+	const size_t W   = mdl->opt->nthread;
+	const bool   wbt = strcmp(mdl->opt->algo, "rprop-");
+	const int    cut = mdl->opt->rprop.cutoff;
 	// Allocate state memory and initialize it
-	double *xp  = xvm_new(F), *stp = xvm_new(F);
+	double *xp  = NULL,       *stp = xvm_new(F);
 	double *g   = xvm_new(F), *gp  = xvm_new(F);
+	if (wbt && !cut)
+		xp = xvm_new(F);
 	for (unsigned f = 0; f < F; f++) {
-		xp[f]  = 0.0;
+		if (wbt && !cut)
+			xp[f]  = 0.0;
 		gp[f]  = 0.0;
 		stp[f] = 0.1;
 	}
@@ -171,7 +178,8 @@ void trn_rprop(mdl_t *mdl) {
 			break;
 	}
 	// Free all allocated memory
-	xvm_free(xp);
+	if (wbt && !cut)
+		xvm_free(xp);
 	xvm_free(g);
 	xvm_free(gp);
 	for (size_t w = 1; w < W; w++)
