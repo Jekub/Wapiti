@@ -392,6 +392,7 @@ void tag_label(mdl_t *mdl, FILE *fin, FILE *fout) {
 			}
 			fprintf(fout, "\n");
 		}
+		fflush(fout);
 		// If user provided reference labels, use them to collect
 		// statistics about how well we have performed here.
 		if (mdl->opt->check) {
