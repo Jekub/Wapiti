@@ -57,14 +57,15 @@ void grd_dosingle(grd_t *grd, const seq_t *seq) {
 	const double *x = mdl->theta;
 	const int     T = seq->len;
 	const size_t  Y = mdl->nlbl;
-	double *g = grd->g;
+	double *psi = grd->psi;
+	double *g   = grd->g;
 	for (int t = 0; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
 		// We first compute for each Y the sum of weights of all
 		// features actives in the sample:
 		//     Ψ(y,x^i) = \exp( ∑_k θ_k f_k(y,x^i) )
 		//     Z_θ(x^i) = ∑_y Ψ(y,x^i)
-		double psi[Y], Z = 0.0;
+		double Z = 0.0;
 		for (size_t y = 0; y < Y; y++)
 			psi[y] = 0.0;
 		for (size_t n = 0; n < pos->ucnt; n++) {
@@ -75,7 +76,7 @@ void grd_dosingle(grd_t *grd, const seq_t *seq) {
 		double lloss = psi[pos->lbl];
 		for (size_t y = 0; y < Y; y++) {
 			psi[y] = (psi[y] == 0.0) ? 1.0 : exp(psi[y]);
-		Z += psi[y];
+			Z += psi[y];
 		}
 		// Now, we can compute the gradient update, for each active
 		// feature in the sample the update is the expectation over the
@@ -695,7 +696,6 @@ void grd_logloss(grd_t *grd, const seq_t *seq) {
  */
 void grd_doseq(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
-	grd_check(grd, seq->len);
 	grd->first = 0;
 	grd->last  = seq->len - 1;
 	if (!mdl->opt->sparse) {
@@ -736,6 +736,7 @@ void grd_doseq(grd_t *grd, const seq_t *seq) {
  *   optimised codepath and classical one depending of the sample.
  */
 void grd_dospl(grd_t *grd, const seq_t *seq) {
+	grd_check(grd, seq->len);
 	if (seq->len == 1 || grd->mdl->reader->nbi == 0)
 		grd_dosingle(grd, seq);
 	else
