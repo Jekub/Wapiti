@@ -1,5 +1,5 @@
-??/??/????
-  Release v?.?.?:
+07/07/2011
+  Release v1.2.0: RProp improvements and bug fix
 
     Switch from splay-trees to critbit-tries
     Add RProp+ and RProp- variants of the RProp algorithm
