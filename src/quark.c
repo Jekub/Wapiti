@@ -24,11 +24,12 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
 #include "quark.h"
@@ -122,7 +123,7 @@ void qrk_free(qrk_t *qrk) {
  *   pair inside the quark. This function is not thread safe and should not be
  *   called on the same map from different thread without locking.
  */
-size_t qrk_str2id(qrk_t *qrk, const char *key) {
+uint64_t qrk_str2id(qrk_t *qrk, const char *key) {
 	const uint8_t *raw = (void *)key;
 	const size_t   len = strlen(key);
 	// We first take care of the empty trie case so later we can safely
@@ -213,7 +214,7 @@ size_t qrk_str2id(qrk_t *qrk, const char *key) {
  *    remain valid only for the life time of the quark, a call to qrk_free will
  *    make this pointer invalid.
  */
-const char *qrk_id2str(const qrk_t *qrk, size_t id) {
+const char *qrk_id2str(const qrk_t *qrk, uint64_t id) {
 	if (id >= qrk->count)
 		fatal("invalid identifier");
 	return qrk->leafs[id]->key;
@@ -225,7 +226,7 @@ const char *qrk_id2str(const qrk_t *qrk, size_t id) {
  *   number correspond to the id.
  */
 void qrk_save(const qrk_t *qrk, FILE *file) {
-	if (fprintf(file, "#qrk#%zu\n", (size_t)qrk->count) < 0)
+	if (fprintf(file, "#qrk#%"PRIu64"\n", qrk->count) < 0)
 		pfatal("cannot write to file");
 	if (qrk->count == 0)
 		return;
@@ -240,13 +241,13 @@ void qrk_save(const qrk_t *qrk, FILE *file) {
  *   initilay empty, this will load a map exactly as saved by qrk_save.
  */
 void qrk_load(qrk_t *qrk, FILE *file) {
-	size_t cnt = 0;
-	if (fscanf(file, "#qrk#%zu\n", &cnt) != 1) {
+	uint64_t cnt = 0;
+	if (fscanf(file, "#qrk#%"SCNu64"\n", &cnt) != 1) {
 		if (ferror(file) != 0)
 			pfatal("cannot read from file");
 		pfatal("invalid format");
 	}
-	for (size_t n = 0; n < cnt; ++n) {
+	for (uint64_t n = 0; n < cnt; ++n) {
 		char *str = ns_readstr(file);
 		qrk_str2id(qrk, str);
 		free(str);
@@ -256,7 +257,7 @@ void qrk_load(qrk_t *qrk, FILE *file) {
 /* qrk_count:
  *   Return the number of mappings stored in the quark.
  */
-size_t qrk_count(const qrk_t *qrk) {
+uint64_t qrk_count(const qrk_t *qrk) {
 	return qrk->count;
 }
 
