@@ -29,6 +29,7 @@
 #define sequence_h
 
 #include <stddef.h>
+#include <stdint.h>
 
 #include "wapiti.h"
 
@@ -121,12 +122,12 @@ struct tok_s {
 typedef struct pos_s pos_t;
 typedef struct seq_s seq_t;
 struct seq_s {
-	int     len;
-	size_t *raw;
+	int       len;
+	uint64_t *raw;
 	struct pos_s {
-		size_t  lbl;
-		size_t  ucnt,  bcnt;
-		size_t *uobs, *bobs;
+		uint64_t  lbl;
+		uint32_t  ucnt,  bcnt;
+		uint64_t *uobs, *bobs;
 	} pos[];
 };
 

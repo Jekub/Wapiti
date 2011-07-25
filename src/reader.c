@@ -253,7 +253,7 @@ raw_t *rdr_readraw(rdr_t *rdr, FILE *file) {
  *   Map an observation to its identifier, automatically adding a 'u' prefix in
  *   pure maxent mode.
  */
-static size_t rdr_mapobs(rdr_t *rdr, const char *str) {
+static uint64_t rdr_mapobs(rdr_t *rdr, const char *str) {
 	if (!rdr->maxent)
 		return qrk_str2id(rdr->obs, str);
 	size_t len = strlen(str) + 2;
@@ -287,9 +287,9 @@ static seq_t *rdr_rawtok2seq(rdr_t *rdr, const tok_t *tok) {
 		}
 	}
 	seq_t *seq = xmalloc(sizeof(seq_t) + sizeof(pos_t) * T);
-	seq->raw = xmalloc(sizeof(size_t) * size);
+	seq->raw = xmalloc(sizeof(uint64_t) * size);
 	seq->len = T;
-	size_t *raw = seq->raw;
+	uint64_t *raw = seq->raw;
 	for (int t = 0; t < T; t++) {
 		seq->pos[t].lbl = none;
 		seq->pos[t].ucnt = 0;
@@ -297,7 +297,7 @@ static seq_t *rdr_rawtok2seq(rdr_t *rdr, const tok_t *tok) {
 		for (int n = 0; n < tok->cnts[t]; n++) {
 			if (tok->toks[t][n][0] == 'b')
 				continue;
-			size_t id = rdr_mapobs(rdr, tok->toks[t][n]);
+			uint64_t id = rdr_mapobs(rdr, tok->toks[t][n]);
 			if (id != none) {
 				(*raw++) = id;
 				seq->pos[t].ucnt++;
@@ -310,7 +310,7 @@ static seq_t *rdr_rawtok2seq(rdr_t *rdr, const tok_t *tok) {
 		for (int n = 0; n < tok->cnts[t]; n++) {
 			if (tok->toks[t][n][0] == 'u')
 				continue;
-			size_t id = rdr_mapobs(rdr, tok->toks[t][n]);
+			uint64_t id = rdr_mapobs(rdr, tok->toks[t][n]);
 			if (id != none) {
 				(*raw++) = id;
 				seq->pos[t].bcnt++;
@@ -321,7 +321,7 @@ static seq_t *rdr_rawtok2seq(rdr_t *rdr, const tok_t *tok) {
 	if (tok->lbl != NULL) {
 		for (int t = 0; t < T; t++) {
 			const char *lbl = tok->lbl[t];
-			size_t id = qrk_str2id(rdr->lbl, lbl);
+			uint64_t id = qrk_str2id(rdr->lbl, lbl);
 			seq->pos[t].lbl = id;
 		}
 	}
@@ -337,9 +337,9 @@ static seq_t *rdr_pattok2seq(rdr_t *rdr, const tok_t *tok) {
 	// object by appling patterns. First we allocate the seq_t object. The
 	// sequence itself as well as the sub array are allocated in one time.
 	seq_t *seq = xmalloc(sizeof(seq_t) + sizeof(pos_t) * T);
-	seq->raw = xmalloc(sizeof(size_t) * (rdr->nuni + rdr->nbi) * T);
+	seq->raw = xmalloc(sizeof(uint64_t) * (rdr->nuni + rdr->nbi) * T);
 	seq->len = T;
-	size_t *tmp = seq->raw;
+	uint64_t *tmp = seq->raw;
 	for (int t = 0; t < T; t++) {
 		seq->pos[t].lbl  = none;
 		seq->pos[t].uobs = tmp; tmp += rdr->nuni;
@@ -354,7 +354,7 @@ static seq_t *rdr_pattok2seq(rdr_t *rdr, const tok_t *tok) {
 		for (int x = 0; x < rdr->npats; x++) {
 			// Get the observation and map it to an identifier
 			char *obs = pat_exec(rdr->pats[x], tok, t);
-			size_t id = rdr_mapobs(rdr, obs);
+			uint64_t id = rdr_mapobs(rdr, obs);
 			if (id == none) {
 				free(obs);
 				continue;
@@ -377,7 +377,7 @@ static seq_t *rdr_pattok2seq(rdr_t *rdr, const tok_t *tok) {
 	if (tok->lbl != NULL) {
 		for (int t = 0; t < T; t++) {
 			const char *lbl = tok->lbl[t];
-			size_t id = qrk_str2id(rdr->lbl, lbl);
+			uint64_t id = qrk_str2id(rdr->lbl, lbl);
 			seq->pos[t].lbl = id;
 		}
 	}

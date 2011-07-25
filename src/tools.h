@@ -29,10 +29,11 @@
 
 #include <stdarg.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 
 #define unused(v) ((void)(v))
-#define none ((size_t)-1)
+#define none ((uint64_t)-1)
 
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #define max(a, b) ((a) < (b) ? (b) : (a))
