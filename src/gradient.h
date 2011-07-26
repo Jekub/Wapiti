@@ -42,22 +42,22 @@
  */
 typedef struct grd_s grd_t;
 struct grd_s {
-	mdl_t  *mdl;
-	int     len;     // =T        max length of sequence
-	double *g;       // [F]       vector where to put gradient updates
-	double  lloss;   //           loss value for the sequence
-	double *psi;     // [T][Y][Y] the transitions scores
-	double *psiuni;  // [T][Y]    | Same as psi in sparse format
-	size_t *psiyp;   // [T][Y][Y] |
-	size_t *psiidx;  // [T][Y]    |
-	size_t *psioff;  // [T]
-	double *alpha;   // [T][Y]    forward scores
-	double *beta;    // [T][Y]    backward scores
-	double *scale;   // [T]       scaling factors of forward scores
-	double *unorm;   // [T]       normalization factors for unigrams
-	double *bnorm;   // [T]       normalization factors for bigrams
-	int     first;   //           first position where gradient is needed
-	int     last;    //           last position where gradient is needed
+	mdl_t    *mdl;
+	int       len;     // =T        max length of sequence
+	double   *g;       // [F]       vector where to put gradient updates
+	double    lloss;   //           loss value for the sequence
+	double   *psi;     // [T][Y][Y] the transitions scores
+	double   *psiuni;  // [T][Y]    | Same as psi in sparse format
+	uint64_t *psiyp;   // [T][Y][Y] |
+	uint64_t *psiidx;  // [T][Y]    |
+	uint64_t *psioff;  // [T]
+	double   *alpha;   // [T][Y]    forward scores
+	double   *beta;    // [T][Y]    backward scores
+	double   *scale;   // [T]       scaling factors of forward scores
+	double   *unorm;   // [T]       normalization factors for unigrams
+	double   *bnorm;   // [T]       normalization factors for bigrams
+	int       first;   //           first position where gradient is needed
+	int       last;    //           last position where gradient is needed
 };
 
 grd_t *grd_new(mdl_t *mdl, double *g);

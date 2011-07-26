@@ -27,6 +27,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -58,7 +59,7 @@
  ******************************************************************************/
 typedef struct rprop_s rprop_t;
 struct rprop_s {
-	mdl_t *mdl;
+	mdl_t  *mdl;
 	double *xp;
 	double *stp;
 	double *g;
@@ -74,20 +75,20 @@ struct rprop_s {
 static void trn_rpropsub(job_t *job, int id, int cnt, rprop_t *st) {
 	unused(job);
 	mdl_t *mdl = st->mdl;
-	const size_t F = mdl->nftr;
-	const double stpmin = mdl->opt->rprop.stpmin;
-	const double stpmax = mdl->opt->rprop.stpmax;
-	const double stpinc = mdl->opt->rprop.stpinc;
-	const double stpdec = mdl->opt->rprop.stpdec;
-	const bool   wbt    = strcmp(mdl->opt->algo, "rprop-");
-	const double rho1   = mdl->opt->rho1;
-	const int    l1     = (rho1 != 0.0) ? mdl->opt->rprop.cutoff + 1: 0;
+	const uint64_t F = mdl->nftr;
+	const double   stpmin = mdl->opt->rprop.stpmin;
+	const double   stpmax = mdl->opt->rprop.stpmax;
+	const double   stpinc = mdl->opt->rprop.stpinc;
+	const double   stpdec = mdl->opt->rprop.stpdec;
+	const bool     wbt    = strcmp(mdl->opt->algo, "rprop-");
+	const double   rho1   = mdl->opt->rho1;
+	const int      l1     = (rho1 != 0.0) ? mdl->opt->rprop.cutoff + 1: 0;
 	double *x = mdl->theta;
 	double *xp  = st->xp,   *stp = st->stp;
 	double *g   = st->g,    *gp  = st->gp;
-	const size_t from = F * id / cnt;
-	const size_t to   = F * (id + 1) / cnt;
-	for (size_t f = from; f < to; f++) {
+	const uint64_t from = F * id / cnt;
+	const uint64_t to   = F * (id + 1) / cnt;
+	for (uint64_t f = from; f < to; f++) {
 		double pg = g[f];
 		// If there is a l1 component in the regularization component,
 		// we either project the gradient in the current orthant or
@@ -137,17 +138,17 @@ static void trn_rpropsub(job_t *job, int id, int cnt, rprop_t *st) {
 }
 
 void trn_rprop(mdl_t *mdl) {
-	const size_t F   = mdl->nftr;
-	const int    K   = mdl->opt->maxiter;
-	const size_t W   = mdl->opt->nthread;
-	const bool   wbt = strcmp(mdl->opt->algo, "rprop-");
-	const int    cut = mdl->opt->rprop.cutoff;
+	const uint64_t F   = mdl->nftr;
+	const int      K   = mdl->opt->maxiter;
+	const size_t   W   = mdl->opt->nthread;
+	const bool     wbt = strcmp(mdl->opt->algo, "rprop-");
+	const int      cut = mdl->opt->rprop.cutoff;
 	// Allocate state memory and initialize it
 	double *xp  = NULL,       *stp = xvm_new(F);
 	double *g   = xvm_new(F), *gp  = xvm_new(F);
 	if (wbt && !cut)
 		xp = xvm_new(F);
-	for (unsigned f = 0; f < F; f++) {
+	for (uint64_t f = 0; f < F; f++) {
 		if (wbt && !cut)
 			xp[f]  = 0.0;
 		gp[f]  = 0.0;

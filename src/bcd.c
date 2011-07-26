@@ -29,6 +29,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -62,8 +63,8 @@ struct bcd_s {
 	double *uhes;    //  [Y]
 	double *bgrd;    //  [Y][Y]
 	double *bhes;    //  [Y][Y]
-	size_t *actpos;  //  [T]
-	size_t  actcnt;
+	int    *actpos;  //  [T]
+	int     actcnt;
 	grd_t  *grd;
 };
 
@@ -80,19 +81,19 @@ static double bcd_soft(double z, double r) {
  *   List position where the given block is active in the sequence and setup the
  *   limits for the fwd/bwd.
  */
-static void bcd_actpos(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, size_t o) {
+static void bcd_actpos(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, uint64_t o) {
 	const int T = seq->len;
-	size_t *actpos = bcd->actpos;
-	size_t  actcnt = 0;
+	int *actpos = bcd->actpos;
+	int  actcnt = 0;
 	for (int t = 0; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
 		bool ok = false;
 		if (mdl->kind[o] & 1)
-			for (size_t n = 0; !ok && n < pos->ucnt; n++)
+			for (uint32_t n = 0; !ok && n < pos->ucnt; n++)
 				if (pos->uobs[n] == o)
 					ok = true;
 		if (mdl->kind[o] & 2)
-			for (size_t n = 0; !ok && n < pos->bcnt; n++)
+			for (uint32_t n = 0; !ok && n < pos->bcnt; n++)
 				if (pos->bobs[n] == o)
 					ok = true;
 		if (!ok)
@@ -110,17 +111,17 @@ static void bcd_actpos(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, size_t o) {
  *   very similar than the trn_spupgrad function but does the computation only
  *   at active pos and approximate also the hessian.
  */
-static void bcd_flgradhes(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, size_t o) {
+static void bcd_flgradhes(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, uint64_t o) {
 	const grd_t *grd = bcd->grd;
-	const size_t Y = mdl->nlbl;
-	const size_t T = seq->len;
+	const uint64_t Y = mdl->nlbl;
+	const int      T = seq->len;
 	const double (*psi  )[T][Y][Y] = (void *)grd->psi;
 	const double (*alpha)[T][Y]    = (void *)grd->alpha;
 	const double (*beta )[T][Y]    = (void *)grd->beta;
 	const double  *unorm           =         grd->unorm;
 	const double  *bnorm           =         grd->bnorm;
-	const size_t  *actpos          =         bcd->actpos;
-	const size_t   actcnt          =         bcd->actcnt;
+	const int     *actpos          =         bcd->actpos;
+	const int      actcnt          =         bcd->actcnt;
 	double *ugrd = bcd->ugrd;
 	double *uhes = bcd->uhes;
 	double *bgrd = bcd->bgrd;
@@ -128,35 +129,35 @@ static void bcd_flgradhes(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, size_t o) {
 	// Update the gradient and the hessian but here we sum only on the
 	// positions where the block is active for unigrams features
 	if (mdl->kind[o] & 1) {
-		for (size_t n = 0; n < actcnt; n++) {
-			const size_t t = actpos[n];
-			for (size_t y = 0; y < Y; y++) {
+		for (int n = 0; n < actcnt; n++) {
+			const int t = actpos[n];
+			for (uint64_t y = 0; y < Y; y++) {
 				const double e = (*alpha)[t][y] * (*beta)[t][y]
 				               * unorm[t];
 				ugrd[y] += e;
 				uhes[y] += e * (1.0 - e);
 			}
-			const size_t y = seq->pos[t].lbl;
+			const uint64_t y = seq->pos[t].lbl;
 			ugrd[y] -= 1.0;
 		}
 	}
 	if ((mdl->kind[o] & 2) == 0)
 		return;
 	// for bigrams features
-	for (size_t n = 0; n < actcnt; n++) {
-		const size_t t = actpos[n];
+	for (int n = 0; n < actcnt; n++) {
+		const int t = actpos[n];
 		if (t == 0)
 			continue;
-		for (size_t yp = 0, d = 0; yp < Y; yp++) {
-			for (size_t y = 0; y < Y; y++, d++) {
+		for (uint64_t yp = 0, d = 0; yp < Y; yp++) {
+			for (uint64_t y = 0; y < Y; y++, d++) {
 				double e = (*alpha)[t - 1][yp] * (*beta)[t][y]
 				         * (*psi)[t][yp][y] * bnorm[t];
 				bgrd[d] += e;
 				bhes[d] += e * (1.0 - e);
 			}
 		}
-		const size_t yp = seq->pos[t - 1].lbl;
-		const size_t y  = seq->pos[t    ].lbl;
+		const uint64_t yp = seq->pos[t - 1].lbl;
+		const uint64_t y  = seq->pos[t    ].lbl;
 		bgrd[yp * Y + y] -= 1.0;
 	}
 }
@@ -166,21 +167,21 @@ static void bcd_flgradhes(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, size_t o) {
  *   very similar than the trn_spupgrad function but does the computation only
  *   at active pos and approximate also the hessian.
  */
-static void bcd_spgradhes(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, size_t o) {
+static void bcd_spgradhes(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, uint64_t o) {
 	const grd_t *grd = bcd->grd;
-	const size_t Y = mdl->nlbl;
-	const size_t T = seq->len;
-	const double (*psiuni)[T][Y] = (void *)grd->psiuni;
-	const double  *psival        =         grd->psi;
-	const size_t  *psiyp         =         grd->psiyp;
-	const size_t (*psiidx)[T][Y] = (void *)grd->psiidx;
-	const size_t  *psioff        =         grd->psioff;
-	const double (*alpha)[T][Y]  = (void *)grd->alpha;
-	const double (*beta )[T][Y]  = (void *)grd->beta;
-	const double  *unorm         =         grd->unorm;
-	const double  *bnorm         =         grd->bnorm;
-	const size_t  *actpos        =         bcd->actpos;
-	const size_t   actcnt        =         bcd->actcnt;
+	const uint64_t Y = mdl->nlbl;
+	const uint64_t T = seq->len;
+	const double   (*psiuni)[T][Y] = (void *)grd->psiuni;
+	const double    *psival        =         grd->psi;
+	const uint64_t  *psiyp         =         grd->psiyp;
+	const uint64_t (*psiidx)[T][Y] = (void *)grd->psiidx;
+	const uint64_t  *psioff        =         grd->psioff;
+	const double   (*alpha)[T][Y]  = (void *)grd->alpha;
+	const double   (*beta )[T][Y]  = (void *)grd->beta;
+	const double    *unorm         =         grd->unorm;
+	const double    *bnorm         =         grd->bnorm;
+	const int       *actpos        =         bcd->actpos;
+	const int        actcnt        =         bcd->actcnt;
 	double *ugrd = bcd->ugrd;
 	double *uhes = bcd->uhes;
 	double *bgrd = bcd->bgrd;
@@ -188,51 +189,51 @@ static void bcd_spgradhes(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, size_t o) {
 	// Update the gradient and the hessian but here we sum only on the
 	// positions where the block is active for unigrams features
 	if (mdl->kind[o] & 1) {
-		for (size_t n = 0; n < actcnt; n++) {
-			const size_t t = actpos[n];
-			for (size_t y = 0; y < Y; y++) {
+		for (int n = 0; n < actcnt; n++) {
+			const int t = actpos[n];
+			for (uint64_t y = 0; y < Y; y++) {
 				const double e = (*alpha)[t][y] * (*beta)[t][y]
 				               * unorm[t];
 				ugrd[y] += e;
 				uhes[y] += e * (1.0 - e);
 			}
-			const size_t y = seq->pos[t].lbl;
+			const uint64_t y = seq->pos[t].lbl;
 			ugrd[y] -= 1.0;
 		}
 	}
 	if ((mdl->kind[o] & 2) == 0)
 		return;
 	// for bigrams features
-	for (size_t n = 0; n < actcnt; n++) {
-		const size_t t = actpos[n];
+	for (int n = 0; n < actcnt; n++) {
+		const int t = actpos[n];
 		if (t == 0)
 			continue;
 		// We build the expectation matrix
 		double e[Y][Y];
-		for (size_t yp = 0; yp < Y; yp++)
-			for (size_t y = 0; y < Y; y++)
+		for (uint64_t yp = 0; yp < Y; yp++)
+			for (uint64_t y = 0; y < Y; y++)
 				e[yp][y] = (*alpha)[t - 1][yp] * (*beta)[t][y]
 				         * (*psiuni)[t][y] * bnorm[t];
-		const size_t off = psioff[t];
-		for (size_t n = 0, y = 0; n < (*psiidx)[t][Y - 1]; ) {
+		const uint64_t off = psioff[t];
+		for (uint64_t n = 0, y = 0; n < (*psiidx)[t][Y - 1]; ) {
 			while (n >= (*psiidx)[t][y])
 				y++;
 			while (n < (*psiidx)[t][y]) {
-				const size_t yp = psiyp [off + n];
-				const double v  = psival[off + n];
+				const uint64_t yp = psiyp [off + n];
+				const double   v  = psival[off + n];
 				e[yp][y] += e[yp][y] * v;
 				n++;
 			}
 		}
 		// And use it
-		for (size_t yp = 0, d = 0; yp < Y; yp++) {
-			for (size_t y = 0; y < Y; y++, d++) {
+		for (uint64_t yp = 0, d = 0; yp < Y; yp++) {
+			for (uint64_t y = 0; y < Y; y++, d++) {
 				bgrd[d] += e[yp][y];
 				bhes[d] += e[yp][y] * (1.0 - e[yp][y]);
 			}
 		}
-		const size_t yp = seq->pos[t - 1].lbl;
-		const size_t y  = seq->pos[t    ].lbl;
+		const uint64_t yp = seq->pos[t - 1].lbl;
+		const uint64_t y  = seq->pos[t    ].lbl;
 		bgrd[yp * Y + y] -= 1.0;
 	}
 }
@@ -241,23 +242,23 @@ static void bcd_spgradhes(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, size_t o) {
  *   Update the model with the computed gradient and hessian.
  */
 static void bcd_update(mdl_t *mdl, bcd_t *bcd, size_t o) {
-	const double  rho1  = mdl->opt->rho1;
-	const double  rho2  = mdl->opt->rho2;
-	const double  kappa = mdl->opt->bcd.kappa;
-	const size_t  Y     = mdl->nlbl;
-	const double *ugrd  = bcd->ugrd;
-	const double *bgrd  = bcd->bgrd;
-	      double *uhes  = bcd->uhes;
-	      double *bhes  = bcd->bhes;
+	const double    rho1  = mdl->opt->rho1;
+	const double    rho2  = mdl->opt->rho2;
+	const double    kappa = mdl->opt->bcd.kappa;
+	const uint64_t  Y     = mdl->nlbl;
+	const double   *ugrd  = bcd->ugrd;
+	const double   *bgrd  = bcd->bgrd;
+	      double   *uhes  = bcd->uhes;
+	      double   *bhes  = bcd->bhes;
 	if (mdl->kind[o] & 1) {
 		// Adjust the hessian
 		double a = 1.0;
-		for (size_t y = 0; y < Y; y++)
+		for (uint64_t y = 0; y < Y; y++)
 			a = max(a, fabs(ugrd[y] / uhes[y]));
 		xvm_scale(uhes, uhes, a * kappa, Y);
 		// Update the model
 		double *w = mdl->theta + mdl->uoff[o];
-		for (size_t y = 0; y < Y; y++) {
+		for (uint64_t y = 0; y < Y; y++) {
 			double z = uhes[y] * w[y] - ugrd[y];
 			double d = uhes[y] + rho2;
 			w[y] = bcd_soft(z, rho1) / d;
@@ -266,12 +267,12 @@ static void bcd_update(mdl_t *mdl, bcd_t *bcd, size_t o) {
 	if (mdl->kind[o] & 2) {
 		// Adjust the hessian
 		double a = 1.0;
-		for (size_t i = 0; i < Y * Y; i++)
+		for (uint64_t i = 0; i < Y * Y; i++)
 			a = max(a, fabs(bgrd[i] / bhes[i]));
 		xvm_scale(bhes, bhes, a * kappa, Y * Y);
 		// Update the model
 		double *bw = mdl->theta + mdl->boff[o];
-		for (size_t i = 0; i < Y * Y; i++) {
+		for (uint64_t i = 0; i < Y * Y; i++) {
 			double z = bhes[i] * bw[i] - bgrd[i];
 			double d = bhes[i] + rho2;
 			bw[i] = bcd_soft(z, rho1) / d;
@@ -283,55 +284,56 @@ static void bcd_update(mdl_t *mdl, bcd_t *bcd, size_t o) {
  *   Train the model using the blockwise coordinates descend method.
  */
 void trn_bcd(mdl_t *mdl) {
-	const size_t Y = mdl->nlbl;
-	const size_t O = mdl->nobs;
-	const size_t T = mdl->train->mlen;
-	const size_t S = mdl->train->nseq;
-	const int    K = mdl->opt->maxiter;
+	const uint64_t Y = mdl->nlbl;
+	const uint64_t O = mdl->nobs;
+	const uint32_t S = mdl->train->nseq;
+	const int      T = mdl->train->mlen;
+	const int      K = mdl->opt->maxiter;
 	// Build the index:
 	//   Count active sequences per blocks
 	info("    - Build the index\n");
 	info("        1/2 -- scan the sequences\n");
-	size_t tot = 0, cnt[O], lcl[O];
-	for (size_t o = 0; o < O; o++)
-		cnt[o] = 0, lcl[o] = none;
-	for (size_t s = 0; s < S; s++) {
+	uint64_t tot = 0;
+	uint32_t cnt[O], lcl[O];
+	for (uint64_t o = 0; o < O; o++)
+		cnt[o] = 0, lcl[o] = (uint32_t)-1;
+	for (uint32_t s = 0; s < S; s++) {
 		// List actives blocks
 		const seq_t *seq = mdl->train->seq[s];
 		for (int t = 0; t < seq->len; t++) {
-			for (size_t b = 0; b < seq->pos[t].ucnt; b++)
+			for (uint32_t b = 0; b < seq->pos[t].ucnt; b++)
 				lcl[seq->pos[t].uobs[b]] = s;
-			for (size_t b = 0; b < seq->pos[t].bcnt; b++)
+			for (uint32_t b = 0; b < seq->pos[t].bcnt; b++)
 				lcl[seq->pos[t].bobs[b]] = s;
 		}
 		// Updates blocks count
-		for (size_t o = 0; o < O; o++)
+		for (uint64_t o = 0; o < O; o++)
 			cnt[o] += (lcl[o] == s);
 	}
-	for (size_t o = 0; o < O; o++)
+	for (uint64_t o = 0; o < O; o++)
 		tot += cnt[o];
 	// Allocate memory
-	size_t  *idx_cnt = xmalloc(sizeof(size_t  ) * O);
-	size_t **idx_lst = xmalloc(sizeof(size_t *) * O);
-	for (size_t o = 0; o < O; o++) {
+	uint32_t  *idx_cnt = xmalloc(sizeof(uint32_t  ) * O);
+	uint32_t **idx_lst = xmalloc(sizeof(uint32_t *) * O);
+	for (uint64_t o = 0; o < O; o++) {
 		idx_cnt[o] = cnt[o];
-		idx_lst[o] = xmalloc(sizeof(size_t) * cnt[o]);
+		idx_lst[o] = xmalloc(sizeof(uint32_t) * cnt[o]);
 	}
 	// Populate the index
 	info("        2/2 -- Populate the index\n");
-	for (size_t o = 0; o < O; o++)
-		cnt[o] = 0, lcl[o] = none;
-	for (size_t s = 0; s < S; s++) {
+	for (uint64_t o = 0; o < O; o++)
+		cnt[o] = 0, lcl[o] = (uint32_t)-1;
+	for (uint32_t s = 0; s < S; s++) {
 		// List actives blocks
 		const seq_t *seq = mdl->train->seq[s];
 		for (int t = 0; t < seq->len; t++) {
-			for (size_t b = 0; b < seq->pos[t].ucnt; b++)
+			for (uint32_t b = 0; b < seq->pos[t].ucnt; b++)
 				lcl[seq->pos[t].uobs[b]] = s;
-			for (size_t b = 0; b < seq->pos[t].bcnt; b++)
+			for (uint32_t b = 0; b < seq->pos[t].bcnt; b++)
 				lcl[seq->pos[t].bobs[b]] = s;
 		}
 		// Build index
-		for (size_t o = 0; o < O; o++)
+		for (uint64_t o = 0; o < O; o++)
 			if (lcl[o] == s)
 				idx_lst[o][cnt[o]++] = s;
 	}
@@ -342,23 +344,23 @@ void trn_bcd(mdl_t *mdl) {
 	bcd->uhes   = xvm_new(Y);
 	bcd->bgrd   = xvm_new(Y * Y);
 	bcd->bhes   = xvm_new(Y * Y);
-	bcd->actpos = xmalloc(sizeof(size_t) * T);
+	bcd->actpos = xmalloc(sizeof(int) * T);
 	bcd->grd    = grd_new(mdl, NULL);
 	// And train the model
 	for (int i = 0; i < K; i++) {
-		for (size_t o = 0; o < O; o++) {
+		for (uint64_t o = 0; o < O; o++) {
 			// Clear the gradient and the hessian
-			for (size_t y = 0, d = 0; y < Y; y++) {
+			for (uint64_t y = 0, d = 0; y < Y; y++) {
 				bcd->ugrd[y] = 0.0;
 				bcd->uhes[y] = 0.0;
-				for (size_t yp = 0; yp < Y; yp++, d++) {
+				for (uint64_t yp = 0; yp < Y; yp++, d++) {
 					bcd->bgrd[d] = 0.0;
 					bcd->bhes[d] = 0.0;
 				}
 			}
 			// Process active sequences
-			for (size_t s = 0; s < idx_cnt[o]; s++) {
-				const size_t id = idx_lst[o][s];
+			for (uint32_t s = 0; s < idx_cnt[o]; s++) {
+				const uint32_t id = idx_lst[o][s];
 				const seq_t *seq = mdl->train->seq[id];
 				bcd_actpos(mdl, bcd, seq, o);
 				grd_check(bcd->grd, seq->len);
@@ -384,7 +386,7 @@ void trn_bcd(mdl_t *mdl) {
 	xvm_free(bcd->bgrd); xvm_free(bcd->bhes);
 	free(bcd->actpos);
 	free(bcd);
-	for (size_t o = 0; o < O; o++)
+	for (uint64_t o = 0; o < O; o++)
 		free(idx_lst[o]);
 	free(idx_lst);
 	free(idx_cnt);

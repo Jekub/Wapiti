@@ -27,6 +27,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -58,12 +59,12 @@
  ******************************************************************************/
 
 void trn_lbfgs(mdl_t *mdl) {
-	const size_t F  = mdl->nftr;
-	const int    K  = mdl->opt->maxiter;
-	const int    C  = mdl->opt->objwin;
-	const int    M  = mdl->opt->lbfgs.histsz;
-	const size_t W  = mdl->opt->nthread;
-	const bool   l1 = mdl->opt->rho1 != 0.0;
+	const uint64_t F  = mdl->nftr;
+	const int      K  = mdl->opt->maxiter;
+	const int      C  = mdl->opt->objwin;
+	const int      M  = mdl->opt->lbfgs.histsz;
+	const size_t   W  = mdl->opt->nthread;
+	const bool     l1 = mdl->opt->rho1 != 0.0;
 	double *x, *xp; // Current and previous value of the variables
 	double *g, *gp; // Current and previous value of the gradient
 	double *pg;     // The pseudo-gradient (only for owl-qn)
@@ -106,7 +107,7 @@ void trn_lbfgs(mdl_t *mdl) {
 		//                              | ±C      if x_i = 0
 		if (l1) {
 			const double rho1 = mdl->opt->rho1;
-			for (unsigned f = 0; f < F; f++) {
+			for (uint64_t f = 0; f < F; f++) {
 				if (x[f] < 0.0)
 					pg[f] = g[f] - rho1;
 				else if (x[f] > 0.0)
@@ -147,7 +148,7 @@ void trn_lbfgs(mdl_t *mdl) {
 			//                    = I * 1 / ρ_k ||y_k||²
 			const double y2 = xvm_dot(y[km], y[km], F);
 			const double v = 1.0 / (p[km] * y2);
-			for (size_t f = 0; f < F; f++)
+			for (uint64_t f = 0; f < F; f++)
 				d[f] *= v;
 			// β_j     = ρ_j y_j^T r_i
 			// r_{i+1} = r_i + s_j (α_i - β_i)
@@ -163,7 +164,7 @@ void trn_lbfgs(mdl_t *mdl) {
 		//   d^k = π(d^k ; v^k)
 		//       = π(d^k ; -◇f(x^k))
 		if (l1)
-			for (size_t f = 0; f < F; f++)
+			for (uint64_t f = 0; f < F; f++)
 				if (d[f] * pg[f] >= 0.0)
 					d[f] = 0.0;
 		// 2nd step: we perform a linesearch in the computed direction,
@@ -192,7 +193,7 @@ void trn_lbfgs(mdl_t *mdl) {
 			// current orthant [3, pp 35]
 			//   x^{k+1} = π(x^k + αp^k ; ξ)
 			if (l1) {
-				for (size_t f = 0; f < F; f++) {
+				for (uint64_t f = 0; f < F; f++) {
 					double or = xp[f];
 					if (or == 0.0)
 						or = -pg[f];
@@ -221,7 +222,7 @@ void trn_lbfgs(mdl_t *mdl) {
 					break;
 			} else {
 				double vp = 0.0;
-				for (size_t f = 0; f < F; f++)
+				for (uint64_t f = 0; f < F; f++)
 					vp += (x[f] - xp[f]) * d[f];
 				if (fx < fi + vp * 1e-4)
 					break;
