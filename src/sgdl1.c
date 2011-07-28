@@ -97,7 +97,7 @@ void trn_sgdl1(mdl_t *mdl) {
 	const uint32_t  U = mdl->reader->nuni;
 	const uint32_t  B = mdl->reader->nbi;
 	const uint32_t  S = mdl->train->nseq;
-	const int       K = mdl->opt->maxiter;
+	const uint32_t  K = mdl->opt->maxiter;
 	      double   *w = mdl->theta;
 	// First we have to build and index who hold, for each sequences, the
 	// list of actives observations.
@@ -152,7 +152,7 @@ void trn_sgdl1(mdl_t *mdl) {
 	// already processed sequences, this is tracked by the <i> variable.
 	double u = 0.0;
 	grd_t *grd = grd_new(mdl, g);
-	for (int k = 0, i = 0; k < K && !uit_stop; k++) {
+	for (uint32_t k = 0, i = 0; k < K && !uit_stop; k++) {
 		// First we shuffle the sequence by making a lot of random swap
 		// of entry in the permutation index.
 		for (uint32_t s = 0; s < S; s++) {

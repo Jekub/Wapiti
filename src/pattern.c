@@ -152,7 +152,7 @@ static bool rex_matchme(const char *re, const char *str, uint32_t *len) {
  *   position of the start of the match is returned and is len is returned in
  *   len, else -1 is returned.
  */
-static int rex_match(const char *re, const char *str, uint32_t *len) {
+static int32_t rex_match(const char *re, const char *str, uint32_t *len) {
 	// Special case for anchor at start
 	if (*re == '^') {
 		*len = 0;
@@ -161,7 +161,7 @@ static int rex_match(const char *re, const char *str, uint32_t *len) {
 		return -1;
 	}
 	// And general case for any position
-	int pos = 0;
+	int32_t pos = 0;
 	do {
 		*len = 0;
 		if (rex_matchme(re, str + pos, len))
@@ -246,11 +246,12 @@ pat_t *pat_comp(char *p) {
 			// the item.
 			const char *at = p + pos;
 			uint32_t col;
-			int off, nch;
+			int32_t off;
+			int nch;
 			item->absolute = false;
-			if (sscanf(at, "[@%d,%"SCNu32"%n", &off, &col, &nch) == 2)
+			if (sscanf(at, "[@%"SCNi32",%"SCNu32"%n", &off, &col, &nch) == 2)
 				item->absolute = true;
-			else if (sscanf(at, "[%d,%"SCNu32"%n", &off, &col, &nch) != 2)
+			else if (sscanf(at, "[%"SCNi32",%"SCNu32"%n", &off, &col, &nch) != 2)
 				fatal("invalid pattern: %s", p);
 			item->offset = off;
 			item->column = col;
@@ -262,7 +263,7 @@ pat_t *pat_comp(char *p) {
 			if (type == 't' || type == 'm') {
 				if (p[pos] != ',' && p[pos + 1] != '"')
 					fatal("missing arg in pattern: %s", p);
-				const int start = (pos += 2);
+				const int32_t start = (pos += 2);
 				while (p[pos] != '\0') {
 					if (p[pos] == '"')
 						break;
@@ -272,7 +273,7 @@ pat_t *pat_comp(char *p) {
 				}
 				if (p[pos] != '"')
 					fatal("unended argument: %s", p);
-				const int len = pos - start;
+				const int32_t len = pos - start;
 				item->value = xmalloc(sizeof(char) * (len + 1));
 				memcpy(item->value, p + start, len);
 				item->value[len] = '\0';
@@ -286,10 +287,10 @@ pat_t *pat_comp(char *p) {
 			// No command here, so build an 's' item with the chars
 			// until end of pattern or next command and put it in
 			// the list.
-			const int start = pos;
+			const int32_t start = pos;
 			while (p[pos] != '\0' && p[pos] != '%')
 				pos++;
-			const int len = pos - start;
+			const int32_t len = pos - start;
 			item->type  = 's';
 			item->caps  = false;
 			item->value = xmalloc(sizeof(char) * (len + 1));
@@ -308,7 +309,7 @@ pat_t *pat_comp(char *p) {
  *   newly allocated memory block and the caller is responsible to free it when
  *   not needed anymore.
  */
-char *pat_exec(const pat_t *pat, const tok_t *tok, int at) {
+char *pat_exec(const pat_t *pat, const tok_t *tok, uint32_t at) {
 	static char *bval[] = {"_x-1", "_x-2", "_x-3", "_x-4", "_x-#"};
 	static char *eval[] = {"_x+1", "_x+2", "_x+3", "_x+4", "_x+#"};
 	const uint32_t T = tok->len;
@@ -336,8 +337,8 @@ char *pat_exec(const pat_t *pat, const tok_t *tok, int at) {
 			uint32_t col = item->column;
 			if (pos < 0)
 				value = bval[min(-pos - 1, 4)];
-			else if (pos >= (int)T)
-				value = eval[min( pos - (int)T, 4)];
+			else if (pos >= (int32_t)T)
+				value = eval[min( pos - (int32_t)T, 4)];
 			else if (col >= tok->cnts[pos])
 				fatal("missing tokens, cannot apply pattern");
 			else
@@ -357,7 +358,7 @@ char *pat_exec(const pat_t *pat, const tok_t *tok, int at) {
 				value = "true";
 			len = strlen(value);
 		} else if (item->type == 'm') {
-			int pos = rex_match(item->value, value, &len);
+			int32_t pos = rex_match(item->value, value, &len);
 			if (pos == -1)
 				len = 0;
 			value += pos;

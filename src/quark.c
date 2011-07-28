@@ -97,10 +97,10 @@ qrk_t *qrk_new(void) {
  *   qrk_unmap become invalid and must not be used anymore.
  */
 void qrk_free(qrk_t *qrk) {
-	const size_t stkmax = 1024;
+	const uint32_t stkmax = 1024;
 	if (qrk->count != 0) {
 		node_t *stk[stkmax];
-		int cnt = 0;
+		uint32_t cnt = 0;
 		stk[cnt++] = qrk->root;
 		while (cnt != 0) {
 			node_t *nd = stk[--cnt];
@@ -269,5 +269,4 @@ bool qrk_lock(qrk_t *qrk, bool lock) {
 	qrk->lock = lock;
 	return old;
 }
-
 

@@ -288,7 +288,7 @@ void trn_bcd(mdl_t *mdl) {
 	const uint64_t O = mdl->nobs;
 	const uint32_t S = mdl->train->nseq;
 	const uint32_t T = mdl->train->mlen;
-	const int      K = mdl->opt->maxiter;
+	const uint32_t K = mdl->opt->maxiter;
 	// Build the index:
 	//   Count active sequences per blocks
 	info("    - Build the index\n");
@@ -347,7 +347,7 @@ void trn_bcd(mdl_t *mdl) {
 	bcd->actpos = xmalloc(sizeof(int) * T);
 	bcd->grd    = grd_new(mdl, NULL);
 	// And train the model
-	for (int i = 0; i < K; i++) {
+	for (uint32_t i = 1; i <= K; i++) {
 		for (uint64_t o = 0; o < O; o++) {
 			// Clear the gradient and the hessian
 			for (uint32_t y = 0, d = 0; y < Y; y++) {
@@ -377,7 +377,7 @@ void trn_bcd(mdl_t *mdl) {
 			// And update the model
 			bcd_update(mdl, bcd, o);
 		}
-		if (!uit_progress(mdl, i + 1, -1.0))
+		if (!uit_progress(mdl, i, -1.0))
 			break;
 	}
 	// Cleanup memory

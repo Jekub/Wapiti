@@ -60,10 +60,10 @@
 
 void trn_lbfgs(mdl_t *mdl) {
 	const uint64_t F  = mdl->nftr;
-	const int      K  = mdl->opt->maxiter;
-	const int      C  = mdl->opt->objwin;
-	const int      M  = mdl->opt->lbfgs.histsz;
-	const size_t   W  = mdl->opt->nthread;
+	const uint32_t K  = mdl->opt->maxiter;
+	const uint32_t C  = mdl->opt->objwin;
+	const uint32_t M  = mdl->opt->lbfgs.histsz;
+	const uint32_t W  = mdl->opt->nthread;
 	const bool     l1 = mdl->opt->rho1 != 0.0;
 	double *x, *xp; // Current and previous value of the variables
 	double *g, *gp; // Current and previous value of the gradient
@@ -81,13 +81,13 @@ void trn_lbfgs(mdl_t *mdl) {
 	x  = mdl->theta;
 	xp = xvm_new(F); g = xvm_new(F);
 	gp = xvm_new(F); d = xvm_new(F);
-	for (int m = 0; m < M; m++) {
+	for (uint32_t m = 0; m < M; m++) {
 		s[m] = xvm_new(F);
 		y[m] = xvm_new(F);
 	}
 	pg = l1 ? xvm_new(F) : NULL;
 	grds[0] = grd_new(mdl, g);
-	for (size_t w = 1; w < W; w++)
+	for (uint32_t w = 1; w < W; w++)
 		grds[w] = grd_new(mdl, xvm_new(F));
 	// Minimization: This is the heart of the function. (a big heart...) We
 	// will perform iterations until one these conditions is reached
@@ -96,7 +96,7 @@ void trn_lbfgs(mdl_t *mdl) {
 	//   - the report function return false
 	//   - an error happen somewhere
 	double fx = grd_gradient(mdl, g, grds);
-	for (int k = 0; !uit_stop && k < K; k++) {
+	for (uint32_t k = 0; !uit_stop && k < K; k++) {
 		// We first compute the pseudo-gradient of f for owl-qn. It is
 		// defined in [3, pp 335(4)]
 		//              | ∂_i^- f(x)   if ∂_i^- f(x) > 0
@@ -131,13 +131,13 @@ void trn_lbfgs(mdl_t *mdl) {
 		// gradient instead of the true one.
 		xvm_neg(d, l1 ? pg : g, F);
 		if (k != 0) {
-			const int km = k % M;
-			const int bnd = (k <= M) ? k : M;
+			const uint32_t km = k % M;
+			const uint32_t bnd = (k <= M) ? k : M;
 			double alpha[M], beta;
 			// α_i = ρ_j s_j^T q_{i+1}
 			// q_i = q_{i+1} - α_i y_i
-			for (int i = bnd; i > 0; i--) {
-				const int j = (k - i + M + 1) % M;
+			for (uint32_t i = bnd; i > 0; i--) {
+				const uint32_t j = (M + 1 + k - i) % M;
 				alpha[i - 1] = p[j] * xvm_dot(s[j], d, F);
 				xvm_axpy(d, -alpha[i - 1], y[j], d, F);
 			}
@@ -152,8 +152,8 @@ void trn_lbfgs(mdl_t *mdl) {
 				d[f] *= v;
 			// β_j     = ρ_j y_j^T r_i
 			// r_{i+1} = r_i + s_j (α_i - β_i)
-			for (int i = 0; i < bnd; i++) {
-				const int j = (k - i + M) % M;
+			for (uint32_t i = 0; i < bnd; i++) {
+				const uint32_t j = (M + k - i) % M;
 				beta = p[j] * xvm_dot(y[j], d, F);
 				xvm_axpy(d, alpha[i] - beta, s[j], d, F);
 			}
@@ -185,7 +185,7 @@ void trn_lbfgs(mdl_t *mdl) {
 		double gd  = l1 ? 0.0 : xvm_dot(g, d, F); // gd = g_k^T d_k
 		double fi  = fx;
 		bool err = false;
-		for (int ls = 1; !uit_stop; ls++, stp *= sc) {
+		for (uint32_t ls = 1; !uit_stop; ls++, stp *= sc) {
 			// We compute the new point using the current step and
 			// search direction
 			xvm_axpy(x, stp, d, xp, F);
@@ -250,7 +250,7 @@ void trn_lbfgs(mdl_t *mdl) {
 		//   s_k = x_{k+1} - x_k
 		//   y_k = g_{k+1} - g_k
 		//   ρ_k = 1 / y_k^T s_k
-		const int kn = (k + 1) % M;
+		const uint32_t kn = (k + 1) % M;
 		xvm_sub(s[kn], x, xp, F);
 		xvm_sub(y[kn], g, gp, F);
 		p[kn] = 1.0 / xvm_dot(y[kn], s[kn], F);
@@ -281,15 +281,15 @@ void trn_lbfgs(mdl_t *mdl) {
 	// Cleanup: We free all the vectors we have allocated.
 	xvm_free(xp); xvm_free(g);
 	xvm_free(gp); xvm_free(d);
-	for (int m = 0; m < M; m++) {
+	for (uint32_t m = 0; m < M; m++) {
 		xvm_free(s[m]);
 		xvm_free(y[m]);
 	}
 	if (l1)
 		xvm_free(pg);
-	for (size_t w = 1; w < W; w++)
+	for (uint32_t w = 1; w < W; w++)
 		xvm_free(grds[w]->g);
-	for (size_t w = 0; w < W; w++)
+	for (uint32_t w = 0; w < W; w++)
 		grd_free(grds[w]);
 }
 

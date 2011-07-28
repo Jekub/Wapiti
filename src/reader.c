@@ -257,8 +257,7 @@ raw_t *rdr_readraw(rdr_t *rdr, FILE *file) {
 static uint64_t rdr_mapobs(rdr_t *rdr, const char *str) {
 	if (!rdr->maxent)
 		return qrk_str2id(rdr->obs, str);
-	size_t len = strlen(str) + 2;
-	char tmp[len];
+	char tmp[strlen(str) + 2];
 	tmp[0] = 'u';
 	strcpy(tmp + 1, str);
 	return qrk_str2id(rdr->obs, tmp);
@@ -361,7 +360,7 @@ static seq_t *rdr_pattok2seq(rdr_t *rdr, const tok_t *tok) {
 				continue;
 			}
 			// If the observation is ok, add it to the lists
-			int kind = 0;
+			char kind = 0;
 			switch (obs[0]) {
 				case 'u': kind = 1; break;
 				case 'b': kind = 2; break;
@@ -410,8 +409,7 @@ seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl) {
 			src++;
 		char *line = xstrdup(src);
 		// Split it in tokens
-		const int len = strlen(line);
-		char *toks[len / 2];
+		char *toks[strlen(line) / 2];
 		uint32_t cnt = 0;
 		while (*line != '\0') {
 			toks[cnt++] = line;

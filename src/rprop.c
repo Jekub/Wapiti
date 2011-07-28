@@ -72,7 +72,7 @@ struct rprop_s {
  *   parameter given, the job scheduling system is not used here as we can
  *   easily split processing in equals parts.
  */
-static void trn_rpropsub(job_t *job, int id, int cnt, rprop_t *st) {
+static void trn_rpropsub(job_t *job, uint32_t id, uint32_t cnt, rprop_t *st) {
 	unused(job);
 	mdl_t *mdl = st->mdl;
 	const uint64_t F = mdl->nftr;
@@ -139,8 +139,8 @@ static void trn_rpropsub(job_t *job, int id, int cnt, rprop_t *st) {
 
 void trn_rprop(mdl_t *mdl) {
 	const uint64_t F   = mdl->nftr;
-	const int      K   = mdl->opt->maxiter;
-	const size_t   W   = mdl->opt->nthread;
+	const uint32_t K   = mdl->opt->maxiter;
+	const uint32_t W   = mdl->opt->nthread;
 	const bool     wbt = strcmp(mdl->opt->algo, "rprop-");
 	const int      cut = mdl->opt->rprop.cutoff;
 	// Allocate state memory and initialize it
@@ -161,16 +161,16 @@ void trn_rprop(mdl_t *mdl) {
 	st->xp  = xp;  st->stp = stp;
 	st->g   = g;   st->gp  = gp;
 	rprop_t *rprop[W];
-	for (size_t w = 0; w < W; w++)
+	for (uint32_t w = 0; w < W; w++)
 		rprop[w] = st;
 	// Prepare the gradient state for the distributed gradient computation.
 	grd_t *grds[W];
 	grds[0] = grd_new(mdl, g);
-	for (size_t w = 1; w < W; w++)
+	for (uint32_t w = 1; w < W; w++)
 		grds[w] = grd_new(mdl, xvm_new(F));
 	// And iterate the gradient computation / weight update process until
 	// convergence or stop request
-	for (int k = 0; !uit_stop && k < K; k++) {
+	for (uint32_t k = 0; !uit_stop && k < K; k++) {
 		double fx = grd_gradient(mdl, g, grds);
 		if (uit_stop)
 			break;
@@ -183,9 +183,9 @@ void trn_rprop(mdl_t *mdl) {
 		xvm_free(xp);
 	xvm_free(g);
 	xvm_free(gp);
-	for (size_t w = 1; w < W; w++)
+	for (uint32_t w = 1; w < W; w++)
 		xvm_free(grds[w]->g);
-	for (size_t w = 0; w < W; w++)
+	for (uint32_t w = 0; w < W; w++)
 		grd_free(grds[w]);
 	free(st);
 }

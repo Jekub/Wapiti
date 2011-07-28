@@ -473,7 +473,7 @@ struct eval_s {
  *   by batch and for each batch do a simple Viterbi and scan the result to find
  *   errors.
  */
-static void tag_evalsub(job_t *job, int id, int cnt, eval_t *eval) {
+static void tag_evalsub(job_t *job, uint32_t id, uint32_t cnt, eval_t *eval) {
 	unused(id && cnt);
 	mdl_t *mdl = eval->mdl;
 	dat_t *dat = eval->dat;
@@ -484,7 +484,7 @@ static void tag_evalsub(job_t *job, int id, int cnt, eval_t *eval) {
 	// We just get a job a process all the squence in it.
 	uint32_t count, pos;
 	while (mth_getjob(job, &count, &pos)) {
-		for (size_t s = pos; s < pos + count; s++) {
+		for (uint32_t s = pos; s < pos + count; s++) {
 			// Tag the sequence with the viterbi
 			const seq_t *seq = dat->seq[s];
 			const uint32_t T = seq->len;
@@ -507,13 +507,13 @@ static void tag_evalsub(job_t *job, int id, int cnt, eval_t *eval) {
  *   taining set if not available).
  */
 void tag_eval(mdl_t *mdl, double *te, double *se) {
-	const int W = mdl->opt->nthread;
+	const uint32_t W = mdl->opt->nthread;
 	dat_t *dat = (mdl->devel == NULL) ? mdl->train : mdl->devel;
 	// First we prepare the eval state for all the workers threads, we just
 	// have to give them the model and dataset to use. This state will be
 	// used to retrieve partial result they computed.
 	eval_t *eval[W];
-	for (int w = 0; w < W; w++) {
+	for (uint32_t w = 0; w < W; w++) {
 		eval[w] = xmalloc(sizeof(eval_t));
 		eval[w]->mdl = mdl;
 		eval[w]->dat = dat;
@@ -524,7 +524,7 @@ void tag_eval(mdl_t *mdl, double *te, double *se) {
 		mdl->opt->jobsize);
 	uint64_t tcnt = 0, terr = 0;
 	uint64_t scnt = 0, serr = 0;
-	for (int w = 0; w < W; w++) {
+	for (uint32_t w = 0; w < W; w++) {
 		tcnt += eval[w]->tcnt;
 		terr += eval[w]->terr;
 		scnt += eval[w]->scnt;

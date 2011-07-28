@@ -26,8 +26,10 @@
  */
 
 #include <errno.h>
+#include <inttypes.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -134,7 +136,7 @@ void *xrealloc(void *ptr, size_t size) {
  *   allocation error.
  */
 char *xstrdup(const char *str) {
-	const int len = strlen(str) + 1;
+	const size_t len = strlen(str) + 1;
 	char *res = xmalloc(sizeof(char) * len);
 	memcpy(res, str, len);
 	return res;
@@ -156,8 +158,8 @@ char *xstrdup(const char *str) {
  *   returned as a newly allocated bloc of memory 0-terminated.
  */
 char *ns_readstr(FILE *file) {
-	int len;
-	if (fscanf(file, "%d:", &len) != 1)
+	uint32_t len;
+	if (fscanf(file, "%"SCNu32":", &len) != 1)
 		pfatal("cannot read from file");
 	char *buf = xmalloc(len + 1);
 	if (fread(buf, len, 1, file) != 1)
@@ -173,8 +175,8 @@ char *ns_readstr(FILE *file) {
  *   Write a string in the netstring format to the given file.
  */
 void ns_writestr(FILE *file, const char *str) {
-	const int len = strlen(str);
-	if (fprintf(file, "%d:%s,\n", len, str) < 0)
+	const uint32_t len = strlen(str);
+	if (fprintf(file, "%"PRIu32":%s,\n", len, str) < 0)
 		pfatal("cannot write to file");
 }
 

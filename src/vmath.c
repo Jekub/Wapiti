@@ -97,7 +97,7 @@ void xvm_neg(double r[], const double x[], uint64_t N) {
 		_mm_store_pd(r + n + 2, r1);
 	}
 #else
-	for (size_t n = 0; n < N; n++)
+	for (uint64_t n = 0; n < N; n++)
 		r[n] = -x[n];
 #endif
 }
@@ -111,7 +111,7 @@ void xvm_sub(double r[], const double x[], const double y[], uint64_t N) {
 	assert(r != NULL && ((uintptr_t)r % 16) == 0);
 	assert(x != NULL && ((uintptr_t)x % 16) == 0);
 	assert(y != NULL && ((uintptr_t)y % 16) == 0);
-	for (uintptr_t n = 0; n < N; n += 4) {
+	for (uint64_t n = 0; n < N; n += 4) {
 		const __m128d x0 = _mm_load_pd(x + n    );
 		const __m128d x1 = _mm_load_pd(x + n + 2);
 		const __m128d y0 = _mm_load_pd(y + n    );
@@ -122,7 +122,7 @@ void xvm_sub(double r[], const double x[], const double y[], uint64_t N) {
 		_mm_store_pd(r + n + 2, r1);
 	}
 #else
-	for (uintptr_t n = 0; n < N; n++)
+	for (uint64_t n = 0; n < N; n++)
 		r[n] = x[n] - y[n];
 #endif
 }

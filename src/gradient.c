@@ -749,7 +749,7 @@ void grd_dospl(grd_t *grd, const seq_t *seq) {
  *   training set. It is mean to be called by the thread spawner in order to
  *   compute the gradient over the full training set.
  */
-static void grd_worker(job_t *job, int id, int cnt, grd_t *grd) {
+static void grd_worker(job_t *job, uint32_t id, uint32_t cnt, grd_t *grd) {
 	unused(id && cnt);
 	mdl_t *mdl = grd->mdl;
 	const dat_t *dat = mdl->train;
@@ -779,7 +779,7 @@ static void grd_worker(job_t *job, int id, int cnt, grd_t *grd) {
 double grd_gradient(mdl_t *mdl, double *g, grd_t *grds[]) {
 	const double *x = mdl->theta;
 	const uint64_t F = mdl->nftr;
-	const int      W = mdl->opt->nthread;
+	const uint32_t W = mdl->opt->nthread;
 	// All is ready to compute the gradient, we spawn the threads of
 	// workers, each one working on a part of the data. As the gradient and
 	// log-likelihood are additive, computing the final values will be
@@ -791,7 +791,7 @@ double grd_gradient(mdl_t *mdl, double *g, grd_t *grds[]) {
 	// All computations are done, it just remain to add all the gradients
 	// and inverse log-likelihood from all the workers.
 	double fx = grds[0]->lloss;
-	for (int w = 1; w < W; w++) {
+	for (uint32_t w = 1; w < W; w++) {
 		for (uint64_t f = 0; f < F; f++)
 			g[f] += grds[w]->g[f];
 		fx += grds[w]->lloss;

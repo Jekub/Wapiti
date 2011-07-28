@@ -47,7 +47,7 @@
  * Training
  ******************************************************************************/
 static void trn_auto(mdl_t *mdl) {
-	const int maxiter = mdl->opt->maxiter;
+	const uint32_t maxiter = mdl->opt->maxiter;
 	mdl->opt->maxiter = 3;
 	trn_sgdl1(mdl);
 	mdl->opt->maxiter = maxiter;
@@ -66,18 +66,18 @@ static const struct {
 	{"rprop-", trn_rprop},
 	{"auto",   trn_auto }
 };
-static const int trn_cnt = sizeof(trn_lst) / sizeof(trn_lst[0]);
+static const uint32_t trn_cnt = sizeof(trn_lst) / sizeof(trn_lst[0]);
 
 static void dotrain(mdl_t *mdl) {
 	// Check if the user requested the trainer list. If this is not the
 	// case, search the trainer.
 	if (!strcmp(mdl->opt->algo, "list")) {
 		info("Available training algorithms:\n");
-		for (int i = 0; i < trn_cnt; i++)
+		for (uint32_t i = 0; i < trn_cnt; i++)
 			info("\t%s\n", trn_lst[i].name);
 		exit(EXIT_SUCCESS);
 	}
-	int trn;
+	uint32_t trn;
 	for (trn = 0; trn < trn_cnt; trn++)
 		if (!strcmp(mdl->opt->algo, trn_lst[trn].name))
 			break;

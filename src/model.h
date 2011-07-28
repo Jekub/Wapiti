@@ -83,8 +83,8 @@ struct mdl_s {
 
 	// Stoping criterion
 	double   *werr;    //       Window of error rate of last iters
-	int       wcnt;    //       Number of iters in the window
-	int       wpos;    //       Position for the next iter
+	uint32_t  wcnt;    //       Number of iters in the window
+	uint32_t  wpos;    //       Position for the next iter
 
 	// Timing
 	tms_t     timer;   //       start time of last iter

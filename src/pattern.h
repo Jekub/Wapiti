@@ -40,17 +40,17 @@ struct pat_s {
 	uint32_t  ntoks;
 	uint32_t  nitems;
 	struct pat_item_s {
-		char  type;
-		bool  caps;
-		char *value;
-		bool  absolute;
-		int   offset;
-		int   column;
+		char      type;
+		bool      caps;
+		char     *value;
+		bool      absolute;
+		int32_t   offset;
+		uint32_t  column;
 	} items[];
 };
 
 pat_t *pat_comp(char *p);
-char *pat_exec(const pat_t *pat, const tok_t *tok, int at);
+char *pat_exec(const pat_t *pat, const tok_t *tok, uint32_t at);
 void pat_free(pat_t *pat);
 
 #endif

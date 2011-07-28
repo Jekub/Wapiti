@@ -24,9 +24,11 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#include <inttypes.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -116,13 +118,13 @@ void uit_cleanup(mdl_t *mdl) {
  *   and false if he must stop, so this is were we will implement the trainer
  *   independant stoping criterion.
  */
-bool uit_progress(mdl_t *mdl, int it, double obj) {
+bool uit_progress(mdl_t *mdl, uint32_t it, double obj) {
 	// First we just compute the error rate on devel or train data
 	double te, se;
 	tag_eval(mdl, &te, &se);
 	// Next, we compute the number of active features
-	size_t act = 0;
-	for (size_t f = 0; f < mdl->nftr; f++)
+	uint64_t act = 0;
+	for (uint64_t f = 0; f < mdl->nftr; f++)
 		if (mdl->theta[f] != 0.0)
 			act++;
 	// Compute timings. As some training algorithms are multi-threaded, we
@@ -135,9 +137,9 @@ bool uit_progress(mdl_t *mdl, int it, double obj) {
 	mdl->total += tm;
 	mdl->timer  = now;
 	// And display progress report
-	info("  [%4d]", it);
+	info("  [%4"PRIu32"]", it);
 	info(obj >= 0.0 ? " obj=%-10.2f" : " obj=NA", obj);
-	info(" act=%-8zu", act);
+	info(" act=%-8"PRIu64, act);
 	info(" err=%5.2f%%/%5.2f%%", te, se);
 	info(" time=%.2fs/%.2fs", tm, mdl->total);
 	info("\n");
@@ -150,7 +152,7 @@ bool uit_progress(mdl_t *mdl, int it, double obj) {
 		mdl->wcnt++;
 		if (mdl->wcnt >= mdl->opt->stopwin) {
 			double emin = 200.0, emax = -100.0;
-			for (int i = 0; i < mdl->opt->stopwin; i++) {
+			for (uint32_t i = 0; i < mdl->opt->stopwin; i++) {
 				emin = min(emin, mdl->werr[i]);
 				emax = max(emax, mdl->werr[i]);
 			}

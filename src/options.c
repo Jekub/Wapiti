@@ -25,9 +25,11 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <inttypes.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -137,17 +139,17 @@ struct {
 	{0, "-d", "--devel",   'S', offsetof(opt_t, devel       )},
 	{0, "-c", "--compact", 'B', offsetof(opt_t, compact     )},
 	{0, "-s", "--sparse",  'B', offsetof(opt_t, sparse      )},
-	{0, "-t", "--nthread", 'I', offsetof(opt_t, nthread     )},
-	{0, "-j", "--josize",  'I', offsetof(opt_t, jobsize     )},
-	{0, "-i", "--maxiter", 'I', offsetof(opt_t, maxiter     )},
+	{0, "-t", "--nthread", 'U', offsetof(opt_t, nthread     )},
+	{0, "-j", "--jobsize", 'U', offsetof(opt_t, jobsize     )},
+	{0, "-i", "--maxiter", 'U', offsetof(opt_t, maxiter     )},
 	{0, "-1", "--rho1",    'F', offsetof(opt_t, rho1        )},
 	{0, "-2", "--rho2",    'F', offsetof(opt_t, rho2        )},
-	{0, "-o", "--objsz",   'I', offsetof(opt_t, objwin      )},
-	{0, "-w", "--stopwin", 'I', offsetof(opt_t, stopwin     )},
+	{0, "-o", "--objsz",   'U', offsetof(opt_t, objwin      )},
+	{0, "-w", "--stopwin", 'U', offsetof(opt_t, stopwin     )},
 	{0, "-e", "--stopeps", 'F', offsetof(opt_t, stopeps     )},
 	{0, "##", "--clip",    'B', offsetof(opt_t, lbfgs.clip  )},
-	{0, "##", "--histsz",  'I', offsetof(opt_t, lbfgs.histsz)},
-	{0, "##", "--maxls",   'I', offsetof(opt_t, lbfgs.maxls )},
+	{0, "##", "--histsz",  'U', offsetof(opt_t, lbfgs.histsz)},
+	{0, "##", "--maxls",   'U', offsetof(opt_t, lbfgs.maxls )},
 	{0, "##", "--eta0",    'F', offsetof(opt_t, sgdl1.eta0  )},
 	{0," ##", "--alpha",   'F', offsetof(opt_t, sgdl1.alpha )},
 	{0, "##", "--kappa",   'F', offsetof(opt_t, bcd.kappa   )},
@@ -162,7 +164,7 @@ struct {
 	{1, "-c", "--check",   'B', offsetof(opt_t, check       )},
 	{1, "-s", "--score",   'B', offsetof(opt_t, outsc       )},
 	{1, "-p", "--post",    'B', offsetof(opt_t, lblpost     )},
-	{1, "-n", "--nbest",   'I', offsetof(opt_t, nbest       )},
+	{1, "-n", "--nbest",   'U', offsetof(opt_t, nbest       )},
 	{-1, NULL, NULL, '\0', 0}
 };
 
@@ -204,7 +206,7 @@ void opt_parse(int argc, char *argv[argc], opt_t *opt) {
 	opt->output = NULL;
 	while (argc > 0) {
 		const char *arg = argv[0];
-		int idx;
+		uint32_t idx;
 		// Check if this argument is a filename or an option
 		if (arg[0] != '-') {
 			if (opt->input == NULL)
@@ -237,8 +239,9 @@ void opt_parse(int argc, char *argv[argc], opt_t *opt) {
 				*((char **)ptr) = argv[1];
 				argc -= 2, argv += 2;
 				break;
-			case 'I':
-				if (sscanf(argv[1], "%d", (int *)ptr) != 1)
+			case 'U':
+				if (sscanf(argv[1], "%"SCNu32,
+						(uint32_t *)ptr) != 1)
 					fatal(err_badval, arg);
 				argc -= 2, argv += 2;
 				break;
