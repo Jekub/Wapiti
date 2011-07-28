@@ -64,7 +64,7 @@ struct mdl_s {
 	opt_t    *opt;     //       options for training
 
 	// Size of various model parameters
-	uint64_t  nlbl;    //   Y   number of labels
+	uint32_t  nlbl;    //   Y   number of labels
 	uint64_t  nobs;    //   O   number of observations
 	uint64_t  nftr;    //   F   number of features
 

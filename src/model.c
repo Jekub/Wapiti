@@ -122,7 +122,7 @@ void mdl_free(mdl_t *mdl) {
  *   This reduce the risk of mistakes.
  */
 void mdl_sync(mdl_t *mdl) {
-	const uint64_t Y = qrk_count(mdl->reader->lbl);
+	const uint32_t Y = qrk_count(mdl->reader->lbl);
 	const uint64_t O = qrk_count(mdl->reader->obs);
 	// If model is already synchronized, do nothing and just return
 	if (mdl->nlbl == Y && mdl->nobs == O)
@@ -199,7 +199,7 @@ void mdl_sync(mdl_t *mdl) {
  *   and labeling.
  */
 void mdl_compact(mdl_t *mdl) {
-	const uint64_t Y = mdl->nlbl;
+	const uint32_t Y = mdl->nlbl;
 	// We first build the new observation list with only observations which
 	// lead to at least one active feature. At the same time we build the
 	// translation table which map the new observations index to the old
@@ -211,11 +211,11 @@ void mdl_compact(mdl_t *mdl) {
 	for (uint64_t oldo = 0; oldo < mdl->nobs; oldo++) {
 		bool active = false;
 		if (mdl->kind[oldo] & 1)
-			for (uint64_t y = 0; y < Y; y++)
+			for (uint32_t y = 0; y < Y; y++)
 				if (mdl->theta[mdl->uoff[oldo] + y] != 0.0)
 					active = true;
 		if (mdl->kind[oldo] & 2)
-			for (uint64_t d = 0; d < Y * Y; d++)
+			for (uint32_t d = 0; d < Y * Y; d++)
 				if (mdl->theta[mdl->boff[oldo] + d] != 0.0)
 					active = true;
 		if (!active)
@@ -242,13 +242,13 @@ void mdl_compact(mdl_t *mdl) {
 		if (mdl->kind[newo] & 1) {
 			double *src = old_theta  + old_uoff[oldo];
 			double *dst = mdl->theta + mdl->uoff[newo];
-			for (uint64_t y = 0; y < Y; y++)
+			for (uint32_t y = 0; y < Y; y++)
 				dst[y] = src[y];
 		}
 		if (mdl->kind[newo] & 2) {
 			double *src = old_theta  + old_boff[oldo];
 			double *dst = mdl->theta + mdl->boff[newo];
-			for (uint64_t d = 0; d < Y * Y; d++)
+			for (uint32_t d = 0; d < Y * Y; d++)
 				dst[d] = src[d];
 		}
 	}

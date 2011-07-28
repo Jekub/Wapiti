@@ -24,8 +24,10 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -136,12 +138,12 @@ static void dotrain(mdl_t *mdl) {
 	mdl_sync(mdl);
 	// Display some statistics as we all love this.
 	info("* Summary\n");
-	info("    nb train:    %d\n", mdl->train->nseq);
+	info("    nb train:    %"PRIu32"\n", mdl->train->nseq);
 	if (mdl->devel != NULL)
-		info("    nb devel:    %d\n", mdl->devel->nseq);
-	info("    nb labels:   %zu\n", mdl->nlbl);
-	info("    nb blocks:   %zu\n", mdl->nobs);
-	info("    nb features: %zu\n", mdl->nftr);
+		info("    nb devel:    %"PRIu32"\n", mdl->devel->nseq);
+	info("    nb labels:   %"PRIu32"\n", mdl->nlbl);
+	info("    nb blocks:   %"PRIu64"\n", mdl->nobs);
+	info("    nb features: %"PRIu64"\n", mdl->nftr);
 	// And train the model...
 	info("* Train the model with %s\n", mdl->opt->algo);
 	uit_setup(mdl);
@@ -149,12 +151,12 @@ static void dotrain(mdl_t *mdl) {
 	uit_cleanup(mdl);
 	// If requested compact the model.
 	if (mdl->opt->compact) {
-		const size_t O = mdl->nobs;
-		const size_t F = mdl->nftr;
+		const uint64_t O = mdl->nobs;
+		const uint64_t F = mdl->nftr;
 		info("* Compacting the model\n");
 		mdl_compact(mdl);
-		info("    %8zu observations removed\n", O - mdl->nobs);
-		info("    %8zu features removed\n", F - mdl->nftr);
+		info("    %8"PRIu64" observations removed\n", O - mdl->nobs);
+		info("    %8"PRIu64" features removed\n", F - mdl->nftr);
 	}
 	// And save the trained model
 	info("* Save the model\n");
@@ -230,16 +232,16 @@ static void dodump(mdl_t *mdl) {
 	}
 	// Dump model
 	info("* Dump model\n");
-	const size_t Y = mdl->nlbl;
-	const size_t O = mdl->nobs;
+	const uint32_t Y = mdl->nlbl;
+	const uint64_t O = mdl->nobs;
 	const qrk_t *Qlbl = mdl->reader->lbl;
 	const qrk_t *Qobs = mdl->reader->obs;
-	for (size_t o = 0; o < O; o++) {
+	for (uint64_t o = 0; o < O; o++) {
 		const char *obs = qrk_id2str(Qobs, o);
 		bool empty = true;
 		if (mdl->kind[o] & 1) {
 			const double *w = mdl->theta + mdl->uoff[o];
-			for (size_t y = 0; y < Y; y++) {
+			for (uint32_t y = 0; y < Y; y++) {
 				if (w[y] == 0.0)
 					continue;
 				const char *ly = qrk_id2str(Qlbl, y);
@@ -249,7 +251,7 @@ static void dodump(mdl_t *mdl) {
 		}
 		if (mdl->kind[o] & 2) {
 			const double *w = mdl->theta + mdl->boff[o];
-			for (size_t d = 0; d < Y * Y; d++) {
+			for (uint32_t d = 0; d < Y * Y; d++) {
 				if (w[d] == 0.0)
 					continue;
 				const char *ly  = qrk_id2str(Qlbl, d % Y);
