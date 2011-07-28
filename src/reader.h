@@ -45,13 +45,13 @@
  */
 typedef struct rdr_s rdr_t;
 struct rdr_s {
-	bool    maxent;     //      Is this a maxent reader
-	int     npats;      //  P   Total number of patterns
-	int     nuni, nbi;  //      Number of unigram and bigram patterns
-	int     ntoks;      //      Expected number of tokens in input
-	pat_t **pats;       // [P]  List of precompiled patterns
-	qrk_t  *lbl;        //      Labels database
-	qrk_t  *obs;        //      Observation database
+	bool       maxent;     //      Is this a maxent reader
+	uint32_t   npats;      //  P   Total number of patterns
+	uint32_t   nuni, nbi;  //      Number of unigram and bigram patterns
+	uint32_t   ntoks;      //      Expected number of tokens in input
+	pat_t    **pats;       // [P]  List of precompiled patterns
+	qrk_t     *lbl;        //      Labels database
+	qrk_t     *obs;        //      Observation database
 };
 
 rdr_t *rdr_new(bool maxent);

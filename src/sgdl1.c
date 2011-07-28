@@ -80,7 +80,7 @@ static void sgd_add(uint64_t *obs, uint32_t *cnt, uint64_t new) {
 	// First check if value is already in the array, we do a linear probing
 	// as it is simpler and since these array will be very short in
 	// practice, it's efficient enough.
-	for (size_t p = 0; p < *cnt; p++)
+	for (uint32_t p = 0; p < *cnt; p++)
 		if (obs[p] == new)
 			return;
 	// Insert the new value at the end since we have not found it.
@@ -94,9 +94,9 @@ static void sgd_add(uint64_t *obs, uint32_t *cnt, uint64_t new) {
 void trn_sgdl1(mdl_t *mdl) {
 	const uint64_t  Y = mdl->nlbl;
 	const uint64_t  F = mdl->nftr;
-	const int       U = mdl->reader->nuni;
-	const int       B = mdl->reader->nbi;
-	const int       S = mdl->train->nseq;
+	const uint32_t  U = mdl->reader->nuni;
+	const uint32_t  B = mdl->reader->nbi;
+	const uint32_t  S = mdl->train->nseq;
 	const int       K = mdl->opt->maxiter;
 	      double   *w = mdl->theta;
 	// First we have to build and index who hold, for each sequences, the
@@ -106,13 +106,13 @@ void trn_sgdl1(mdl_t *mdl) {
 	// unigrams obss and one for bigrams obss.
 	info("    - Build the index\n");
 	sgd_idx_t *idx  = xmalloc(sizeof(sgd_idx_t) * S);
-	for (int s = 0; s < S; s++) {
+	for (uint32_t s = 0; s < S; s++) {
 		const seq_t *seq = mdl->train->seq[s];
-		const int T = seq->len;
+		const uint32_t T = seq->len;
 		uint64_t uobs[U * T + 1];
 		uint64_t bobs[B * T + 1];
 		uint32_t ucnt = 0, bcnt = 0;
-		for (int t = 0; t < seq->len; t++) {
+		for (uint32_t t = 0; t < seq->len; t++) {
 			const pos_t *pos = &seq->pos[t];
 			for (uint32_t p = 0; p < pos->ucnt; p++)
 				sgd_add(uobs, &ucnt, pos->uobs[p]);
@@ -139,8 +139,8 @@ void trn_sgdl1(mdl_t *mdl) {
 	// time.
 	// We also need an aditional vector named <q> who hold the penalty
 	// already applied to each features.
-	int *perm = xmalloc(sizeof(int) * S);
-	for (int s = 0; s < S; s++)
+	uint32_t *perm = xmalloc(sizeof(uint32_t) * S);
+	for (uint32_t s = 0; s < S; s++)
 		perm[s] = s;
 	double *g = xmalloc(sizeof(double) * F);
 	double *q = xmalloc(sizeof(double) * F);
@@ -155,16 +155,16 @@ void trn_sgdl1(mdl_t *mdl) {
 	for (int k = 0, i = 0; k < K && !uit_stop; k++) {
 		// First we shuffle the sequence by making a lot of random swap
 		// of entry in the permutation index.
-		for (int s = 0; s < S; s++) {
-			const int a = rand() % S;
-			const int b = rand() % S;
-			const int t = perm[a];
+		for (uint32_t s = 0; s < S; s++) {
+			const uint32_t a = rand() % S;
+			const uint32_t b = rand() % S;
+			const uint32_t t = perm[a];
 			perm[a] = perm[b];
 			perm[b] = t;
 		}
 		// And so, we can process sequence in a random order
-		for (int sp = 0; sp < S && !uit_stop; sp++, i++) {
-			const int s = perm[sp];
+		for (uint32_t sp = 0; sp < S && !uit_stop; sp++, i++) {
+			const uint32_t s = perm[sp];
 			const seq_t *seq = mdl->train->seq[s];
 			grd_dospl(grd, seq);
 			// Before applying the gradient, we have to compute the
@@ -184,7 +184,7 @@ void trn_sgdl1(mdl_t *mdl) {
 			// sequence.
 			for (uint32_t n = 0; idx[s].uobs[n] != none; n++) {
 				uint64_t f = mdl->uoff[idx[s].uobs[n]];
-				for (uint64_t y = 0; y < Y; y++, f++) {
+				for (uint32_t y = 0; y < Y; y++, f++) {
 					w[f] -= nk * g[f];
 					applypenalty(f);
 					g[f] = 0.0;
@@ -192,7 +192,7 @@ void trn_sgdl1(mdl_t *mdl) {
 			}
 			for (uint32_t n = 0; idx[s].bobs[n] != none; n++) {
 				uint64_t f = mdl->boff[idx[s].bobs[n]];
-				for (uint64_t d = 0; d < Y * Y; d++, f++) {
+				for (uint32_t d = 0; d < Y * Y; d++, f++) {
 					w[f] -= nk * g[f];
 					applypenalty(f);
 					g[f] = 0.0;
@@ -207,7 +207,7 @@ void trn_sgdl1(mdl_t *mdl) {
 	}
 	grd_free(grd);
 	// Cleanup allocated memory before returning
-	for (int s = 0; s < S; s++) {
+	for (uint32_t s = 0; s < S; s++) {
 		free(idx[s].uobs);
 		free(idx[s].bobs);
 	}

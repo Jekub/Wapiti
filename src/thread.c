@@ -51,10 +51,10 @@
  ******************************************************************************/
 #ifdef MTH_ANSI
 struct job_s {
-	size_t size;
+	uint32_t size;
 };
 
-bool mth_getjob(job_t *job, size_t *cnt, size_t *pos) {
+bool mth_getjob(job_t *job, uint32_t *cnt, uint32_t *pos) {
 	if (job->size == 0)
 		return false;
 	*cnt = job->size;
@@ -63,7 +63,7 @@ bool mth_getjob(job_t *job, size_t *cnt, size_t *pos) {
 	return true;
 }
 
-void mth_spawn(func_t *f, int W, void *ud[W], size_t size, size_t batch) {
+void mth_spawn(func_t *f, int W, void *ud[W], uint32_t size, uint32_t batch) {
 	unused(batch);
 	if (size == 0) {
 		f(NULL, 0, 1, ud[0]);
@@ -78,9 +78,9 @@ void mth_spawn(func_t *f, int W, void *ud[W], size_t size, size_t batch) {
 #include <pthread.h>
 
 struct job_s {
-	size_t size;
-	size_t send;
-	size_t batch;
+	uint32_t size;
+	uint32_t send;
+	uint32_t batch;
 	pthread_mutex_t lock;
 };
 
@@ -100,7 +100,7 @@ struct mth_s {
  *   This function use a lock to ensure thread safety as it will be called by
  *   the multiple workers threads.
  */
-bool mth_getjob(job_t *job, size_t *cnt, size_t *pos) {
+bool mth_getjob(job_t *job, uint32_t *cnt, uint32_t *pos) {
 	if (job == NULL)
 		return false;
 	if (job->send == job->size)
@@ -124,7 +124,7 @@ static void *mth_stub(void *ud) {
  *   will get a unique identifier between 0 and W-1 and a user data from the
  *   'ud' array.
  */
-void mth_spawn(func_t *f, int W, void *ud[W], size_t size, size_t batch) {
+void mth_spawn(func_t *f, int W, void *ud[W], uint32_t size, uint32_t batch) {
 	// First prepare the jobs scheduler
 	job_t job, *pjob = NULL;
 	if (size != 0) {

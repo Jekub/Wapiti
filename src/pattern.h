@@ -29,15 +29,16 @@
 #define pattern_h
 
 #include <stdbool.h>
+#include <stdint.h>
 
 #include "sequence.h"
 
 typedef struct pat_s pat_t;
 typedef struct pat_item_s pat_item_t;
 struct pat_s {
-	char *src;
-	int   ntoks;
-	int   nitems;
+	char     *src;
+	uint32_t  ntoks;
+	uint32_t  nitems;
 	struct pat_item_s {
 		char  type;
 		bool  caps;

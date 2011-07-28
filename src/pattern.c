@@ -3,7 +3,7 @@
  *
  * Copyright (c) 2009-2011  CNRS
  * All rights reserved.
- *
+i *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *     * Redistributions of source code must retain the above copyright
@@ -26,8 +26,10 @@
  */
 
 #include <ctype.h>
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -101,7 +103,7 @@ static bool rex_matchit(const char *ch, const char *str) {
  *   is length is returned in len. The mathing is done through tail-recursion
  *   for good performances.
  */
-static bool rex_matchme(const char *re, const char *str, int *len) {
+static bool rex_matchme(const char *re, const char *str, uint32_t *len) {
 	// Special check for end of regexp
 	if (re[0] == '\0')
 		return true;
@@ -120,7 +122,7 @@ static bool rex_matchme(const char *re, const char *str, int *len) {
 	if (nxt[0] == '*') {
 		nxt++;
 		do {
-			const int save = *len;
+			const uint32_t save = *len;
 			if (rex_matchme(nxt, str, len))
 				return true;
 			*len = save + 1;
@@ -150,7 +152,7 @@ static bool rex_matchme(const char *re, const char *str, int *len) {
  *   position of the start of the match is returned and is len is returned in
  *   len, else -1 is returned.
  */
-static int rex_match(const char *re, const char *str, int *len) {
+static int rex_match(const char *re, const char *str, uint32_t *len) {
 	// Special case for anchor at start
 	if (*re == '^') {
 		*len = 0;
@@ -215,8 +217,8 @@ pat_t *pat_comp(char *p) {
 	// on an over-estimation of the number of required item. As compiled
 	// pattern take a neglectible amount of memory, this waste is not
 	// important.
-	int mitems = 0;
-	for (int pos = 0; p[pos] != '\0'; pos++)
+	uint32_t mitems = 0;
+	for (uint32_t pos = 0; p[pos] != '\0'; pos++)
 		if (p[pos] == '%')
 			mitems++;
 	mitems = mitems * 2 + 1;
@@ -225,9 +227,9 @@ pat_t *pat_comp(char *p) {
 	// Next, we go through the pattern compiling the items as they are
 	// found. Commands are parsed and put in a corresponding item, and
 	// segment of char not in a command are put in a 's' item.
-	int nitems = 0;
-	int ntoks = 0;
-	int pos = 0;
+	uint32_t nitems = 0;
+	uint32_t ntoks = 0;
+	uint32_t pos = 0;
 	while (p[pos] != '\0') {
 		pat_item_t *item = &(pat->items[nitems++]);
 		item->value = NULL;
@@ -243,14 +245,13 @@ pat_t *pat_comp(char *p) {
 			// Next we parse the offset and column and store them in
 			// the item.
 			const char *at = p + pos;
-			int off, col, nch;
+			uint32_t col;
+			int off, nch;
 			item->absolute = false;
-			if (sscanf(at, "[@%d,%d%n", &off, &col, &nch) == 2)
+			if (sscanf(at, "[@%d,%"SCNu32"%n", &off, &col, &nch) == 2)
 				item->absolute = true;
-			else if (sscanf(at, "[%d,%d%n", &off, &col, &nch) != 2)
+			else if (sscanf(at, "[%d,%"SCNu32"%n", &off, &col, &nch) != 2)
 				fatal("invalid pattern: %s", p);
-			if (col < 0)
-				fatal("invalid column number: %d", col);
 			item->offset = off;
 			item->column = col;
 			ntoks = max(ntoks, col);
@@ -310,15 +311,15 @@ pat_t *pat_comp(char *p) {
 char *pat_exec(const pat_t *pat, const tok_t *tok, int at) {
 	static char *bval[] = {"_x-1", "_x-2", "_x-3", "_x-4", "_x-#"};
 	static char *eval[] = {"_x+1", "_x+2", "_x+3", "_x+4", "_x+#"};
-	const int T = tok->len;
+	const uint32_t T = tok->len;
 	// Prepare the buffer who will hold the result
-	int size = 16, pos = 0;
+	uint32_t size = 16, pos = 0;
 	char *buffer = xmalloc(sizeof(char) * size);
 	// And loop over the compiled items
-	for (int it = 0; it < pat->nitems; it++) {
+	for (uint32_t it = 0; it < pat->nitems; it++) {
 		const pat_item_t *item = &(pat->items[it]);
 		char *value = NULL;
-		int len = 0;
+		uint32_t len = 0;
 		// First, if needed, we retrieve the token at the referenced
 		// position in the sequence. We store it in value and let the
 		// command handler do what it need with it.
@@ -332,11 +333,11 @@ char *pat_exec(const pat_t *pat, const tok_t *tok, int at) {
 			} else {
 				pos += at;
 			}
-			int col = item->column;
+			uint32_t col = item->column;
 			if (pos < 0)
 				value = bval[min(-pos - 1, 4)];
-			else if (pos >= T)
-				value = eval[min( pos - T, 4)];
+			else if (pos >= (int)T)
+				value = eval[min( pos - (int)T, 4)];
 			else if (col >= tok->cnts[pos])
 				fatal("missing tokens, cannot apply pattern");
 			else
@@ -370,7 +371,7 @@ char *pat_exec(const pat_t *pat, const tok_t *tok, int at) {
 		}
 		memcpy(buffer + pos, value, len);
 		if (item->caps)
-			for (int i = pos; i < pos + len; i++)
+			for (uint32_t i = pos; i < pos + len; i++)
 				buffer[i] = tolower(buffer[i]);
 		pos += len;
 	}
@@ -386,7 +387,7 @@ char *pat_exec(const pat_t *pat, const tok_t *tok, int at) {
  *   not use this pointer again.
  */
 void pat_free(pat_t *pat) {
-	for (int it = 0; it < pat->nitems; it++)
+	for (uint32_t it = 0; it < pat->nitems; it++)
 		free(pat->items[it].value);
 	free(pat->src);
 	free(pat);

@@ -25,6 +25,7 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 #include <ctype.h>
+#include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdlib.h>
@@ -78,7 +79,7 @@ rdr_t *rdr_new(bool maxent) {
  *   any string returned by them must not be used after this call.
  */
 void rdr_free(rdr_t *rdr) {
-	for (int i = 0; i < rdr->npats; i++)
+	for (uint32_t i = 0; i < rdr->npats; i++)
 		pat_free(rdr->pats[i]);
 	free(rdr->pats);
 	qrk_free(rdr->lbl);
@@ -90,7 +91,7 @@ void rdr_free(rdr_t *rdr) {
  *   Free all memory used by a raw_t object.
  */
 void rdr_freeraw(raw_t *raw) {
-	for (int t = 0; t < raw->len; t++)
+	for (uint32_t t = 0; t < raw->len; t++)
 		free(raw->lines[t]);
 	free(raw);
 }
@@ -107,7 +108,7 @@ void rdr_freeseq(seq_t *seq) {
  *   Free all memory used by a dat_t object.
  */
 void rdr_freedat(dat_t *dat) {
-	for (size_t i = 0; i < dat->nseq; i++)
+	for (uint32_t i = 0; i < dat->nseq; i++)
 		rdr_freeseq(dat->seq[i]);
 	free(dat->seq);
 	free(dat);
@@ -122,7 +123,7 @@ static char *rdr_readline(FILE *file) {
 	if (feof(file))
 		return NULL;
 	// Initialize the buffer
-	int len = 0, size = 16;
+	uint32_t len = 0, size = 16;
 	char *buffer = xmalloc(size);
 	// We read the line chunk by chunk until end of line, file or error
 	while (!feof(file)) {
@@ -203,7 +204,7 @@ raw_t *rdr_readraw(rdr_t *rdr, FILE *file) {
 	if (feof(file))
 		return NULL;
 	// Prepare the raw sequence object
-	int size = 32, cnt = 0;
+	uint32_t size = 32, cnt = 0;
 	raw_t *raw = xmalloc(sizeof(raw_t) + sizeof(char *) * size);
 	// And read the next sequence in the file, this will skip any blank line
 	// before reading the sequence stoping at end of file or on a new blank
@@ -268,13 +269,13 @@ static uint64_t rdr_mapobs(rdr_t *rdr, const char *str) {
  *   applying patterns.
  */
 static seq_t *rdr_rawtok2seq(rdr_t *rdr, const tok_t *tok) {
-	const int T = tok->len;
-	int size = 0;
+	const uint32_t T = tok->len;
+	uint32_t size = 0;
 	if (rdr->maxent) {
 		size = tok->cnts[0];
 	} else {
-		for (int t = 0; t < T; t++) {
-			for (int n = 0; n < tok->cnts[t]; n++) {
+		for (uint32_t t = 0; t < T; t++) {
+			for (uint32_t n = 0; n < tok->cnts[t]; n++) {
 				const char *o = tok->toks[t][n];
 				switch (o[0]) {
 					case 'u': size += 1; break;
@@ -290,15 +291,15 @@ static seq_t *rdr_rawtok2seq(rdr_t *rdr, const tok_t *tok) {
 	seq->raw = xmalloc(sizeof(uint64_t) * size);
 	seq->len = T;
 	uint64_t *raw = seq->raw;
-	for (int t = 0; t < T; t++) {
-		seq->pos[t].lbl = none;
+	for (uint32_t t = 0; t < T; t++) {
+		seq->pos[t].lbl = (uint32_t)-1;
 		seq->pos[t].ucnt = 0;
 		seq->pos[t].uobs = raw;
-		for (int n = 0; n < tok->cnts[t]; n++) {
+		for (uint32_t n = 0; n < tok->cnts[t]; n++) {
 			if (tok->toks[t][n][0] == 'b')
 				continue;
 			uint64_t id = rdr_mapobs(rdr, tok->toks[t][n]);
-			if (id != none) {
+			if (id != (uint32_t)-1) {
 				(*raw++) = id;
 				seq->pos[t].ucnt++;
 			}
@@ -307,11 +308,11 @@ static seq_t *rdr_rawtok2seq(rdr_t *rdr, const tok_t *tok) {
 		if (rdr->maxent)
 			continue;
 		seq->pos[t].bobs = raw;
-		for (int n = 0; n < tok->cnts[t]; n++) {
+		for (uint32_t n = 0; n < tok->cnts[t]; n++) {
 			if (tok->toks[t][n][0] == 'u')
 				continue;
 			uint64_t id = rdr_mapobs(rdr, tok->toks[t][n]);
-			if (id != none) {
+			if (id != (uint32_t)-1) {
 				(*raw++) = id;
 				seq->pos[t].bcnt++;
 			}
@@ -319,7 +320,7 @@ static seq_t *rdr_rawtok2seq(rdr_t *rdr, const tok_t *tok) {
 	}
 	// And finally, if the user specified it, populate the labels
 	if (tok->lbl != NULL) {
-		for (int t = 0; t < T; t++) {
+		for (uint32_t t = 0; t < T; t++) {
 			const char *lbl = tok->lbl[t];
 			uint64_t id = qrk_str2id(rdr->lbl, lbl);
 			seq->pos[t].lbl = id;
@@ -332,7 +333,7 @@ static seq_t *rdr_rawtok2seq(rdr_t *rdr, const tok_t *tok) {
  *   Convert a tok_t to a seq_t object by applying the patterns of the reader.
  */
 static seq_t *rdr_pattok2seq(rdr_t *rdr, const tok_t *tok) {
-	const int T = tok->len;
+	const uint32_t T = tok->len;
 	// So now the tok object is ready, we can start building the seq_t
 	// object by appling patterns. First we allocate the seq_t object. The
 	// sequence itself as well as the sub array are allocated in one time.
@@ -340,18 +341,18 @@ static seq_t *rdr_pattok2seq(rdr_t *rdr, const tok_t *tok) {
 	seq->raw = xmalloc(sizeof(uint64_t) * (rdr->nuni + rdr->nbi) * T);
 	seq->len = T;
 	uint64_t *tmp = seq->raw;
-	for (int t = 0; t < T; t++) {
-		seq->pos[t].lbl  = none;
+	for (uint32_t t = 0; t < T; t++) {
+		seq->pos[t].lbl  = (uint32_t)-1;
 		seq->pos[t].uobs = tmp; tmp += rdr->nuni;
 		seq->pos[t].bobs = tmp; tmp += rdr->nbi;
 	}
 	// Next, we can build the observations list by applying the patterns on
 	// the tok_t sequence.
-	for (int t = 0; t < T; t++) {
+	for (uint32_t t = 0; t < T; t++) {
 		pos_t *pos = &seq->pos[t];
 		pos->ucnt = 0;
 		pos->bcnt = 0;
-		for (int x = 0; x < rdr->npats; x++) {
+		for (uint32_t x = 0; x < rdr->npats; x++) {
 			// Get the observation and map it to an identifier
 			char *obs = pat_exec(rdr->pats[x], tok, t);
 			uint64_t id = rdr_mapobs(rdr, obs);
@@ -375,7 +376,7 @@ static seq_t *rdr_pattok2seq(rdr_t *rdr, const tok_t *tok) {
 	}
 	// And finally, if the user specified it, populate the labels
 	if (tok->lbl != NULL) {
-		for (int t = 0; t < T; t++) {
+		for (uint32_t t = 0; t < T; t++) {
 			const char *lbl = tok->lbl[t];
 			uint64_t id = qrk_str2id(rdr->lbl, lbl);
 			seq->pos[t].lbl = id;
@@ -390,11 +391,11 @@ static seq_t *rdr_pattok2seq(rdr_t *rdr, const tok_t *tok) {
  *   interned also.
  */
 seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl) {
-	const int T = raw->len;
+	const uint32_t T = raw->len;
 	// Allocate the tok_t object, the label array is allocated only if they
 	// are requested by the user.
 	tok_t *tok = xmalloc(sizeof(tok_t) + T * sizeof(char **));
-	tok->cnts = xmalloc(sizeof(size_t) * T);
+	tok->cnts = xmalloc(sizeof(uint32_t) * T);
 	tok->lbl = NULL;
 	if (lbl == true)
 		tok->lbl = xmalloc(sizeof(char *) * T);
@@ -402,7 +403,7 @@ seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl) {
 	// tokens. To reduce memory fragmentation, the raw line is copied and
 	// his reference is kept by the first tokens, next tokens are pointer to
 	// this copy.
-	for (int t = 0; t < T; t++) {
+	for (uint32_t t = 0; t < T; t++) {
 		// Get a copy of the raw line skiping leading space characters
 		const char *src = raw->lines[t];
 		while (isspace(*src))
@@ -411,7 +412,7 @@ seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl) {
 		// Split it in tokens
 		const int len = strlen(line);
 		char *toks[len / 2];
-		int cnt = 0;
+		uint32_t cnt = 0;
 		while (*line != '\0') {
 			toks[cnt++] = line;
 			while (*line != '\0' && !isspace(*line))
@@ -441,7 +442,7 @@ seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl) {
 	else
 		seq = rdr_pattok2seq(rdr, tok);
 	// Before returning the sequence, we have to free the tok_t
-	for (int t = 0; t < T; t++) {
+	for (uint32_t t = 0; t < T; t++) {
 		if (tok->cnts[t] == 0)
 			continue;
 		free(tok->toks[t][0]);
@@ -477,7 +478,7 @@ seq_t *rdr_readseq(rdr_t *rdr, FILE *file, bool lbl) {
  */
 dat_t *rdr_readdat(rdr_t *rdr, FILE *file, bool lbl) {
 	// Prepare dataset
-	size_t size = 1000;
+	uint32_t size = 1000;
 	dat_t *dat = xmalloc(sizeof(dat_t));
 	dat->nseq = 0;
 	dat->mlen = 0;
@@ -498,7 +499,7 @@ dat_t *rdr_readdat(rdr_t *rdr, FILE *file, bool lbl) {
 		dat->seq[dat->nseq++] = seq;
 		dat->mlen = max(dat->mlen, seq->len);
 		if (dat->nseq % 1000 == 0)
-			info("%7d sequences loaded\n", dat->nseq);
+			info("%7"PRIu32" sequences loaded\n", dat->nseq);
 	}
 	// If no sequence readed, cleanup and repport
 	if (dat->nseq == 0) {
@@ -520,11 +521,11 @@ dat_t *rdr_readdat(rdr_t *rdr, FILE *file, bool lbl) {
  */
 void rdr_load(rdr_t *rdr, FILE *file) {
 	const char *err = "broken file, invalid reader format";
-	if (fscanf(file, "#rdr#%d/%d\n", &rdr->npats, &rdr->ntoks) != 2)
+	if (fscanf(file, "#rdr#%"PRIu32"/%"PRIu32"\n", &rdr->npats, &rdr->ntoks) != 2)
 		fatal(err);
 	rdr->nuni = rdr->nbi = 0;
 	rdr->pats = xmalloc(sizeof(pat_t *) * rdr->npats);
-	for (int p = 0; p < rdr->npats; p++) {
+	for (uint32_t p = 0; p < rdr->npats; p++) {
 		char *pat = ns_readstr(file);
 		rdr->pats[p] = pat_comp(pat);
 		switch (tolower(pat[0])) {
@@ -543,9 +544,9 @@ void rdr_load(rdr_t *rdr, FILE *file) {
  *   is plain text and portable accros computers.
  */
 void rdr_save(const rdr_t *rdr, FILE *file) {
-	if(fprintf(file, "#rdr#%d/%d\n", rdr->npats, rdr->ntoks) < 0)
+	if(fprintf(file, "#rdr#%"PRIu32"/%"PRIu32"\n", rdr->npats, rdr->ntoks) < 0)
 		pfatal("cannot write to file");
-	for (int p = 0; p < rdr->npats; p++)
+	for (uint32_t p = 0; p < rdr->npats; p++)
 		ns_writestr(file, rdr->pats[p]->src);
 	qrk_save(rdr->lbl, file);
 	qrk_save(rdr->obs, file);
