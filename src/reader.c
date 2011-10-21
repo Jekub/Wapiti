@@ -298,7 +298,7 @@ static seq_t *rdr_rawtok2seq(rdr_t *rdr, const tok_t *tok) {
 			if (!rdr->maxent && tok->toks[t][n][0] == 'b')
 				continue;
 			uint64_t id = rdr_mapobs(rdr, tok->toks[t][n]);
-			if (id != (uint32_t)-1) {
+			if (id != none) {
 				(*raw++) = id;
 				seq->pos[t].ucnt++;
 			}
@@ -311,7 +311,7 @@ static seq_t *rdr_rawtok2seq(rdr_t *rdr, const tok_t *tok) {
 			if (tok->toks[t][n][0] == 'u')
 				continue;
 			uint64_t id = rdr_mapobs(rdr, tok->toks[t][n]);
-			if (id != (uint32_t)-1) {
+			if (id != none) {
 				(*raw++) = id;
 				seq->pos[t].bcnt++;
 			}

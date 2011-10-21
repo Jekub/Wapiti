@@ -69,8 +69,6 @@ struct qrk_s {
 	uint64_t size;
 };
 
-#define qrk_none ((uint64_t)-1)
-
 #define qrk_lf2nd(lf)  ((node_t *)((intptr_t)(lf) |  1))
 #define qrk_nd2lf(nd)  ((leaf_t *)((intptr_t)(nd) & ~1))
 #define qrk_isleaf(nd) ((intptr_t)(nd) & 1)
