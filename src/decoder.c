@@ -396,10 +396,13 @@ void tag_label(mdl_t *mdl, FILE *fin, FILE *fout) {
 		}
 		fflush(fout);
 		// If user provided reference labels, use them to collect
-		// statistics about how well we have performed here.
+		// statistics about how well we have performed here. Labels
+		// unseen at training time are discarded.
 		if (mdl->opt->check) {
 			bool err = false;
 			for (uint32_t t = 0; t < T; t++) {
+				if (seq->pos[t].lbl == (uint32_t)-1)
+					continue;
 				stat[0][seq->pos[t].lbl]++;
 				stat[1][out[t * N]]++;
 				if (seq->pos[t].lbl != out[t * N])
