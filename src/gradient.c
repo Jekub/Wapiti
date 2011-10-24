@@ -827,6 +827,8 @@ void grd_dospl(grd_t *grd, const seq_t *seq) {
 	grd_check(grd, seq->len);
 	if (seq->len == 1 || grd->mdl->reader->nbi == 0)
 		grd_dosingle(grd, seq);
+	else if (grd->mdl->type == 1)
+		grd_domemm(grd, seq);
 	else
 		grd_doseq(grd, seq);
 }
