@@ -62,6 +62,7 @@ typedef struct tms tms_t;
 typedef struct mdl_s mdl_t;
 struct mdl_s {
 	opt_t    *opt;     //       options for training
+	int       type;    //       model type
 
 	// Size of various model parameters
 	uint32_t  nlbl;    //   Y   number of labels

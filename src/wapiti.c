@@ -54,6 +54,13 @@ static void trn_auto(mdl_t *mdl) {
 	trn_lbfgs(mdl);
 }
 
+static const char *typ_lst[] = {
+	"maxent",
+	"memm",
+	"crf"
+};
+static const uint32_t typ_cnt = sizeof(typ_lst) / sizeof(typ_lst[0]);
+
 static const struct {
 	char *name;
 	void (* train)(mdl_t *mdl);
@@ -69,15 +76,27 @@ static const struct {
 static const uint32_t trn_cnt = sizeof(trn_lst) / sizeof(trn_lst[0]);
 
 static void dotrain(mdl_t *mdl) {
-	// Check if the user requested the trainer list. If this is not the
-	// case, search the trainer.
+	// Check if the user requested the type or trainer list. If this is not
+	// the case, search them in the lists.
+	if (!strcmp(mdl->opt->type, "list")) {
+		info("Available types of models:\n");
+		for (uint32_t i = 0; i < typ_cnt; i++)
+			info("\t%s\n", typ_lst[i]);
+		exit(EXIT_SUCCESS);
+	}
 	if (!strcmp(mdl->opt->algo, "list")) {
 		info("Available training algorithms:\n");
 		for (uint32_t i = 0; i < trn_cnt; i++)
 			info("\t%s\n", trn_lst[i].name);
 		exit(EXIT_SUCCESS);
 	}
-	uint32_t trn;
+	uint32_t typ, trn;
+	for (typ = 0; typ < typ_cnt; typ++)
+		if (!strcmp(mdl->opt->type, typ_lst[typ]))
+			break;
+	if (typ == typ_cnt)
+		fatal("unknown model type '%s'", mdl->opt->type);
+	mdl->type = typ;
 	for (trn = 0; trn < trn_cnt; trn++)
 		if (!strcmp(mdl->opt->algo, trn_lst[trn].name))
 			break;
