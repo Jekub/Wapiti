@@ -1,3 +1,12 @@
+??/??/????
+  Release v?.?.?: MEMM and bug fixes
+
+    Added support for Maximum Entropy Markov Models.
+    Fix bug with unseen features in raw mode (thanks to Jurgen Van Gael)
+    Fix bug discarding some features in maxent mode (thanks to George Foster)
+    Switched code to stdint, should resolve some issue with size_t
+      on exotic systems.
+
 07/07/2011
   Release v1.2.0: RProp improvements and bug fix
 
