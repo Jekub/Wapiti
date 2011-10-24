@@ -101,7 +101,94 @@ void grd_dosingle(grd_t *grd, const seq_t *seq) {
 }
 
 /******************************************************************************
- * Single sequence gradient computation
+ * Maximum entropy markov model optimized gradient computation
+ *
+ *   Maximum entropy markov models are similar to linear-chains CRFs but with
+ *   local normalization instead of global normalization. This change make the
+ *   computation a lot more simpler.
+ *
+ *   The code is very similar to the maxent one with the difference that bigram
+ *   features are allowed. They are handled like unigrams features with the
+ *   previous label considered observed unlike in CRFs. This simple change
+ *   remove the quadratic complexity. See [1] for more details.
+ *
+ *   [1] Maximum Entropy Markov Models for Information Extraction and
+ *       Segmentation, A. McCallum and D. Freitag and F. Pereira, 2000,
+ *       Proceedings of ICML 2000 , 591–598. Stanford, California.
+ ******************************************************************************/
+void grd_domemm(grd_t *grd, const seq_t *seq) {
+	const mdl_t *mdl = grd->mdl;
+	const double *x = mdl->theta;
+	const uint32_t T = seq->len;
+	const uint32_t Y = mdl->nlbl;
+	double *psi = grd->psi;
+	double *g   = grd->g;
+	for (uint32_t t = 0; t < T; t++) {
+		const pos_t *pos = &(seq->pos[t]);
+		// We first compute for each Y the sum of weights of all
+		// features actives in the sample:
+		//     Ψ(y,x^i) = \exp( ∑_k θ_k f_k(y_t-1, y,x^i) )
+		//     Z_θ(x^i) = ∑_y Ψ(y,x^i)
+		// Bigram features rely on the gold label at previous position
+		// for the markov dependency unlike in CRFs.
+		double Z = 0.0;
+		for (uint32_t y = 0; y < Y; y++)
+			psi[y] = 0.0;
+		for (uint32_t n = 0; n < pos->ucnt; n++) {
+			const double *wgh = x + mdl->uoff[pos->uobs[n]];
+			for (uint32_t y = 0; y < Y; y++)
+				psi[y] += wgh[y];
+		}
+		if (t != 0) {
+			const uint32_t yp = seq->pos[t - 1].lbl;
+			const uint32_t d  = yp * Y;
+			for (uint32_t y = 0; y < Y; y++) {
+				double sum = 0.0;
+				for (uint32_t n = 0; n < pos->bcnt; n++) {
+					const uint64_t o = pos->bobs[n];
+					sum += x[mdl->boff[o] + d + y];
+				}
+				psi[y] += sum;
+			}
+		}
+		double lloss = psi[pos->lbl];
+		for (uint32_t y = 0; y < Y; y++) {
+			psi[y] = (psi[y] == 0.0) ? 1.0 : exp(psi[y]);
+			Z += psi[y];
+		}
+		// Now, we can compute the gradient update, for each active
+		// feature in the sample the update is the expectation over the
+		// current model minus the expectation over the observed
+		// distribution:
+		//     E_{q_θ}(x,y) - E_{p}(x,y)
+		// and we can compute the expectation over the model with:
+		//     E_{q_θ}(x,y) = f_k(y, y,x^i) * ψ(y,x) / Z_θ(x)
+		for (uint32_t y = 0; y < Y; y++)
+			psi[y] /= Z;
+		for (uint32_t n = 0; n < pos->ucnt; n++) {
+			double *grd = g + mdl->uoff[pos->uobs[n]];
+			for (uint32_t y = 0; y < Y; y++)
+				grd[y] += psi[y];
+			grd[pos->lbl] -= 1.0;
+		}
+		if (t != 0) {
+			const uint32_t yp = seq->pos[t - 1].lbl;
+			const uint32_t d  = yp * Y;
+			for (uint32_t n = 0; n < pos->bcnt; n++) {
+				double *grd = g + mdl->boff[pos->bobs[n]] + d;
+				for (uint32_t y = 0; y < Y; y++)
+					grd[y] += psi[y];
+				grd[pos->lbl] -= 1.0;
+			}
+		}
+		// And finally the log-likelihood with:
+		//     L_θ(x^i,y^i) = log(Z_θ(x^i)) - log(ψ(y^i,x^i))
+		grd->lloss += log(Z) - lloss;
+	}
+}
+
+/******************************************************************************
+ * Linear-chain CRF gradient computation
  *
  *   This section is responsible for computing the gradient of the
  *   log-likelihood function to optimize over a single sequence.
@@ -789,7 +876,7 @@ double grd_gradient(mdl_t *mdl, double *g, grd_t *grds[]) {
 	if (uit_stop)
 		return -1.0;
 	// All computations are done, it just remain to add all the gradients
-	// and inverse log-likelihood from all the workers.
+	// and negative log-likelihood from all the workers.
 	double fx = grds[0]->lloss;
 	for (uint32_t w = 1; w < W; w++) {
 		for (uint64_t f = 0; f < F; f++)
