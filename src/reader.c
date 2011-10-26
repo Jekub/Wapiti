@@ -60,12 +60,14 @@
  ******************************************************************************/
 
 /* rdr_new:
- *   Create a new empty reader object. You mut load patterns in it or a
- *   previously saved reader if you want to use it for reading sequences.
+ *   Create a new empty reader object. If no patterns are loaded before you
+ *   start using the reader the input data are assumed to be already prepared
+ *   list of features. They must either start with a prefix 'u', 'b', or '*', or
+ *   you must set autouni to true in order to automatically add a 'u' prefix.
  */
-rdr_t *rdr_new(bool maxent) {
+rdr_t *rdr_new(bool autouni) {
 	rdr_t *rdr = xmalloc(sizeof(rdr_t));
-	rdr->maxent = maxent;
+	rdr->autouni = autouni;
 	rdr->npats = rdr->nuni = rdr->nbi = 0;
 	rdr->ntoks = 0;
 	rdr->pats = NULL;
@@ -233,9 +235,9 @@ raw_t *rdr_readraw(rdr_t *rdr, FILE *file) {
 			                + sizeof(char *) * size);
 		}
 		raw->lines[cnt++] = line;
-		// In maxent mode, we only have to load one line for each sample
-		// so we can stop here.
-		if (rdr->maxent)
+		// In autouni mode, there will be only unigram features so we
+		// can use small sequences to improve multi-theading.
+		if (rdr->autouni)
 			break;
 	}
 	// If no lines was read, we just free allocated memory and return NULL
@@ -252,10 +254,10 @@ raw_t *rdr_readraw(rdr_t *rdr, FILE *file) {
 
 /* rdr_mapobs:
  *   Map an observation to its identifier, automatically adding a 'u' prefix in
- *   pure maxent mode.
+ *   'autouni' mode.
  */
 static uint64_t rdr_mapobs(rdr_t *rdr, const char *str) {
-	if (!rdr->maxent)
+	if (!rdr->autouni)
 		return qrk_str2id(rdr->obs, str);
 	char tmp[strlen(str) + 2];
 	tmp[0] = 'u';
@@ -270,7 +272,7 @@ static uint64_t rdr_mapobs(rdr_t *rdr, const char *str) {
 static seq_t *rdr_rawtok2seq(rdr_t *rdr, const tok_t *tok) {
 	const uint32_t T = tok->len;
 	uint32_t size = 0;
-	if (rdr->maxent) {
+	if (rdr->autouni) {
 		size = tok->cnts[0];
 	} else {
 		for (uint32_t t = 0; t < T; t++) {
@@ -295,7 +297,7 @@ static seq_t *rdr_rawtok2seq(rdr_t *rdr, const tok_t *tok) {
 		seq->pos[t].ucnt = 0;
 		seq->pos[t].uobs = raw;
 		for (uint32_t n = 0; n < tok->cnts[t]; n++) {
-			if (!rdr->maxent && tok->toks[t][n][0] == 'b')
+			if (!rdr->autouni && tok->toks[t][n][0] == 'b')
 				continue;
 			uint64_t id = rdr_mapobs(rdr, tok->toks[t][n]);
 			if (id != none) {
@@ -304,7 +306,7 @@ static seq_t *rdr_rawtok2seq(rdr_t *rdr, const tok_t *tok) {
 			}
 		}
 		seq->pos[t].bcnt = 0;
-		if (rdr->maxent)
+		if (rdr->autouni)
 			continue;
 		seq->pos[t].bobs = raw;
 		for (uint32_t n = 0; n < tok->cnts[t]; n++) {
