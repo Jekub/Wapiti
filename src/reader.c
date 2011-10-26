@@ -521,18 +521,27 @@ dat_t *rdr_readdat(rdr_t *rdr, FILE *file, bool lbl) {
  */
 void rdr_load(rdr_t *rdr, FILE *file) {
 	const char *err = "broken file, invalid reader format";
-	if (fscanf(file, "#rdr#%"PRIu32"/%"PRIu32"\n", &rdr->npats, &rdr->ntoks) != 2)
-		fatal(err);
+	int autouni = rdr->autouni;
+	if (fscanf(file, "#rdr#%"PRIu32"/%"PRIu32"/%d\n",
+			&rdr->npats, &rdr->ntoks, &autouni) != 3) {
+		// This for compatibility with previous file format
+		if (fscanf(file, "#rdr#%"PRIu32"/%"PRIu32"\n",
+				&rdr->npats, &rdr->ntoks) != 2)
+			fatal(err);
+	}
+	rdr->autouni = autouni;
 	rdr->nuni = rdr->nbi = 0;
-	rdr->pats = xmalloc(sizeof(pat_t *) * rdr->npats);
-	for (uint32_t p = 0; p < rdr->npats; p++) {
-		char *pat = ns_readstr(file);
-		rdr->pats[p] = pat_comp(pat);
-		switch (tolower(pat[0])) {
-			case 'u': rdr->nuni++; break;
-			case 'b': rdr->nbi++;  break;
-			case '*': rdr->nuni++;
-			          rdr->nbi++;  break;
+	if (rdr->npats != 0) {
+		rdr->pats = xmalloc(sizeof(pat_t *) * rdr->npats);
+		for (uint32_t p = 0; p < rdr->npats; p++) {
+			char *pat = ns_readstr(file);
+			rdr->pats[p] = pat_comp(pat);
+			switch (tolower(pat[0])) {
+				case 'u': rdr->nuni++; break;
+				case 'b': rdr->nbi++;  break;
+				case '*': rdr->nuni++;
+				          rdr->nbi++;  break;
+			}
 		}
 	}
 	qrk_load(rdr->lbl, file);
@@ -544,7 +553,8 @@ void rdr_load(rdr_t *rdr, FILE *file) {
  *   is plain text and portable accros computers.
  */
 void rdr_save(const rdr_t *rdr, FILE *file) {
-	if(fprintf(file, "#rdr#%"PRIu32"/%"PRIu32"\n", rdr->npats, rdr->ntoks) < 0)
+	if (fprintf(file, "#rdr#%"PRIu32"/%"PRIu32"/%d\n",
+			rdr->npats, rdr->ntoks, rdr->autouni) < 0)
 		pfatal("cannot write to file");
 	for (uint32_t p = 0; p < rdr->npats; p++)
 		ns_writestr(file, rdr->pats[p]->src);
