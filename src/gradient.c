@@ -42,18 +42,22 @@
 #include "vmath.h"
 
 /******************************************************************************
- * Maxent optimized gradient computation
+ * Maxent gradient computation
  *
- *   Maxent or maximum entropy models are a specific case of CRF where the
- *   output graph is reduced to a single node. In this specific case, the
- *   computation of the gradient can be simplified a lot as it is done in this
- *   part of the code.
+ *   Maxent or maximum entropy models are multi class logistic regression (see
+ *   [1]. Then can be viewed as a special class of CRFs models where the there
+ *   is no dependencies between the output labels. This mean that the
+ *   normalization is local to each nodes and can be done a lot more efficiently
+ *   as we do not have to perform the forward backward procedure.
  *
- *   This code will be used to compute gradient for sequences of length one and
- *   without actives bigrams features. All other case are handled by the next
- *   section.
+ *   This code is used both when the maxent type of model is used and in other
+ *   modes if the sequence length is one or if there is no bigrams features.
+ *
+ *   [1] A maximum entropy approach to natural language processing, A. Berger
+ *       and S. Della Pietra and V. Della Pietra, Computational Linguistics,
+ *       (22-1), March 1996.
  ******************************************************************************/
-void grd_dosingle(grd_t *grd, const seq_t *seq) {
+void grd_domaxent(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
 	const double *x = mdl->theta;
 	const uint32_t T = seq->len;
@@ -101,18 +105,20 @@ void grd_dosingle(grd_t *grd, const seq_t *seq) {
 }
 
 /******************************************************************************
- * Maximum entropy markov model optimized gradient computation
+ * Maximum entropy markov model gradient computation
  *
  *   Maximum entropy markov models are similar to linear-chains CRFs but with
- *   local normalization instead of global normalization. This change make the
- *   computation a lot more simpler.
+ *   local normalization instead of global normalization (see [2]). This change
+ *   make the computation a lot more simpler as at training time the gradient
+ *   can be computed similarily to the maxent cases with the previous output
+ *   label observed.
  *
- *   The code is very similar to the maxent one with the difference that bigram
- *   features are allowed. They are handled like unigrams features with the
- *   previous label considered observed unlike in CRFs. This simple change
- *   remove the quadratic complexity. See [1] for more details.
+ *   This mean that for bigram features we only have to consider the reference
+ *   label at previous position instead of all possible labels, so we don't have
+ *   to perform the forward backward. Bigrams features are handle in the same
+ *   way than unigrams features.
  *
- *   [1] Maximum Entropy Markov Models for Information Extraction and
+ *   [2] Maximum Entropy Markov Models for Information Extraction and
  *       Segmentation, A. McCallum and D. Freitag and F. Pereira, 2000,
  *       Proceedings of ICML 2000 , 591–598. Stanford, California.
  ******************************************************************************/
@@ -774,7 +780,7 @@ void grd_logloss(grd_t *grd, const seq_t *seq) {
 	grd->lloss += lloss;
 }
 
-/* grd_doseq:
+/* grd_docrf:
  *   This function compute the gradient and value of the negative log-likelihood
  *   of the model over a single training sequence.
  *
@@ -782,7 +788,7 @@ void grd_logloss(grd_t *grd, const seq_t *seq) {
  *   just accumulate the values for the given sequence in it. This allow to
  *   easily compute the gradient over a set of sequences.
  */
-void grd_doseq(grd_t *grd, const seq_t *seq) {
+void grd_docrf(grd_t *grd, const seq_t *seq) {
 	const mdl_t *mdl = grd->mdl;
 	grd->first = 0;
 	grd->last  = seq->len - 1;
@@ -826,11 +832,13 @@ void grd_doseq(grd_t *grd, const seq_t *seq) {
 void grd_dospl(grd_t *grd, const seq_t *seq) {
 	grd_check(grd, seq->len);
 	if (seq->len == 1 || grd->mdl->reader->nbi == 0)
-		grd_dosingle(grd, seq);
+		grd_domaxent(grd, seq);
+	else if (grd->mdl->type == 0)
+		grd_domaxent(grd, seq);
 	else if (grd->mdl->type == 1)
 		grd_domemm(grd, seq);
 	else
-		grd_doseq(grd, seq);
+		grd_docrf(grd, seq);
 }
 
 /* grd_worker:
