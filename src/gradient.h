@@ -35,10 +35,13 @@
 /* grd_st_t:
  *   State tracker for the gradient computation. To compute the gradient we need
  *   to perform several steps and communicate between them a lot of intermediate
- *   values, all these temporary are store in this object.
+ *   values, all these temporary are stored in this object.
  *   A tracker can be used to compute sequence of length <len> at most, before
  *   using it you must call grd_stcheck to ensure that the tracker is big enough
  *   for your sequence.
+ *   This tracker is used to perform single sample gradient computations or
+ *   partial gradient computation in online algorithms and for decoding with
+ *   posteriors.
  */
 typedef struct grd_st_s grd_st_t;
 struct grd_st_s {
@@ -75,7 +78,22 @@ void grd_spupgrad(grd_st_t *grd_st, const seq_t *seq);
 void grd_logloss(grd_st_t *grd_st, const seq_t *seq);
 
 void grd_dospl(grd_st_t *grd_st, const seq_t *seq);
-double grd_gradient(mdl_t *mdl, double *g, grd_st_t *grds_st[]);
+
+/* grd_t:
+ *   Multi-threaded full dataset gradient computer. This is used to compute the
+ *   gradient by algorithm working on the full dataset at each iterations. It
+ *   efficiently compute it using the fact it is additive to use as many threads
+ *   as allowed.
+ */
+typedef struct grd_s grd_t;
+struct grd_s {
+	mdl_t     *mdl;
+	grd_st_t **grd_st;
+};
+
+grd_t *grd_new(mdl_t *mdl, double *g);
+void   grd_free(grd_t *grd);
+double grd_gradient(grd_t *grd);
 
 #endif
 

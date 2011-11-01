@@ -63,7 +63,6 @@ void trn_lbfgs(mdl_t *mdl) {
 	const uint32_t K  = mdl->opt->maxiter;
 	const uint32_t C  = mdl->opt->objwin;
 	const uint32_t M  = mdl->opt->lbfgs.histsz;
-	const uint32_t W  = mdl->opt->nthread;
 	const bool     l1 = mdl->opt->rho1 != 0.0;
 	double *x, *xp; // Current and previous value of the variables
 	double *g, *gp; // Current and previous value of the gradient
@@ -73,7 +72,6 @@ void trn_lbfgs(mdl_t *mdl) {
 	double *y[M];   // History value y_k = Δ(g,pg)
 	double  p[M];   // ρ_k
 	double  fh[C];  // f(x) history
-	grd_st_t *grds_st[W];
 	// Initialization: Here, we have to allocate memory on the heap as we
 	// cannot request so much memory on the stack as this will have a too
 	// big impact on performance and will be refused by the system on non-
@@ -86,16 +84,14 @@ void trn_lbfgs(mdl_t *mdl) {
 		y[m] = xvm_new(F);
 	}
 	pg = l1 ? xvm_new(F) : NULL;
-	grds_st[0] = grd_stnew(mdl, g);
-	for (uint32_t w = 1; w < W; w++)
-		grds_st[w] = grd_stnew(mdl, xvm_new(F));
+	grd_t *grd = grd_new(mdl, g);
 	// Minimization: This is the heart of the function. (a big heart...) We
 	// will perform iterations until one these conditions is reached
 	//   - the maximum iteration count is reached
 	//   - we have converged (upto numerical precision)
 	//   - the report function return false
 	//   - an error happen somewhere
-	double fx = grd_gradient(mdl, g, grds_st);
+	double fx = grd_gradient(grd);
 	for (uint32_t k = 0; !uit_stop && k < K; k++) {
 		// We first compute the pseudo-gradient of f for owl-qn. It is
 		// defined in [3, pp 335(4)]
@@ -203,7 +199,7 @@ void trn_lbfgs(mdl_t *mdl) {
 			}
 			// And we ask for the value of the objective function
 			// and its gradient.
-			fx = grd_gradient(mdl, g, grds_st);
+			fx = grd_gradient(grd);
 			// Now we check if the step satisfy the conditions. For
 			// l-bfgs, we check the classical decrease and curvature
 			// known as the Wolfe conditions [2, pp 506]
@@ -287,9 +283,6 @@ void trn_lbfgs(mdl_t *mdl) {
 	}
 	if (l1)
 		xvm_free(pg);
-	for (uint32_t w = 1; w < W; w++)
-		xvm_free(grds_st[w]->g);
-	for (uint32_t w = 0; w < W; w++)
-		grd_stfree(grds_st[w]);
+	grd_free(grd);
 }
 

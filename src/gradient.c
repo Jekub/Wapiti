@@ -841,12 +841,41 @@ void grd_dospl(grd_st_t *grd_st, const seq_t *seq) {
 		grd_docrf(grd_st, seq);
 }
 
+/* grd_new:
+ *   Allocate a new parallel gradient computer. Return a grd_t object who can
+ *   compute gradient over the full data set and store it in the vector <g>.
+ */
+grd_t *grd_new(mdl_t *mdl, double *g) {
+	const uint64_t F = mdl->nftr;
+	const uint32_t W = mdl->opt->nthread;
+	grd_t *grd = xmalloc(sizeof(grd_t));
+	grd->mdl = mdl;
+	grd->grd_st = xmalloc(sizeof(grd_st_t *) * W);
+	grd->grd_st[0] = grd_stnew(mdl, g);
+	for (uint32_t w = 1; w < W; w++)
+		grd->grd_st[w] = grd_stnew(mdl, xvm_new(F));
+	return grd;
+}
+
+/* grd_free:
+ *   Free all memory allocated for the given gradient computer object.
+ */
+void grd_free(grd_t *grd) {
+	const uint32_t W = grd->mdl->opt->nthread;
+	for (uint32_t w = 1; w < W; w++)
+		xvm_free(grd->grd_st[w]->g);
+	for (uint32_t w = 0; w < W; w++)
+		grd_stfree(grd->grd_st[w]);
+	free(grd);
+}
+
 /* grd_worker:
  *   This is a simple function who compute the gradient over a subset of the
  *   training set. It is mean to be called by the thread spawner in order to
  *   compute the gradient over the full training set.
  */
-static void grd_worker(job_t *job, uint32_t id, uint32_t cnt,grd_st_t *grd_st) {
+static
+void grd_worker(job_t *job, uint32_t id, uint32_t cnt, grd_st_t *grd_st) {
 	unused(id && cnt);
 	mdl_t *mdl = grd_st->mdl;
 	const dat_t *dat = mdl->train;
@@ -873,25 +902,27 @@ static void grd_worker(job_t *job, uint32_t id, uint32_t cnt,grd_st_t *grd_st) {
  *   the fact that the gradient over the full training set is just the sum of
  *   the gradient of each sequence.
  */
-double grd_gradient(mdl_t *mdl, double *g, grd_st_t *grds_st[]) {
-	const double *x = mdl->theta;
+double grd_gradient(grd_t *grd) {
+	mdl_t *mdl = grd->mdl;
+	const double  *x = mdl->theta;
 	const uint64_t F = mdl->nftr;
 	const uint32_t W = mdl->opt->nthread;
 	// All is ready to compute the gradient, we spawn the threads of
 	// workers, each one working on a part of the data. As the gradient and
 	// log-likelihood are additive, computing the final values will be
 	// trivial.
-	mth_spawn((func_t *)grd_worker, W, (void **)grds_st, mdl->train->nseq,
-		mdl->opt->jobsize);
+	mth_spawn((func_t *)grd_worker, W, (void **)grd->grd_st,
+		mdl->train->nseq, mdl->opt->jobsize);
 	if (uit_stop)
 		return -1.0;
 	// All computations are done, it just remain to add all the gradients
 	// and negative log-likelihood from all the workers.
-	double fx = grds_st[0]->lloss;
+	double *g = grd->grd_st[0]->g;
+	double fx = grd->grd_st[0]->lloss;
 	for (uint32_t w = 1; w < W; w++) {
 		for (uint64_t f = 0; f < F; f++)
-			g[f] += grds_st[w]->g[f];
-		fx += grds_st[w]->lloss;
+			g[f] += grd->grd_st[w]->g[f];
+		fx += grd->grd_st[w]->lloss;
 	}
 	// If needed we clip the gradient: setting to 0.0 all coordinates where
 	// the function is 0.0.

@@ -164,14 +164,11 @@ void trn_rprop(mdl_t *mdl) {
 	for (uint32_t w = 0; w < W; w++)
 		rprop[w] = st;
 	// Prepare the gradient state for the distributed gradient computation.
-	grd_st_t *grds_st[W];
-	grds_st[0] = grd_stnew(mdl, g);
-	for (uint32_t w = 1; w < W; w++)
-		grds_st[w] = grd_stnew(mdl, xvm_new(F));
+	grd_t *grd = grd_new(mdl, g);
 	// And iterate the gradient computation / weight update process until
 	// convergence or stop request
 	for (uint32_t k = 0; !uit_stop && k < K; k++) {
-		double fx = grd_gradient(mdl, g, grds_st);
+		double fx = grd_gradient(grd);
 		if (uit_stop)
 			break;
 		mth_spawn((func_t *)trn_rpropsub, W, (void **)rprop, 0, 0);
@@ -183,10 +180,7 @@ void trn_rprop(mdl_t *mdl) {
 		xvm_free(xp);
 	xvm_free(g);
 	xvm_free(gp);
-	for (uint32_t w = 1; w < W; w++)
-		xvm_free(grds_st[w]->g);
-	for (uint32_t w = 0; w < W; w++)
-		grd_stfree(grds_st[w]);
+	grd_free(grd);
 	free(st);
 }
 
