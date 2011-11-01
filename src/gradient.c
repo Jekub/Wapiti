@@ -48,7 +48,7 @@
 #ifdef ATM_ANSI
 static inline
 void atm_inc(double *value, double inc) {
-	*value += inc
+	*value += inc;
 }
 #else
 static inline
