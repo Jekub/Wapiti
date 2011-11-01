@@ -1,7 +1,8 @@
 ??/??/????
-  Release v?.?.?: MEMM and bug fixes
+  Release v?.?.?: MEMM, faster gradient and bug fixes
 
     Added support for Maximum Entropy Markov Models.
+    Added use of atomic operation in gradient computation
     Fix bug with unseen features in raw mode (thanks to Jurgen Van Gael)
     Fix bug discarding some features in maxent mode (thanks to George Foster)
     Switched code to stdint, should resolve some issue with size_t

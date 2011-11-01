@@ -41,6 +41,30 @@
 #include "thread.h"
 #include "vmath.h"
 
+/* atm_inc:
+ *   Atomically increment the value pointed by [ptr] by [inc]. If ATM_ANSI is
+ *   defined this NOT atomic at all so caller must have to deal with this.
+ */
+#ifdef ATM_ANSI
+static inline
+void atm_inc(double *value, double inc) {
+	*value += inc
+}
+#else
+static inline
+void atm_inc(volatile double *value, double inc) {
+	while (1) {
+		const double   d_old = *value;
+		const double   d_new = d_old + inc;
+		const uint64_t u_old = *((uint64_t *)&d_old);
+		const uint64_t u_new = *((uint64_t *)&d_new);
+		uint64_t *u_ptr = (uint64_t *)value;
+		if (__sync_bool_compare_and_swap(u_ptr, u_old, u_new))
+			break;
+	}
+}
+#endif
+
 /******************************************************************************
  * Maxent gradient computation
  *
@@ -95,8 +119,8 @@ void grd_domaxent(grd_st_t *grd_st, const seq_t *seq) {
 		for (uint32_t n = 0; n < pos->ucnt; n++) {
 			double *grd = g + mdl->uoff[pos->uobs[n]];
 			for (uint32_t y = 0; y < Y; y++)
-				grd[y] += psi[y];
-			grd[pos->lbl] -= 1.0;
+				atm_inc(grd + y, psi[y]);
+			atm_inc(grd + pos->lbl, -1.0);
 		}
 		// And finally the log-likelihood with:
 		//     L_θ(x^i,y^i) = log(Z_θ(x^i)) - log(ψ(y^i,x^i))
@@ -174,8 +198,8 @@ void grd_domemm(grd_st_t *grd_st, const seq_t *seq) {
 		for (uint32_t n = 0; n < pos->ucnt; n++) {
 			double *grd = g + mdl->uoff[pos->uobs[n]];
 			for (uint32_t y = 0; y < Y; y++)
-				grd[y] += psi[y];
-			grd[pos->lbl] -= 1.0;
+				atm_inc(grd + y, psi[y]);
+			atm_inc(grd + pos->lbl, -1.0);
 		}
 		if (t != 0) {
 			const uint32_t yp = seq->pos[t - 1].lbl;
@@ -183,8 +207,8 @@ void grd_domemm(grd_st_t *grd_st, const seq_t *seq) {
 			for (uint32_t n = 0; n < pos->bcnt; n++) {
 				double *grd = g + mdl->boff[pos->bobs[n]] + d;
 				for (uint32_t y = 0; y < Y; y++)
-					grd[y] += psi[y];
-				grd[pos->lbl] -= 1.0;
+					atm_inc(grd + y, psi[y]);
+				atm_inc(grd + pos->lbl, -1.0);
 			}
 		}
 		// And finally the log-likelihood with:
@@ -545,7 +569,7 @@ void grd_flupgrad(grd_st_t *grd_st, const seq_t *seq) {
 			double e = (*alpha)[t][y] * (*beta)[t][y] * unorm[t];
 			for (uint32_t n = 0; n < pos->ucnt; n++) {
 				const uint64_t o = pos->uobs[n];
-				g[mdl->uoff[o] + y] += e;
+				atm_inc(g + mdl->uoff[o] + y, e);
 			}
 		}
 	}
@@ -557,7 +581,7 @@ void grd_flupgrad(grd_st_t *grd_st, const seq_t *seq) {
 				         * (*psi)[t][yp][y] * bnorm[t];
 				for (uint32_t n = 0; n < pos->bcnt; n++) {
 					const uint64_t o = pos->bobs[n];
-					g[mdl->boff[o] + d] += e;
+					atm_inc(g + mdl->boff[o] + d, e);
 				}
 			}
 		}
@@ -592,7 +616,7 @@ void grd_spupgrad(grd_st_t *grd_st, const seq_t *seq) {
 			double e = (*alpha)[t][y] * (*beta)[t][y] * unorm[t];
 			for (uint32_t n = 0; n < pos->ucnt; n++) {
 				const uint64_t o = pos->uobs[n];
-				g[mdl->uoff[o] + y] += e;
+				atm_inc(g + mdl->uoff[o] + y, e);
 			}
 		}
 	}
@@ -620,7 +644,7 @@ void grd_spupgrad(grd_st_t *grd_st, const seq_t *seq) {
 			for (uint32_t y = 0; y < Y; y++, d++) {
 				for (uint32_t n = 0; n < pos->bcnt; n++) {
 					const uint64_t o = pos->bobs[n];
-					g[mdl->boff[o] + d] += e[yp][y];
+					atm_inc(g + mdl->boff[o] + d, e[yp][y]);
 				}
 			}
 		}
@@ -641,7 +665,7 @@ void grd_subemp(grd_st_t *grd_st, const seq_t *seq) {
 		const pos_t *pos = &(seq->pos[t]);
 		const uint32_t y = seq->pos[t].lbl;
 		for (uint32_t n = 0; n < pos->ucnt; n++)
-			g[mdl->uoff[pos->uobs[n]] + y] -= 1.0;
+			atm_inc(g + mdl->uoff[pos->uobs[n]] + y, -1.0);
 	}
 	for (uint32_t t = 1; t < T; t++) {
 		const pos_t *pos = &(seq->pos[t]);
@@ -649,7 +673,7 @@ void grd_subemp(grd_st_t *grd_st, const seq_t *seq) {
 		const uint32_t y  = seq->pos[t    ].lbl;
 		const uint32_t d  = yp * Y + y;
 		for (uint32_t n = 0; n < pos->bcnt; n++)
-			g[mdl->boff[pos->bobs[n]] + d] -= 1.0;
+			atm_inc(g + mdl->boff[pos->bobs[n]] + d, -1.0);
 	}
 }
 
@@ -846,14 +870,18 @@ void grd_dospl(grd_st_t *grd_st, const seq_t *seq) {
  *   compute gradient over the full data set and store it in the vector <g>.
  */
 grd_t *grd_new(mdl_t *mdl, double *g) {
-	const uint64_t F = mdl->nftr;
 	const uint32_t W = mdl->opt->nthread;
 	grd_t *grd = xmalloc(sizeof(grd_t));
 	grd->mdl = mdl;
 	grd->grd_st = xmalloc(sizeof(grd_st_t *) * W);
+#ifdef ATM_ANSI
 	grd->grd_st[0] = grd_stnew(mdl, g);
 	for (uint32_t w = 1; w < W; w++)
-		grd->grd_st[w] = grd_stnew(mdl, xvm_new(F));
+		grd->grd_st[w] = grd_stnew(mdl, xvm_new(mdl->nftr));
+#else
+	for (uint32_t w = 0; w < W; w++)
+		grd->grd_st[w] = grd_stnew(mdl, g);
+#endif
 	return grd;
 }
 
@@ -862,8 +890,10 @@ grd_t *grd_new(mdl_t *mdl, double *g) {
  */
 void grd_free(grd_t *grd) {
 	const uint32_t W = grd->mdl->opt->nthread;
+#ifdef ATM_ANSI
 	for (uint32_t w = 1; w < W; w++)
 		xvm_free(grd->grd_st[w]->g);
+#endif
 	for (uint32_t w = 0; w < W; w++)
 		grd_stfree(grd->grd_st[w]);
 	free(grd);
@@ -879,12 +909,14 @@ void grd_worker(job_t *job, uint32_t id, uint32_t cnt, grd_st_t *grd_st) {
 	unused(id && cnt);
 	mdl_t *mdl = grd_st->mdl;
 	const dat_t *dat = mdl->train;
-	const uint64_t F = mdl->nftr;
 	// We first cleanup the gradient and value as our parent don't do it (it
 	// is better to do this also in parallel)
 	grd_st->lloss = 0.0;
+#ifdef ATM_ANSI
+	const uint64_t F = mdl->nftr;
 	for (uint64_t f = 0; f < F; f++)
 		grd_st->g[f] = 0.0;
+#endif
 	// Now all is ready, we can process our sequences and accumulate the
 	// gradient and inverse log-likelihood
 	uint32_t count, pos;
@@ -907,6 +939,11 @@ double grd_gradient(grd_t *grd) {
 	const double  *x = mdl->theta;
 	const uint64_t F = mdl->nftr;
 	const uint32_t W = mdl->opt->nthread;
+	double *g = grd->grd_st[0]->g;
+#ifndef ATM_ANSI
+	for (uint64_t f = 0; f < F; f++)
+		g[f] = 0.0;
+#endif
 	// All is ready to compute the gradient, we spawn the threads of
 	// workers, each one working on a part of the data. As the gradient and
 	// log-likelihood are additive, computing the final values will be
@@ -917,13 +954,14 @@ double grd_gradient(grd_t *grd) {
 		return -1.0;
 	// All computations are done, it just remain to add all the gradients
 	// and negative log-likelihood from all the workers.
-	double *g = grd->grd_st[0]->g;
 	double fx = grd->grd_st[0]->lloss;
-	for (uint32_t w = 1; w < W; w++) {
+	for (uint32_t w = 1; w < W; w++)
+		fx += grd->grd_st[w]->lloss;
+#ifdef ATM_ANSI
+	for (uint32_t w = 1; w < W; w++)
 		for (uint64_t f = 0; f < F; f++)
 			g[f] += grd->grd_st[w]->g[f];
-		fx += grd->grd_st[w]->lloss;
-	}
+#endif
 	// If needed we clip the gradient: setting to 0.0 all coordinates where
 	// the function is 0.0.
 	if (mdl->opt->lbfgs.clip == true)
