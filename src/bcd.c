@@ -65,7 +65,7 @@ struct bcd_s {
 	double   *bhes;    //  [Y][Y]
 	uint32_t *actpos;  //  [T]
 	uint32_t  actcnt;
-	grd_t  *grd;
+	grd_st_t *grd_st;
 };
 
 /* bcd_soft:
@@ -102,8 +102,8 @@ static void bcd_actpos(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, uint64_t o) {
 	}
 	assert(actcnt != 0);
 	bcd->actcnt = actcnt;
-	bcd->grd->first = actpos[0];
-	bcd->grd->last  = actpos[actcnt - 1];
+	bcd->grd_st->first = actpos[0];
+	bcd->grd_st->last  = actpos[actcnt - 1];
 }
 
 /* bct_flgradhes:
@@ -112,14 +112,14 @@ static void bcd_actpos(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, uint64_t o) {
  *   at active pos and approximate also the hessian.
  */
 static void bcd_flgradhes(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, uint64_t o) {
-	const grd_t *grd = bcd->grd;
+	const grd_st_t *grd_st = bcd->grd_st;
 	const uint32_t Y = mdl->nlbl;
 	const uint32_t T = seq->len;
-	const double   (*psi  )[T][Y][Y] = (void *)grd->psi;
-	const double   (*alpha)[T][Y]    = (void *)grd->alpha;
-	const double   (*beta )[T][Y]    = (void *)grd->beta;
-	const double    *unorm           =         grd->unorm;
-	const double    *bnorm           =         grd->bnorm;
+	const double   (*psi  )[T][Y][Y] = (void *)grd_st->psi;
+	const double   (*alpha)[T][Y]    = (void *)grd_st->alpha;
+	const double   (*beta )[T][Y]    = (void *)grd_st->beta;
+	const double    *unorm           =         grd_st->unorm;
+	const double    *bnorm           =         grd_st->bnorm;
 	const uint32_t  *actpos          =         bcd->actpos;
 	const uint32_t   actcnt          =         bcd->actcnt;
 	double *ugrd = bcd->ugrd;
@@ -168,18 +168,18 @@ static void bcd_flgradhes(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, uint64_t o) 
  *   at active pos and approximate also the hessian.
  */
 static void bcd_spgradhes(mdl_t *mdl, bcd_t *bcd, const seq_t *seq, uint64_t o) {
-	const grd_t *grd = bcd->grd;
+	const grd_st_t *grd_st = bcd->grd_st;
 	const uint32_t Y = mdl->nlbl;
 	const uint32_t T = seq->len;
-	const double   (*psiuni)[T][Y] = (void *)grd->psiuni;
-	const double    *psival        =         grd->psi;
-	const uint32_t  *psiyp         =         grd->psiyp;
-	const uint32_t (*psiidx)[T][Y] = (void *)grd->psiidx;
-	const uint32_t  *psioff        =         grd->psioff;
-	const double   (*alpha)[T][Y]  = (void *)grd->alpha;
-	const double   (*beta )[T][Y]  = (void *)grd->beta;
-	const double    *unorm         =         grd->unorm;
-	const double    *bnorm         =         grd->bnorm;
+	const double   (*psiuni)[T][Y] = (void *)grd_st->psiuni;
+	const double    *psival        =         grd_st->psi;
+	const uint32_t  *psiyp         =         grd_st->psiyp;
+	const uint32_t (*psiidx)[T][Y] = (void *)grd_st->psiidx;
+	const uint32_t  *psioff        =         grd_st->psioff;
+	const double   (*alpha)[T][Y]  = (void *)grd_st->alpha;
+	const double   (*beta )[T][Y]  = (void *)grd_st->beta;
+	const double    *unorm         =         grd_st->unorm;
+	const double    *bnorm         =         grd_st->bnorm;
 	const uint32_t  *actpos        =         bcd->actpos;
 	const uint32_t   actcnt        =         bcd->actcnt;
 	double *ugrd = bcd->ugrd;
@@ -345,7 +345,7 @@ void trn_bcd(mdl_t *mdl) {
 	bcd->bgrd   = xvm_new(Y * Y);
 	bcd->bhes   = xvm_new(Y * Y);
 	bcd->actpos = xmalloc(sizeof(int) * T);
-	bcd->grd    = grd_new(mdl, NULL);
+	bcd->grd_st = grd_stnew(mdl, NULL);
 	// And train the model
 	for (uint32_t i = 1; i <= K; i++) {
 		for (uint64_t o = 0; o < O; o++) {
@@ -363,14 +363,14 @@ void trn_bcd(mdl_t *mdl) {
 				const uint32_t id = idx_lst[o][s];
 				const seq_t *seq = mdl->train->seq[id];
 				bcd_actpos(mdl, bcd, seq, o);
-				grd_check(bcd->grd, seq->len);
+				grd_stcheck(bcd->grd_st, seq->len);
 				if (mdl->opt->sparse) {
-					grd_spdopsi(bcd->grd, seq);
-					grd_spfwdbwd(bcd->grd, seq);
+					grd_spdopsi(bcd->grd_st, seq);
+					grd_spfwdbwd(bcd->grd_st, seq);
 					bcd_spgradhes(mdl, bcd, seq, o);
 				} else {
-					grd_fldopsi(bcd->grd, seq);
-					grd_flfwdbwd(bcd->grd, seq);
+					grd_fldopsi(bcd->grd_st, seq);
+					grd_flfwdbwd(bcd->grd_st, seq);
 					bcd_flgradhes(mdl, bcd, seq, o);
 				}
 			}
@@ -381,7 +381,7 @@ void trn_bcd(mdl_t *mdl) {
 			break;
 	}
 	// Cleanup memory
-	grd_free(bcd->grd);
+	grd_stfree(bcd->grd_st);
 	xvm_free(bcd->ugrd); xvm_free(bcd->uhes);
 	xvm_free(bcd->bgrd); xvm_free(bcd->bhes);
 	free(bcd->actpos);

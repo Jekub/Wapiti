@@ -128,20 +128,20 @@ static int tag_postsc(mdl_t *mdl, const seq_t *seq, double *vpsi) {
 	const uint32_t Y = mdl->nlbl;
 	const uint32_t T = seq->len;
 	double (*psi)[T][Y][Y] = (void *)vpsi;
-	grd_t *grd = grd_new(mdl, NULL);
-	grd->first = 0;
-	grd->last  = T - 1;
-	grd_check(grd, seq->len);
+	grd_st_t *grd_st = grd_stnew(mdl, NULL);
+	grd_st->first = 0;
+	grd_st->last  = T - 1;
+	grd_stcheck(grd_st, seq->len);
 	if (mdl->opt->sparse) {
-		grd_spdopsi(grd, seq);
-		grd_spfwdbwd(grd, seq);
+		grd_spdopsi(grd_st, seq);
+		grd_spfwdbwd(grd_st, seq);
 	} else {
-		grd_fldopsi(grd, seq);
-		grd_flfwdbwd(grd, seq);
+		grd_fldopsi(grd_st, seq);
+		grd_flfwdbwd(grd_st, seq);
 	}
-	double (*alpha)[T][Y] = (void *)grd->alpha;
-	double (*beta )[T][Y] = (void *)grd->beta;
-	double  *unorm        =         grd->unorm;
+	double (*alpha)[T][Y] = (void *)grd_st->alpha;
+	double (*beta )[T][Y] = (void *)grd_st->beta;
+	double  *unorm        =         grd_st->unorm;
 	for (uint32_t t = 0; t < T; t++) {
 		for (uint32_t y = 0; y < Y; y++) {
 			double e = (*alpha)[t][y] * (*beta)[t][y] * unorm[t];
@@ -149,7 +149,7 @@ static int tag_postsc(mdl_t *mdl, const seq_t *seq, double *vpsi) {
 				(*psi)[t][yp][y] = e;
 		}
 	}
-	grd_free(grd);
+	grd_stfree(grd_st);
 	return 1;
 }
 

@@ -151,7 +151,7 @@ void trn_sgdl1(mdl_t *mdl) {
 	// computing the decay, we will need to keep track of the number of
 	// already processed sequences, this is tracked by the <i> variable.
 	double u = 0.0;
-	grd_t *grd = grd_new(mdl, g);
+	grd_st_t *grd_st = grd_stnew(mdl, g);
 	for (uint32_t k = 0, i = 0; k < K && !uit_stop; k++) {
 		// First we shuffle the sequence by making a lot of random swap
 		// of entry in the permutation index.
@@ -166,7 +166,7 @@ void trn_sgdl1(mdl_t *mdl) {
 		for (uint32_t sp = 0; sp < S && !uit_stop; sp++, i++) {
 			const uint32_t s = perm[sp];
 			const seq_t *seq = mdl->train->seq[s];
-			grd_dospl(grd, seq);
+			grd_dospl(grd_st, seq);
 			// Before applying the gradient, we have to compute the
 			// learning rate to apply to this sequence. For this we
 			// use an exponential decay [1, pp 481(5)]
@@ -205,7 +205,7 @@ void trn_sgdl1(mdl_t *mdl) {
 		if (!uit_progress(mdl, k + 1, -1.0))
 			break;
 	}
-	grd_free(grd);
+	grd_stfree(grd_st);
 	// Cleanup allocated memory before returning
 	for (uint32_t s = 0; s < S; s++) {
 		free(idx[s].uobs);
