@@ -24,6 +24,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#include <float.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -40,7 +41,9 @@
 #include "thread.h"
 #include "vmath.h"
 
-#define sign(v) ((v) < 0.0 ? -1.0 : ((v) > 0.0 ? 1.0 : 0.0))
+#define EPSILON (DBL_EPSILON * 64.0)
+
+#define sign(v) ((v) < -EPSILON ? -1.0 : ((v) > EPSILON ? 1.0 : 0.0))
 #define sqr(v)  ((v) * (v))
 
 /******************************************************************************
@@ -94,11 +97,11 @@ static void trn_rpropsub(job_t *job, uint32_t id, uint32_t cnt, rprop_t *st) {
 		// we either project the gradient in the current orthant or
 		// check for cutdown depending on the projection scheme wanted.
 		if (l1 == 1) {
-			if (x[f] < 0.0)        pg -= rho1;
-			else if (x[f] > 0.0)   pg += rho1;
-			else if (g[f] < -rho1) pg += rho1;
-			else if (g[f] > rho1)  pg -= rho1;
-			else                   pg  = 0.0;
+			     if (x[f] < -EPSILON) pg -= rho1;
+			else if (x[f] >  EPSILON) pg += rho1;
+			else if (g[f] < -rho1)    pg += rho1;
+			else if (g[f] >  rho1)    pg -= rho1;
+			else                      pg  = 0.0;
 		} else if (l1 && sqr(g[f] + rho1 * sign(x[f])) < sqr(rho1)) {
 			if (x[f] == 0.0 || (   gp[f] * g[f] < 0.0
 			                    && xp[f] * x[f] < 0.0)) {
@@ -109,29 +112,32 @@ static void trn_rpropsub(job_t *job, uint32_t id, uint32_t cnt, rprop_t *st) {
 				continue;
 			}
 		}
+		const double sgp = sign(gp[f]);
+		const double spg = sign(pg);
 		// Next we adjust the step depending of the new and
 		// previous gradient values.
-		if (gp[f] * pg > 0.0)
+		if (sgp * spg > 0.0)
 			stp[f] = min(stp[f] * stpinc, stpmax);
-		else if (gp[f] * pg < 0.0)
+		else if (sgp * spg < 0.0)
 			stp[f] = max(stp[f] * stpdec, stpmin);
 		// Finally update the weight. if there is l1 penalty
 		// and the pseudo gradient projection is used, we have to
 		// project back the update in the choosen orthant.
-		if (!wbt || gp[f] * pg > 0.0) {
+		//::if (!wbt || gp[f] * pg > 0.0) {
+		if (!wbt || sgp * spg > 0.0) {
 			double dlt = stp[f] * -sign(g[f]);
-			if (l1 == 1 && dlt * pg >= 0.0)
+			if (l1 == 1 && dlt * spg >= 0.0)
 				dlt = 0.0;
 			if (wbt)
 				xp[f] = x[f];
 			x[f] += dlt;
-		} else if (gp[f] * pg < 0.0) {
+		} else if (sgp * spg < -0.0) {
 			x[f] = xp[f];
 			g[f] = 0.0;
 		} else {
 			xp[f] = x[f];
 			if (l1 != 1)
-				x[f] += stp[f] * -sign(pg);
+				x[f] += stp[f] * -spg;
 		}
 		gp[f] = g[f];
 	}
