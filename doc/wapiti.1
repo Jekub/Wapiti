@@ -6,7 +6,8 @@ wapiti
 .RB mode\ [options]\ [input]\ [output]
 .SH DESCRIPTION
 .SS Overview
-Wapiti is a program for training and using maxent models or linear-chain CRF models with various algorithms using an elastic penalty.
+Wapiti is a program for training and using discriminative sequence labelling models with various algorithms using an elastic penalty.
+It currently implement maxent models, maximum entropy Markov models (MEMM) and linear-chain conditional random fields (CRF) models
 .P
 It can work in different mode depending on the first argument you give to it, either training a model, labeling new data, or dumping a model in readable form.
 .P
@@ -24,8 +25,11 @@ Output version and revision numbers.
 .B \-\-me
 Activate the pure maxent mode, see below for more details.
 .TP
+.B \-T | \-\-type <string>
+Select the type of model to train. Can be either "maxent", "memm", or "crf", or "list" to get a list of supported models types. By default "crf" models are used.
+.TP
 .B \-a | \-\-algo <string>
-Select the algorithm used to train the CRF model, specify "list" for a list of available algorithms. The first algorithm in this list is used as default.
+Select the algorithm used to train the model, specify "list" for a list of available algorithms. The first algorithm in this list is used as default.
 .TP
 .B \-p | \-\-pattern <file>
 Specify the file containing the patterns for extracting features. The format of the pattern file is detailed below.
@@ -159,8 +163,6 @@ This algorithm requires the gradient to be fully computable at any point so it c
 
 It requires to keep 5 + M * 2 vectors the sizes of which are the number of features. Each component of these vectors are double precision floating point values. So, for training a model with F features, you need 8 * F * (5 + M * 2) bytes of memory. If the OWL-QN variant is used, one additional vector is needed to keep the pseudo-gradient.
 
-This algorithm is multi-threaded, if you enable the multi-threaded mode, each thread after the first one will require an additional vector for storing their local gradient. Be sure you have enough memory for storing all the data.
-
 .B sgd-l1
 This is the stochastic gradient descent for L1-regularized model. It works by computing the gradient only on a single sequence at a time and making a small step in this direction.
 
@@ -175,21 +177,30 @@ This the more memory economical algorithm as it only requires to keep the featur
 
 This flexibility has a price: don't use it if your features are not sparse, as it will be very slow in this case.
 
+NOTE: This algorithm is available only for training CRF models.
+
 .B rprop (rprop+ / rprop-)
 This algorithm use the gradient only to find a good search direction, not for choosing the step to make in that direction. It can be verry effective on some dataset.
 
 Compared to quasi-newton methods, rprop reach the neighboorhood of the optimum more quickly but the lack of second order information and the restricted use of the first order one make the fine tunning slower.
 
-Memory requirement are quite light as it require 4 vectors of the size of the feature set, and an additional vector for each thread after the first.
+Memory requirement are quite light as it require 4 vectors of the size of the feature set.
 
 The rprop- is a variant of rprop+ without backtracking, its performance compared to rprop+ is task dependent and it require one less vector so for very large model it can be better.
+
+.SH MULTI-THREADING
+Wapiti can efficiently use multiple threads to speedup the gradient computation for l-bfgs and rprop algorithms. Using the --nthread parameter, you can specify the number of threads to use.
+
+Beware that if the atomic updates were disabled at compilation time, each threads after the first will cost you an extra vector of the size of the feature set. This imply that for large models, multiple thread can cost you a lot of memory. Atomic updates are supported at least with GCC and CLang compilers. It may also work if your compiler support the same intrinsics atomic operations or if you reimplement the atm_inc function in gradient.c for it.
+
+The multi-threading code can be disabled at compilation time if your platform is not supported. See wapiti.h for more details.
 
 .SH DATAFILES
 Data files are plain text files containing sequence separated by empty lines. Each sequence is a set of non-empty lines where each of these represents one position in the sequence.
 
 Each lines are made of tokens separated either by spaces or by tabulations. All tokens are observations available for training or labeling, except the last one in training mode which is assumed to be the label to predict.
 
-If no patterns are specified, each tokens are interpreted directly as an observation and is combined with label in order to generate features. If patterns are specified, they are used in combination with the tokens to generate the features.The observations must be prefixed by either 'u', 'b' or '*' in order to specify if it is unigram, bigram or both.
+If no patterns are specified, each tokens are interpreted directly as an observation and is combined with label in order to generate features. If patterns are specified, they are used in combination with the tokens to generate the features. The observations must be prefixed by either 'u', 'b' or '*' in order to specify if it is unigram, bigram or both.
 
 .SH PATTERNS
 Pattern files are almost compatible with CRF++ templates. Empty lines as well as all characters appearing after a '#' are discarded. The remaining lines are interpreted as patterns.
