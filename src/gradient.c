@@ -54,12 +54,14 @@ void atm_inc(double *value, double inc) {
 static inline
 void atm_inc(volatile double *value, double inc) {
 	while (1) {
-		const double   d_old = *value;
-		const double   d_new = d_old + inc;
-		const uint64_t u_old = *((uint64_t *)&d_old);
-		const uint64_t u_new = *((uint64_t *)&d_new);
-		uint64_t *u_ptr = (uint64_t *)value;
-		if (__sync_bool_compare_and_swap(u_ptr, u_old, u_new))
+		volatile union {
+			double   d;
+			uint64_t u;
+		} old, new;
+		old.d = *value;
+		new.d = old.d + inc;
+		uint64_t *ptr = (uint64_t *)value;
+		if (__sync_bool_compare_and_swap(ptr, old.u, new.u))
 			break;
 	}
 }
@@ -896,6 +898,7 @@ void grd_free(grd_t *grd) {
 #endif
 	for (uint32_t w = 0; w < W; w++)
 		grd_stfree(grd->grd_st[w]);
+	free(grd->grd_st);
 	free(grd);
 }
 

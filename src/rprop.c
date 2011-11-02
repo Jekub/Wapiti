@@ -123,7 +123,6 @@ static void trn_rpropsub(job_t *job, uint32_t id, uint32_t cnt, rprop_t *st) {
 		// Finally update the weight. if there is l1 penalty
 		// and the pseudo gradient projection is used, we have to
 		// project back the update in the choosen orthant.
-		//::if (!wbt || gp[f] * pg > 0.0) {
 		if (!wbt || sgp * spg > 0.0) {
 			double dlt = stp[f] * -sign(g[f]);
 			if (l1 == 1 && dlt * spg >= 0.0)
@@ -186,6 +185,7 @@ void trn_rprop(mdl_t *mdl) {
 		xvm_free(xp);
 	xvm_free(g);
 	xvm_free(gp);
+	xvm_free(stp);
 	grd_free(grd);
 	free(st);
 }
