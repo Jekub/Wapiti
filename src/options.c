@@ -59,7 +59,7 @@ static void opt_help(const char *pname) {
 		"Training mode:\n"
 		"    %1$s train [options] [input data] [model file]\n"
 		"\t   | --me               force maxent mode\n"
-		"\t-T | --type     STRING  type of model to train"
+		"\t-T | --type     STRING  type of model to train\n"
 		"\t-a | --algo     STRING  training algorithm to use\n"
 		"\t-p | --pattern  FILE    patterns for extracting features\n"
 		"\t-m | --model    FILE    model file to preload\n"
