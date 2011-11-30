@@ -13,11 +13,11 @@ HDR=src/*.h
 
 wapiti: $(SRC) $(HDR)
 	@echo "CC: wapiti.c --> wapiti"
-	@$(CC) -DNDEBUG $(CFLAGS) $(LIBS) -o wapiti $(SRC)
+	@$(CC) -DNDEBUG $(CFLAGS) -o wapiti $(SRC) $(LIBS)
 
 debug: $(SRC) $(HDR)
 	@echo "CC: wapiti.c --> wapiti"
-	@$(CC) -g $(CFLAGS) $(LIBS) -o wapiti $(SRC)
+	@$(CC) -g $(CFLAGS) -o wapiti $(SRC) $(LIBS)
 
 install: wapiti
 	@echo "CP: wapiti   --> $(DESTDIR)$(PREFIX)/bin"
