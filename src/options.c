@@ -147,7 +147,7 @@ struct {
 	{0, "-i", "--maxiter", 'U', offsetof(opt_t, maxiter     )},
 	{0, "-1", "--rho1",    'F', offsetof(opt_t, rho1        )},
 	{0, "-2", "--rho2",    'F', offsetof(opt_t, rho2        )},
-	{0, "-o", "--objsz",   'U', offsetof(opt_t, objwin      )},
+	{0, "-o", "--objwin",  'U', offsetof(opt_t, objwin      )},
 	{0, "-w", "--stopwin", 'U', offsetof(opt_t, stopwin     )},
 	{0, "-e", "--stopeps", 'F', offsetof(opt_t, stopeps     )},
 	{0, "##", "--clip",    'B', offsetof(opt_t, lbfgs.clip  )},
