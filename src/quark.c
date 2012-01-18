@@ -1,7 +1,7 @@
 /*
  *      Wapiti - A linear-chain CRF tool
  *
- * Copyright (c) 2009-2011  CNRS
+ * Copyright (c) 2009-2012  CNRS
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -48,7 +48,7 @@
  *   Information Coded in Alphanumeric, Journal of the ACM 15 (4): pp. 514--534,
  *   1968. DOI:10.1145/321479.321481
  *
- *   This code is copyright 2002-2011 Thomas Lavergne and licenced under the BSD
+ *   This code is copyright 2002-2012 Thomas Lavergne and licenced under the BSD
  *   Licence like the remaining of Wapiti.
  ******************************************************************************/
 

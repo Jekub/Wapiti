@@ -1,7 +1,7 @@
 /*
  *      Wapiti - A linear-chain CRF tool
  *
- * Copyright (c) 2009-2011  CNRS
+ * Copyright (c) 2009-2012  CNRS
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -43,5 +43,6 @@ void tag_nbviterbi(mdl_t *mdl, const seq_t *seq, uint32_t N,
 
 void tag_label(mdl_t *mdl, FILE *fin, FILE *fout);
 void tag_eval(mdl_t *mdl, double *te, double *se);
+
 #endif
 
