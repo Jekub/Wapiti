@@ -46,14 +46,6 @@
 /*******************************************************************************
  * Training
  ******************************************************************************/
-static void trn_auto(mdl_t *mdl) {
-	const uint32_t maxiter = mdl->opt->maxiter;
-	mdl->opt->maxiter = 3;
-	trn_sgdl1(mdl);
-	mdl->opt->maxiter = maxiter;
-	trn_lbfgs(mdl);
-}
-
 static const char *typ_lst[] = {
 	"maxent",
 	"memm",
@@ -71,7 +63,6 @@ static const struct {
 	{"rprop",  trn_rprop},
 	{"rprop+", trn_rprop},
 	{"rprop-", trn_rprop},
-	{"auto",   trn_auto }
 };
 static const uint32_t trn_cnt = sizeof(trn_lst) / sizeof(trn_lst[0]);
 
