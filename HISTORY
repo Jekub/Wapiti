@@ -1,3 +1,10 @@
+??/??/2012
+  Release v1.3.1:
+
+    Switched to elapsed time instead of wall time in progress
+    Fixed bug in Makefile (thanks to Lars Buitinck)
+    Fix bad handling of objwin option
+
 03/11/2011
   Release v1.3.0: MEMM, faster gradient and bug fixes
 

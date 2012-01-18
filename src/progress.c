@@ -33,7 +33,7 @@
 #include <stdio.h>
 
 #include <unistd.h>
-#include <sys/times.h>
+#include <sys/time.h>
 #include <sys/resource.h>
 
 #include "wapiti.h"
@@ -91,7 +91,7 @@ void uit_setup(mdl_t *mdl) {
 	uit_stop = false;
 	if (signal(SIGINT, uit_signal) == SIG_ERR)
 		warning("failed to set signal handler, no clean early stop");
-	times(&mdl->timer);
+	gettimeofday(&mdl->timer, NULL);
 	if (mdl->opt->stopwin != 0)
 		mdl->werr = xmalloc(sizeof(double) * mdl->opt->stopwin);
 	mdl->wcnt = mdl->wpos = 0;
@@ -130,10 +130,9 @@ bool uit_progress(mdl_t *mdl, uint32_t it, double obj) {
 	// Compute timings. As some training algorithms are multi-threaded, we
 	// cannot use ansi/c function and must rely on posix one to sum time
 	// spent in main thread and in child ones.
-	tms_t now; times(&now);
-	double tm = (now.tms_utime  - mdl->timer.tms_utime )
-	          + (now.tms_cutime - mdl->timer.tms_cutime);
-	tm /= sysconf(_SC_CLK_TCK);
+	tms_t now; gettimeofday(&now, NULL);
+	double tm = (now.tv_sec        + (double)now.tv_usec        * 1.0e-6)
+	          - (mdl->timer.tv_sec + (double)mdl->timer.tv_usec * 1.0e-6);
 	mdl->total += tm;
 	mdl->timer  = now;
 	// And display progress report

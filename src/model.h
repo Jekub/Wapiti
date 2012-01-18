@@ -30,14 +30,14 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <sys/times.h>
+#include <sys/time.h>
 
 #include "wapiti.h"
 #include "options.h"
 #include "sequence.h"
 #include "reader.h"
 
-typedef struct tms tms_t;
+typedef struct timeval tms_t;
 
 /* mdl_t:
  *   Represent a linear-chain CRF model. The model contain both unigram and
