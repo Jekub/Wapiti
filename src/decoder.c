@@ -31,6 +31,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 
 #include "wapiti.h"
 #include "gradient.h"
@@ -153,6 +154,41 @@ static int tag_postsc(mdl_t *mdl, const seq_t *seq, double *vpsi) {
 	return 1;
 }
 
+/* tag_forced:
+ *   This function apply correction to the psi table to take account of already
+ *   known labels. If a label is known, all arcs leading or comming from other
+ *   labels at this position are NULLified and will not be selected by the
+ *   decoder.
+ */
+static void tag_forced(mdl_t *mdl, const seq_t *seq, double *vpsi, int op) {
+	const uint32_t Y = mdl->nlbl;
+	const uint32_t T = seq->len;
+	const double v = op ? 0.0 : -HUGE_VAL;
+	double (*psi)[T][Y][Y] = (void *)vpsi;
+	for (uint32_t t = 1; t < T; t++) {
+		for (uint32_t yp = 0; yp < Y; yp++) {
+			const uint32_t ypr = seq->pos[t - 1].lbl;
+			for (uint32_t y = 0; y < Y; y++) {
+				const uint32_t yr = seq->pos[t].lbl;
+				if (yr == (uint32_t)-1 && ypr == (uint32_t)-1)
+					continue;
+				if (yr == y && ypr == yp)
+					continue;
+				(*psi)[t][yp][y] = v;
+			}
+		}
+	}
+	const uint32_t yr = seq->pos[0].lbl;
+	if (yr != (uint32_t)-1) {
+		for (uint32_t y = 0; y < Y; y++) {
+			if (yr == y)
+				continue;
+			for (uint32_t yp = 0; yp < Y; yp++)
+				(*psi)[0][yp][y] = v;
+		}
+	}
+}
+
 /* tag_viterbi:
  *   This function implement the Viterbi algorithm in order to decode the most
  *   probable sequence of labels according to the model. Some part of this code
@@ -178,6 +214,8 @@ void tag_viterbi(mdl_t *mdl, const seq_t *seq,
 		op = tag_postsc(mdl, seq, vpsi);
 	else
 		op = tag_expsc(mdl, seq, vpsi);
+	if (mdl->opt->force)
+		tag_forced(mdl, seq, vpsi, op);
 	// Now we can do the Viterbi algorithm. This is very similar to the
 	// forward pass
 	//   | α_1(y) = Ψ_1(y,x_1)
@@ -197,7 +235,7 @@ void tag_viterbi(mdl_t *mdl, const seq_t *seq,
 		for (uint32_t y = 0; y < Y; y++)
 			old[y] = cur[y];
 		for (uint32_t y = 0; y < Y; y++) {
-			double   bst = -1.0;
+			double   bst = -HUGE_VAL;
 			uint32_t idx = 0;
 			for (uint32_t yp = 0; yp < Y; yp++) {
 				double val = old[yp];
@@ -261,6 +299,8 @@ void tag_nbviterbi(mdl_t *mdl, const seq_t *seq, uint32_t N,
 		op = tag_postsc(mdl, seq, (double *)psi);
 	else
 		op = tag_expsc(mdl, seq, (double *)psi);
+	if (mdl->opt->force)
+		tag_forced(mdl, seq, vpsi, op);
 	// Here also, it's classical but we have to keep the N best paths
 	// leading to each nodes of the lattice instead of only the best one.
 	// This mean that code is less trivial and the current implementation is
@@ -366,7 +406,8 @@ void tag_label(mdl_t *mdl, FILE *fin, FILE *fout) {
 		raw_t *raw = rdr_readraw(mdl->reader, fin);
 		if (raw == NULL)
 			break;
-		seq_t *seq = rdr_raw2seq(mdl->reader, raw, mdl->opt->check);
+		seq_t *seq = rdr_raw2seq(mdl->reader, raw,
+			mdl->opt->check | mdl->opt->force);
 		const uint32_t T = seq->len;
 		uint32_t *out = xmalloc(sizeof(uint32_t) * T * N);
 		double   *psc = xmalloc(sizeof(double  ) * T * N);
