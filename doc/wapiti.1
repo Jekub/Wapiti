@@ -120,6 +120,9 @@ Use posterior decoding instead of the classical Viterbi decoding. This generally
 .TP
 .B \-n | \-\-nbest <int>
 Output the N best sequences of labels instead of just the best one. The N sequences of labels are output in order in the output file.
+.TP
+.B \-\-force
+Enable forced decoding for labelling data already partly labelled. See below for more details.
 
 .SS Dump mode
 For the moment, there is no switch specific to this mode.
@@ -238,6 +241,13 @@ And the constructs :
 So, for example, the regexp "^.?.?.?.?" will match a prefix of at most four characters and "^\u\u*$" will match only on data composed solely of uppercase characters.
 
 For the commands, %x, %t, and %m, if the command name is given in uppercase, the case is removed from the string before being added to the observation.
+
+.SH FORCED DECODING
+The forced decoding switch allow decoding of already partly labelled data. If some labels are already known and only the unknown must be predicted, instead of doing a full prediction and correcting the wapiti output as a post-processing step you can enable forced decoding. This allow you to specified the already known labels and let wapiti use this information to improve the decoding.
+
+In order to do this you must provide the same data as usual with all the columns needed for your patterns, and you must add another column like the one provided for the --check option with the known labels. For each lines where a prediction must be made by wapiti, either leave this column blank or specify an invalid label.
+
+Wapiti decoder will just fill the blank and use the information provided to improve there prediction.
 
 .SH PURE MAXENT MODE
 If you don't make anything special, Wapiti will automatically choose between the maxent codepath and the linear-chain codepath for each sequence. If a sequence have a length of one and no bigram features, it will switch to the maxent codepath.

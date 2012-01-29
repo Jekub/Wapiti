@@ -95,6 +95,7 @@ static void opt_help(const char *pname) {
 		"\t-s | --score            add scores to output\n"
 		"\t-p | --post             label using posteriors\n"
 		"\t-n | --nbest    INT     output n-best list\n"
+		"\t   | --force            use forced decoding\n"
 		"\n"
 		"Dumping mode\n"
 		"    %1$s dump [input model] [output text]\n";
@@ -120,7 +121,7 @@ const opt_t opt_defaults = {
 	.rprop = {.stpmin = 1e-8, .stpmax = 50.0, .stpinc = 1.2, .stpdec = 0.5,
 	          .cutoff = false},
 	.label   = false,    .check   = false, .outsc = false,
-	.lblpost = false,    .nbest = 1
+	.lblpost = false,    .nbest   = 1,     .force = false,
 };
 
 /* opt_switch:
@@ -168,6 +169,7 @@ struct {
 	{1, "-s", "--score",   'B', offsetof(opt_t, outsc       )},
 	{1, "-p", "--post",    'B', offsetof(opt_t, lblpost     )},
 	{1, "-n", "--nbest",   'U', offsetof(opt_t, nbest       )},
+	{1, "##", "--force",   'B', offsetof(opt_t, force       )},
 	{-1, NULL, NULL, '\0', 0}
 };
 
@@ -282,5 +284,7 @@ void opt_parse(int argc, char *argv[argc], opt_t *opt) {
 		fatal("BCD not supported for training maxent models");
 	if (!strcmp(opt->type, "memm") && !strcmp(opt->algo, "bcd"))
 		fatal("BCD not supported for training MEMM models");
+	if (opt->check && opt->force)
+		fatal("--check and --force cannot be used together");
 }
 

@@ -83,6 +83,7 @@ struct opt_s {
 	bool      outsc;
 	bool      lblpost;
 	uint32_t  nbest;
+	bool      force;
 };
 
 extern const opt_t opt_defaults;
