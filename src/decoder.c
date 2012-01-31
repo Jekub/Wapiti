@@ -165,18 +165,20 @@ static void tag_forced(mdl_t *mdl, const seq_t *seq, double *vpsi, int op) {
 	const uint32_t T = seq->len;
 	const double v = op ? 0.0 : -HUGE_VAL;
 	double (*psi)[T][Y][Y] = (void *)vpsi;
-	for (uint32_t t = 1; t < T; t++) {
-		for (uint32_t yp = 0; yp < Y; yp++) {
-			const uint32_t ypr = seq->pos[t - 1].lbl;
-			for (uint32_t y = 0; y < Y; y++) {
-				const uint32_t yr = seq->pos[t].lbl;
-				if (yr == (uint32_t)-1 && ypr == (uint32_t)-1)
-					continue;
-				if (yr == y && ypr == yp)
-					continue;
-				(*psi)[t][yp][y] = v;
-			}
-		}
+	for (uint32_t t = 0; t < T; t++) {
+		const uint32_t yr = seq->pos[t].lbl;
+		if (yr == (uint32_t)-1)
+			continue;
+		if (t != 0)
+			for (uint32_t y = 0; y < Y; y++)
+				if (y != yr)
+					for (uint32_t yp = 0; yp < Y; yp++)
+						(*psi)[t][yp][y] = v;
+		if (t != T - 1)
+			for (uint32_t y = 0; y < Y; y++)
+				if (y != yr)
+					for (uint32_t yn = 0; yn < Y; yn++)
+						(*psi)[t + 1][y][yn] = v;
 	}
 	const uint32_t yr = seq->pos[0].lbl;
 	if (yr != (uint32_t)-1) {
