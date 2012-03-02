@@ -238,7 +238,7 @@ void tag_viterbi(mdl_t *mdl, const seq_t *seq,
 	// We first compute the scores for each transitions in the lattice of
 	// labels.
 	int op;
-	if (!strcmp(mdl->opt->type, "memm"))
+	if (mdl->type == 1)
 		op = tag_memmsc(mdl, seq, vpsi);
 	else if (mdl->opt->lblpost)
 		op = tag_postsc(mdl, seq, vpsi);
@@ -325,7 +325,7 @@ void tag_nbviterbi(mdl_t *mdl, const seq_t *seq, uint32_t N,
 	// We first compute the scores for each transitions in the lattice of
 	// labels.
 	int op;
-	if (!strcmp(mdl->opt->type, "memm"))
+	if (mdl->type == 1)
 		op = tag_memmsc(mdl, seq, vpsi);
 	else if (mdl->opt->lblpost)
 		op = tag_postsc(mdl, seq, (double *)psi);
