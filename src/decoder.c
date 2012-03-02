@@ -31,6 +31,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <math.h>
 
 #include "wapiti.h"
@@ -42,6 +43,7 @@
 #include "thread.h"
 #include "tools.h"
 #include "decoder.h"
+#include "vmath.h"
 
 /******************************************************************************
  * Sequence tagging
@@ -117,6 +119,30 @@ static int tag_expsc(mdl_t *mdl, const seq_t *seq, double *vpsi) {
 		}
 	}
 	return 0;
+}
+
+/* tag_memmsc:
+ *   Compute the score for viterbi decoding of MEMM models. This use the
+ *   previous function to compute the classical score and then normalize them
+ *   relative to the previous label. This normalization must be done in linear
+ *   space, not in logarithm one.
+ */
+static int tag_memmsc(mdl_t *mdl, const seq_t *seq, double *vpsi) {
+	const uint32_t Y = mdl->nlbl;
+	const uint32_t T = seq->len;
+	tag_expsc(mdl, seq, vpsi);
+	xvm_expma(vpsi, vpsi, 0.0, T * Y * Y);
+	double (*psi)[T][Y][Y] = (void *)vpsi;
+	for (uint32_t t = 0; t < T; t++) {
+		for (uint32_t yp = 0; yp < Y; yp++) {
+			double sum = 0.0;
+			for (uint32_t y = 0; y < Y; y++)
+				sum += (*psi)[t][yp][y];
+			for (uint32_t y = 0; y < Y; y++)
+				(*psi)[t][yp][y] /= sum;
+		}
+	}
+	return 1;
 }
 
 /* tag_postsc:
@@ -203,7 +229,7 @@ void tag_viterbi(mdl_t *mdl, const seq_t *seq,
 	         uint32_t out[], double *sc, double psc[]) {
 	const uint32_t Y = mdl->nlbl;
 	const uint32_t T = seq->len;
-	double   *vpsi  = xmalloc(sizeof(double  ) * T * Y * Y);
+	double   *vpsi  = xvm_new(T * Y * Y);
 	uint32_t *vback = xmalloc(sizeof(uint32_t) * T * Y);
 	double   (*psi) [T][Y][Y] = (void *)vpsi;
 	uint32_t (*back)[T][Y]    = (void *)vback;
@@ -212,7 +238,9 @@ void tag_viterbi(mdl_t *mdl, const seq_t *seq,
 	// We first compute the scores for each transitions in the lattice of
 	// labels.
 	int op;
-	if (mdl->opt->lblpost)
+	if (!strcmp(mdl->opt->type, "memm"))
+		op = tag_memmsc(mdl, seq, vpsi);
+	else if (mdl->opt->lblpost)
 		op = tag_postsc(mdl, seq, vpsi);
 	else
 		op = tag_expsc(mdl, seq, vpsi);
@@ -275,7 +303,7 @@ void tag_viterbi(mdl_t *mdl, const seq_t *seq,
 	free(old);
 	free(cur);
 	free(vback);
-	free(vpsi);
+	xvm_free(vpsi);
 }
 
 /* tag_nbviterbi:
@@ -288,7 +316,7 @@ void tag_nbviterbi(mdl_t *mdl, const seq_t *seq, uint32_t N,
                    uint32_t out[][N], double sc[], double psc[][N]) {
 	const uint32_t Y = mdl->nlbl;
 	const uint32_t T = seq->len;
-	double   *vpsi  = xmalloc(sizeof(double  ) * T * Y * Y);
+	double   *vpsi  = xvm_new(T * Y * Y);
 	uint32_t *vback = xmalloc(sizeof(uint32_t) * T * Y * N);
 	double   (*psi) [T][Y    ][Y] = (void *)vpsi;
 	uint32_t (*back)[T][Y * N]    = (void *)vback;
@@ -297,7 +325,9 @@ void tag_nbviterbi(mdl_t *mdl, const seq_t *seq, uint32_t N,
 	// We first compute the scores for each transitions in the lattice of
 	// labels.
 	int op;
-	if (mdl->opt->lblpost)
+	if (!strcmp(mdl->opt->type, "memm"))
+		op = tag_memmsc(mdl, seq, vpsi);
+	else if (mdl->opt->lblpost)
 		op = tag_postsc(mdl, seq, (double *)psi);
 	else
 		op = tag_expsc(mdl, seq, (double *)psi);
@@ -374,7 +404,7 @@ void tag_nbviterbi(mdl_t *mdl, const seq_t *seq, uint32_t N,
 	free(old);
 	free(cur);
 	free(vback);
-	free(vpsi);
+	xvm_free(vpsi);
 }
 
 /* tag_label:
