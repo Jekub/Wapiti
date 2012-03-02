@@ -24,10 +24,12 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#include <inttypes.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -85,6 +87,36 @@ void trn_lbfgs(mdl_t *mdl) {
 	}
 	pg = l1 ? xvm_new(F) : NULL;
 	grd_t *grd = grd_new(mdl, g);
+	// Restore a saved state if user specified one.
+	if (mdl->opt->rstate != NULL) {
+		const char *err = "invalid state file";
+		FILE *file = fopen(mdl->opt->rstate, "r");
+		if (file == NULL)
+			fatal("failed to open input state file");
+		int type, histsz;
+		uint64_t nftr;
+		if (fscanf(file, "#state#%d#%d#%"SCNu64"\n", &type, &histsz,
+				&nftr) != 3)
+			fatal("0 %s", err);
+		if (type != 0 || histsz != (int)M)
+			fatal("state is not compatible");
+		for (uint64_t i = 0; i < nftr; i++) {
+			uint64_t f;
+			if (fscanf(file, "%"PRIu64, &f) != 1)
+				fatal("1 %s", err);
+			if (fscanf(file, "%la %la", &xp[f], &gp[f]) != 2)
+				fatal("2 %s", err);
+			for (uint32_t m = 0; m < M; m++) {
+				if (fscanf(file, "%la", &s[m][f]) != 1)
+					fatal("3 %s", err);
+				if (fscanf(file, "%la", &y[m][f]) != 1)
+					fatal("4 %s", err);
+			}
+		}
+		for (uint32_t m = 0; m < M; m++)
+			p[m] = 1.0 / xvm_dot(y[m], s[m], F);
+		fclose(file);
+	}
 	// Minimization: This is the heart of the function. (a big heart...) We
 	// will perform iterations until one these conditions is reached
 	//   - the maximum iteration count is reached
@@ -273,6 +305,21 @@ void trn_lbfgs(mdl_t *mdl) {
 			if (dlt < mdl->opt->stopeps)
 				break;
 		}
+	}
+	// Save the optimizer state if requested by the user
+	if (mdl->opt->sstate != NULL) {
+		FILE *file = fopen(mdl->opt->sstate, "w");
+		if (file == NULL)
+			fatal("failed to open output state file");
+		fprintf(file, "#state#0#%"PRIu32"#%"PRIu64"\n", M, F);
+		for (uint64_t f = 0; f < F; f++) {
+			fprintf(file, "%"PRIu64, f);
+			fprintf(file, " %la %la", xp[f], gp[f]);
+			for (uint32_t m = 0; m < M; m++)
+				fprintf(file, " %la %la", s[m][f], y[m][f]);
+			fprintf(file, "\n");
+		}
+		fclose(file);
 	}
 	// Cleanup: We free all the vectors we have allocated.
 	xvm_free(xp); xvm_free(g);
