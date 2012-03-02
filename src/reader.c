@@ -411,7 +411,7 @@ seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl) {
 			src++;
 		char *line = xstrdup(src);
 		// Split it in tokens
-		char *toks[strlen(line) / 2];
+		char *toks[strlen(line) / 2 + 1];
 		uint32_t cnt = 0;
 		while (*line != '\0') {
 			toks[cnt++] = line;
