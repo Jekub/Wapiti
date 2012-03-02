@@ -64,6 +64,8 @@ static void opt_help(const char *pname) {
 		"\t-p | --pattern  FILE    patterns for extracting features\n"
 		"\t-m | --model    FILE    model file to preload\n"
 		"\t-d | --devel    FILE    development dataset\n"
+		"\t   | --rstate   FILE    optimizer state to restore\n"
+		"\t   | --sstate   FILE    optimizer state to save\n"
 		"\t-c | --compact          compact model after training\n"
 		"\t-t | --nthread  INT     number of worker threads\n"
 		"\t-j | --jobsize  INT     job size for worker threads\n"
@@ -111,6 +113,7 @@ const opt_t opt_defaults = {
 	.type    = "crf",
 	.maxent  = false,
 	.algo    = "l-bfgs", .pattern = NULL,  .model   = NULL, .devel   = NULL,
+	.rstate  = NULL,     .sstate  = NULL,
 	.compact = false,    .sparse  = false,
 	.nthread = 1,        .jobsize = 64,    .maxiter = 0,
 	.rho1    = 0.5,      .rho2    = 0.0001,
@@ -141,6 +144,8 @@ struct {
 	{0, "-p", "--pattern", 'S', offsetof(opt_t, pattern     )},
 	{0, "-m", "--model",   'S', offsetof(opt_t, model       )},
 	{0, "-d", "--devel",   'S', offsetof(opt_t, devel       )},
+	{0, "##", "--rstate",  'S', offsetof(opt_t, rstate      )},
+	{0, "##", "--sstate",  'S', offsetof(opt_t, sstate      )},
 	{0, "-c", "--compact", 'B', offsetof(opt_t, compact     )},
 	{0, "-s", "--sparse",  'B', offsetof(opt_t, sparse      )},
 	{0, "-t", "--nthread", 'U', offsetof(opt_t, nthread     )},

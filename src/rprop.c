@@ -24,11 +24,13 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#include <inttypes.h>
 #include <float.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -159,6 +161,30 @@ void trn_rprop(mdl_t *mdl) {
 		gp[f]  = 0.0;
 		stp[f] = 0.1;
 	}
+	// Restore a saved state if given by the user
+	if (mdl->opt->rstate != NULL) {
+		const char *err = "invalid state file";
+		FILE *file = fopen(mdl->opt->rstate, "r");
+		if (file == NULL)
+			fatal("failed to open input state file");
+		int type;
+		uint64_t nftr;
+		if (fscanf(file, "#state#%d#%"SCNu64"\n", &type, &nftr) != 2)
+			fatal(err);
+		if (type != 3)
+			fatal("state is not for rprop model");
+		for (uint64_t i = 0; i < nftr; i++) {
+			uint64_t f;
+			double vxp, vstp, vgp;
+			if (fscanf(file, "%"PRIu64" %la %la %la\n", &f, &vxp,
+					&vstp, &vgp) != 4)
+				fatal(err);
+			if (wbt && !cut) xp[f] = vxp;
+			gp[f] = vgp;
+			stp[f] = vstp;
+		}
+		fclose(file);
+	}
 	// Prepare the rprop state used to send information to the rprop worker
 	// about updating weight using the gradient.
 	rprop_t *st = xmalloc(sizeof(rprop_t));
@@ -179,6 +205,20 @@ void trn_rprop(mdl_t *mdl) {
 		mth_spawn((func_t *)trn_rpropsub, W, (void **)rprop, 0, 0);
 		if (uit_progress(mdl, k + 1, fx) == false)
 			break;
+	}
+	// Save state if user requested it
+	if (mdl->opt->sstate != NULL) {
+		FILE *file = fopen(mdl->opt->sstate, "w");
+		if (file == NULL)
+			fatal("failed to open output state file");
+		fprintf(file, "#state#3#%"PRIu64"\n", F);
+		for (uint64_t f = 0; f < F; f++) {
+			double vxp = xp != NULL ? xp[f] : 0.0;
+			double vstp = stp[f], vgp = gp[f];
+			fprintf(file, "%"PRIu64" ", f);
+			fprintf(file, "%la %la %la\n", vxp, vstp, vgp);
+		}
+		fclose(file);
 	}
 	// Free all allocated memory
 	if (wbt && !cut)

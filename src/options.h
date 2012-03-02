@@ -45,6 +45,7 @@ struct opt_s {
 	char     *type;
 	char     *algo,   *pattern;
 	char     *model,  *devel;
+	char     *rstate, *sstate;
 	bool      compact, sparse;
 	uint32_t  nthread;
 	uint32_t  jobsize;
