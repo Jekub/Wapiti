@@ -40,6 +40,12 @@ Specify a model file to load and to train again. This allow you either to contin
 .B \-d | \-\-devel <file>
 Specify the data file to load as a development set. At the end of each iterations the error rate is computed on this dataset and displayed in the progress line. If enabled, this values is used to check convergence and stop training. If none are specified, the training set is used instead but beware that this is bad practice to use the training set to choose the stopping criterion.
 .TP
+.B \-\-rstate <file>
+Restore an optimizer state from the given file and restart optimization from this point. Only available for L-BFGS and R-PROP but the saved state are compatible between MEMM and CRF models. This allow to keep more informations about the optimal point found while training an MEMM to bootstrap a CRF model, or to restart an optimization with adjusted parameters.
+.TP
+.B \-\-sstate <file>
+Save the full optimizer state at the end of optimization so it can be restored later with \-\-rstate.
+.TP
 .B \-c | \-\-compact
 Enable model compaction at the end of the training. This will remove all inactive observations from the model, leading to a much smaller model when an l1-penalty is used. See the note below for more details.
 .TP

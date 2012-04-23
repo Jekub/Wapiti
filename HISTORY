@@ -1,9 +1,13 @@
 ??/??/2012
   Release v1.3.1:
 
+    Add forced decoding to partialy decode sequences
+    Add optimizer state saving for L-BFGS and R-PROP
     Switched to elapsed time instead of wall time in progress
-    Fixed bug in Makefile (thanks to Lars Buitinck)
+    Fix bug in Makefile (thanks to Lars Buitinck)
+    Fix local normalization decoding in MEMM (thanks to Anoop Deoras)
     Fix bad handling of objwin option
+    Fix bug in reader for single letter obs and lbl
 
 03/11/2011
   Release v1.3.0: MEMM, faster gradient and bug fixes
