@@ -1,5 +1,5 @@
-??/??/2012
-  Release v1.3.1:
+23/04/2012
+  Release v1.4.0: Forced decoding, optimizer state, and bug fixes
 
     Add forced decoding to partialy decode sequences
     Add optimizer state saving for L-BFGS and R-PROP
