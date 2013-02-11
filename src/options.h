@@ -85,6 +85,8 @@ struct opt_s {
 	bool      lblpost;
 	uint32_t  nbest;
 	bool      force;
+	// Options for model dump
+	int       prec;
 };
 
 extern const opt_t opt_defaults;

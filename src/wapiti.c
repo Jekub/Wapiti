@@ -246,6 +246,8 @@ static void dodump(mdl_t *mdl) {
 	const uint64_t O = mdl->nobs;
 	const qrk_t *Qlbl = mdl->reader->lbl;
 	const qrk_t *Qobs = mdl->reader->obs;
+	char fmt[16];
+	sprintf(fmt, "%%.%df\n", mdl->opt->prec);
 	for (uint64_t o = 0; o < O; o++) {
 		const char *obs = qrk_id2str(Qobs, o);
 		bool empty = true;
@@ -255,7 +257,8 @@ static void dodump(mdl_t *mdl) {
 				if (w[y] == 0.0)
 					continue;
 				const char *ly = qrk_id2str(Qlbl, y);
-				fprintf(fout, "%s\t#\t%s\t%f\n", obs, ly, w[y]);
+				fprintf(fout, "%s\t#\t%s\t", obs, ly);
+				fprintf(fout, fmt, w[y]);
 				empty = false;
 			}
 		}
@@ -266,8 +269,8 @@ static void dodump(mdl_t *mdl) {
 					continue;
 				const char *ly  = qrk_id2str(Qlbl, d % Y);
 				const char *lyp = qrk_id2str(Qlbl, d / Y);
-				fprintf(fout, "%s\t%s\t%s\t%f\n", obs, lyp, ly,
-				       w[d]);
+				fprintf(fout, "%s\t%s\t%s\t", obs, lyp, ly);
+				fprintf(fout, fmt, w[d]);
 				empty = false;
 			}
 		}

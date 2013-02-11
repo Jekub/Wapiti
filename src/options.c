@@ -100,7 +100,9 @@ static void opt_help(const char *pname) {
 		"\t   | --force            use forced decoding\n"
 		"\n"
 		"Dumping mode\n"
-		"    %1$s dump [input model] [output text]\n";
+		"    %1$s dump [input model] [output text]\n"
+		"\t-p | --prec     INT     set weights precision\n"
+	;
 	fprintf(stderr, msg, pname);
 }
 
@@ -125,6 +127,7 @@ const opt_t opt_defaults = {
 	          .cutoff = false},
 	.label   = false,    .check   = false, .outsc = false,
 	.lblpost = false,    .nbest   = 1,     .force = false,
+	.prec    = 5,
 };
 
 /* opt_switch:
@@ -175,6 +178,7 @@ struct {
 	{1, "-p", "--post",    'B', offsetof(opt_t, lblpost     )},
 	{1, "-n", "--nbest",   'U', offsetof(opt_t, nbest       )},
 	{1, "##", "--force",   'B', offsetof(opt_t, force       )},
+	{2, "-p", "--prec",    'U', offsetof(opt_t, prec        )},
 	{-1, NULL, NULL, '\0', 0}
 };
 

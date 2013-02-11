@@ -131,7 +131,9 @@ Output the N-best sequences of labels instead of just the best one. The N sequen
 Enable forced decoding for labeling sequences that are already partially labeled. See below for details.
 
 .SS Dump mode
-For the moment, there is no switch specific to this mode.
+.TP
+.B \-p | \-\-prec <int>
+Set the floating point precision of weights values.
 
 .SH USAGE
 Wapiti can work in different modes. The mode determines the options that are available (see above) and what the model expects in the input and output files. In train mode, Wapiti expects a training dataset as input and outputs the trained model. In label mode, it expects data to label as input and will output the same data, augmented with the labels computed by the model. Finally, in dump mode, it expects a model as input and outputs it in a readable form.
