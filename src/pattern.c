@@ -1,9 +1,9 @@
 /*
  *      Wapiti - A linear-chain CRF tool
  *
- * Copyright (c) 2009-2012  CNRS
+ * Copyright (c) 2009-2013  CNRS
  * All rights reserved.
-i *
+ *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *     * Redistributions of source code must retain the above copyright
