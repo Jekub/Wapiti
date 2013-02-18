@@ -56,7 +56,7 @@ static void opt_help(const char *pname) {
 		"\t-h | --help      display this help message\n"
 		"\t   | --version   display version information\n"
 		"\n"
-		"Training mode:\n"
+		"Train mode:\n"
 		"    %1$s train [options] [input data] [model file]\n"
 		"\t   | --me               force maxent mode\n"
 		"\t-T | --type     STRING  type of model to train\n"
@@ -88,7 +88,7 @@ static void opt_help(const char *pname) {
 		"\t   | --stpdec   FLOAT   (rprop)  step decrement factor\n"
 		"\t   | --cutoff           (rprop)  alternate projection\n"
 		"\n"
-		"Labelling mode:\n"
+		"Label mode:\n"
 		"    %1$s label [options] [input data] [output data]\n"
 		"\t   | --me               force maxent mode\n"
 		"\t-m | --model    FILE    model file to load\n"
@@ -99,9 +99,13 @@ static void opt_help(const char *pname) {
 		"\t-n | --nbest    INT     output n-best list\n"
 		"\t   | --force            use forced decoding\n"
 		"\n"
-		"Dumping mode\n"
-		"    %1$s dump [input model] [output text]\n"
+		"Dump mode\n"
+		"    %1$s dump [options] [input model] [output text]\n"
 		"\t-p | --prec     INT     set weights precision\n"
+		"\n"
+		"Update mode\n"
+		"    %1$s update [options] [patch file] [output model]\n"
+		"\t-m | --model    FILE    model file to load\n"
 	;
 	fprintf(stderr, msg, pname);
 }
@@ -179,6 +183,7 @@ struct {
 	{1, "-n", "--nbest",   'U', offsetof(opt_t, nbest       )},
 	{1, "##", "--force",   'B', offsetof(opt_t, force       )},
 	{2, "-p", "--prec",    'U', offsetof(opt_t, prec        )},
+	{3, "-m", "--model",   'S', offsetof(opt_t, model       )},
 	{-1, NULL, NULL, '\0', 0}
 };
 
@@ -211,6 +216,8 @@ void opt_parse(int argc, char *argv[argc], opt_t *opt) {
 		opt->mode = 1;
 	} else if (!strcmp(argv[0], "d") || !strcmp(argv[0], "dump")) {
 		opt->mode = 2;
+	} else if (!strcmp(argv[0], "u") || !strcmp(argv[0], "update")) {
+		opt->mode = 3;
 	} else {
 		fatal("unknown mode <%s>", argv[0]);
 	}

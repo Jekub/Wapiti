@@ -24,6 +24,7 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
+#include <ctype.h>
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -281,6 +282,101 @@ static void dodump(mdl_t *mdl) {
 		fclose(fout);
 }
 
+
+/*******************************************************************************
+ * Updating
+ ******************************************************************************/
+static void doupdt(mdl_t *mdl) {
+	// Load input model file
+	info("* Load model\n");
+	if (mdl->opt->model == NULL)
+		fatal("no model file provided");
+	FILE *Min = fopen(mdl->opt->model, "r");
+	if (Min == NULL)
+		pfatal("cannot open model file %s", mdl->opt->model);
+	mdl_load(mdl, Min);
+	fclose(Min);
+	// Open patch file
+	info("* Update model\n");
+	FILE *fin = stdin;
+	if (mdl->opt->input != NULL) {
+		fin = fopen(mdl->opt->input, "r");
+		if (fin == NULL)
+			pfatal("cannot open update file");
+	}
+	int nline = 0;
+	while (!feof(fin)) {
+		char *raw = rdr_readline(fin);
+		if (raw == NULL)
+			break;
+		char *line = raw;
+		nline++;
+		// First we split the line in space separated tokens. We expect
+		// four of them and skip empty lines.
+		char *toks[4];
+		int ntoks = 0;
+		while (ntoks < 4) {
+			while (isspace(*line))
+				line++;
+			if (*line == '\0')
+				break;
+			toks[ntoks++] = line;
+			while (*line != '\0' && !isspace(*line))
+				line++;
+			if (*line == '\0')
+				break;
+			*line++ = '\0';
+		}
+		if (ntoks == 0) {
+			free(raw);
+			continue;
+		} else if (ntoks != 4) {
+			fatal("invalid line at %d", nline);
+		}
+		// Parse the tokens, the first three should be string maping to
+		// observations and labels and the last should be the weight.
+		uint64_t obs = none, yp = none, y = none;
+		obs = qrk_str2id(mdl->reader->obs, toks[0]);
+		if (obs == none)
+			fatal("bad on observation on line %d", nline);
+		if (strcmp(toks[1], "#")) {
+			yp = qrk_str2id(mdl->reader->lbl, toks[1]);
+			if (yp == none)
+				fatal("bad label <%s> line %d", toks[1], nline);
+		}
+		y = qrk_str2id(mdl->reader->lbl, toks[2]);
+		if (y == none)
+			fatal("bad label <%s> line %d", toks[2], nline);
+		double wgh = 0.0;
+		if (sscanf(toks[3], "%lf", &wgh) != 1)
+			fatal("bad weight on line %d", nline);
+
+		const uint32_t Y = mdl->nlbl;
+		if (yp == none) {
+			double *w = mdl->theta + mdl->uoff[obs];
+			w[y] = wgh;
+		} else {
+			double *w = mdl->theta + mdl->boff[obs];
+			w[yp * Y + y] = wgh;
+		}
+		free(raw);
+	}
+	if (mdl->opt->input != NULL)
+		fclose(fin);
+	// And save the updated model
+	info("* Save the model\n");
+	FILE *file = stdout;
+	if (mdl->opt->output != NULL) {
+		file = fopen(mdl->opt->output, "w");
+		if (file == NULL)
+			pfatal("cannot open output model");
+	}
+	mdl_save(mdl, file);
+	if (mdl->opt->output != NULL)
+		fclose(file);
+	info("* Done\n");
+}
+
 /*******************************************************************************
  * Entry point
  ******************************************************************************/
@@ -295,7 +391,8 @@ int main(int argc, char *argv[argc]) {
 	switch (opt.mode) {
 		case 0: dotrain(mdl); break;
 		case 1: dolabel(mdl); break;
-		case 2: dodump(mdl); break;
+		case 2: dodump(mdl);  break;
+		case 3: doupdt(mdl);  break;
 	}
 	// And cleanup
 	mdl_free(mdl);
