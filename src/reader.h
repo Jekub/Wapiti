@@ -69,5 +69,7 @@ dat_t *rdr_readdat(rdr_t *rdr, FILE *file, bool lbl);
 void rdr_load(rdr_t *rdr, FILE *file);
 void rdr_save(const rdr_t *rdr, FILE *file);
 
+char *rdr_readline(FILE *file);
+
 #endif
 

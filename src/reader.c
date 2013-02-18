@@ -121,7 +121,7 @@ void rdr_freedat(dat_t *dat) {
  *   available memory, a buffer large enough is allocated and returned. The
  *   caller is responsible to free it. On end-of-file, NULL is returned.
  */
-static char *rdr_readline(FILE *file) {
+char *rdr_readline(FILE *file) {
 	if (feof(file))
 		return NULL;
 	// Initialize the buffer
