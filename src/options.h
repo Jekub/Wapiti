@@ -87,6 +87,7 @@ struct opt_s {
 	bool      force;
 	// Options for model dump
 	int       prec;
+	bool      all;
 };
 
 extern const opt_t opt_defaults;

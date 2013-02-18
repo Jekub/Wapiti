@@ -255,7 +255,7 @@ static void dodump(mdl_t *mdl) {
 		if (mdl->kind[o] & 1) {
 			const double *w = mdl->theta + mdl->uoff[o];
 			for (uint32_t y = 0; y < Y; y++) {
-				if (w[y] == 0.0)
+				if (!mdl->opt->all && w[y] == 0.0)
 					continue;
 				const char *ly = qrk_id2str(Qlbl, y);
 				fprintf(fout, "%s\t#\t%s\t", obs, ly);
@@ -266,7 +266,7 @@ static void dodump(mdl_t *mdl) {
 		if (mdl->kind[o] & 2) {
 			const double *w = mdl->theta + mdl->boff[o];
 			for (uint32_t d = 0; d < Y * Y; d++) {
-				if (w[d] == 0.0)
+				if (!mdl->opt->all && w[d] == 0.0)
 					continue;
 				const char *ly  = qrk_id2str(Qlbl, d % Y);
 				const char *lyp = qrk_id2str(Qlbl, d / Y);
@@ -363,6 +363,15 @@ static void doupdt(mdl_t *mdl) {
 	}
 	if (mdl->opt->input != NULL)
 		fclose(fin);
+	// If requested compact the model.
+	if (mdl->opt->compact) {
+		const uint64_t O = mdl->nobs;
+		const uint64_t F = mdl->nftr;
+		info("* Compacting the model\n");
+		mdl_compact(mdl);
+		info("    %8"PRIu64" observations removed\n", O - mdl->nobs);
+		info("    %8"PRIu64" features removed\n", F - mdl->nftr);
+	}
 	// And save the updated model
 	info("* Save the model\n");
 	FILE *file = stdout;

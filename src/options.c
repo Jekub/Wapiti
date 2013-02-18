@@ -102,10 +102,12 @@ static void opt_help(const char *pname) {
 		"Dump mode\n"
 		"    %1$s dump [options] [input model] [output text]\n"
 		"\t-p | --prec     INT     set weights precision\n"
+		"\t   | --all              also output 0 weights\n"
 		"\n"
 		"Update mode\n"
 		"    %1$s update [options] [patch file] [output model]\n"
 		"\t-m | --model    FILE    model file to load\n"
+		"\t-c | --compact          compact model after training\n"
 	;
 	fprintf(stderr, msg, pname);
 }
@@ -131,7 +133,7 @@ const opt_t opt_defaults = {
 	          .cutoff = false},
 	.label   = false,    .check   = false, .outsc = false,
 	.lblpost = false,    .nbest   = 1,     .force = false,
-	.prec    = 5,
+	.prec    = 5,        .all     = false,
 };
 
 /* opt_switch:
@@ -183,7 +185,9 @@ struct {
 	{1, "-n", "--nbest",   'U', offsetof(opt_t, nbest       )},
 	{1, "##", "--force",   'B', offsetof(opt_t, force       )},
 	{2, "-p", "--prec",    'U', offsetof(opt_t, prec        )},
+	{2, "##", "--all",     'B', offsetof(opt_t, all         )},
 	{3, "-m", "--model",   'S', offsetof(opt_t, model       )},
+	{3, "-c", "--compact", 'B', offsetof(opt_t, compact     )},
 	{-1, NULL, NULL, '\0', 0}
 };
 
