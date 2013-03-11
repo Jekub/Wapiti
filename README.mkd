@@ -1,0 +1,35 @@
+# Wapiti - A linear-chain CRF tool
+
+    Copyright (c) 2009-2013  CNRS
+    All rights reserved.
+
+For more detailed information see the [homepage](http://wapiti.limsi.fr).
+
+Wapiti is a very fast toolkit for segmenting and labeling sequences with
+discriminative models. It is based on maxent models, maximum entropy Markov
+models and linear-chain CRF and proposes various optimization and regularization
+methods to improve both the computational complexity and the prediction
+performance of standard models. Wapiti is ranked first on the sequence tagging
+task for more than a year on MLcomp web site.
+
+Wapiti is developed by LIMSI-CNRS and was partially funded by ANR projects
+CroTaL (ANR-07-MDCO-003) and MGA (ANR-07-BLAN-0311-02).
+
+For suggestions, comments, or patchs, you can contact me at lavergne@limsi.fr
+
+If you use Wapiti for research purpose, please use the following citation:
+
+    @inproceedings{lavergne2010practical,
+        author    = {Lavergne, Thomas and Capp\'{e}, Olivier and Yvon,
+                     Fran\c{c}ois},
+        title     = {Practical Very Large Scale {CRFs}},
+        booktitle = {Proceedings the 48th Annual Meeting of the Association
+                     for Computational Linguistics ({ACL})},
+        month     = {July},
+        year      = {2010},
+        location  = {Uppsala, Sweden},
+        publisher = {Association for Computational Linguistics},
+        pages     = {504--513},
+        url       = {http://www.aclweb.org/anthology/P10-1052}
+    }
+

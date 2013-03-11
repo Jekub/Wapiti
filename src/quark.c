@@ -48,7 +48,7 @@
  *   Information Coded in Alphanumeric, Journal of the ACM 15 (4): pp. 514--534,
  *   1968. DOI:10.1145/321479.321481
  *
- *   This code is copyright 2002-2012 Thomas Lavergne and licenced under the BSD
+ *   This code is copyright 2002-2013 Thomas Lavergne and licenced under the BSD
  *   Licence like the remaining of Wapiti.
  ******************************************************************************/
 

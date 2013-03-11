@@ -272,7 +272,7 @@ void xvm_axpy(double r[], double a, const double x[], const double y[],
  *     -inf or -oor  -->   return  0.0
  *     qNaN or sNaN  -->   return qNaN
  *
- *   This code is copyright 2004-2012 Thomas Lavergne and licenced under the
+ *   This code is copyright 2004-2013 Thomas Lavergne and licenced under the
  *   BSD licence like the remaining of Wapiti.
  */
 void xvm_expma(double r[], const double x[], double a, uint64_t N) {
