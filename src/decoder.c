@@ -44,6 +44,7 @@
 #include "tools.h"
 #include "decoder.h"
 #include "vmath.h"
+#include "heap.h"
 
 /******************************************************************************
  * Sequence tagging
@@ -322,6 +323,10 @@ void tag_nbviterbi(mdl_t *mdl, const seq_t *seq, uint32_t N,
 	uint32_t (*back)[T][Y * N]    = (void *)vback;
 	double *cur = xmalloc(sizeof(double) * Y * N);
 	double *old = xmalloc(sizeof(double) * Y * N);
+	uint32_t indices [Y*N];
+	for (uint32_t i = 0; i < N * Y; i++) {
+	indices[i] = i;
+	}
 	// We first compute the scores for each transitions in the lattice of
 	// labels.
 	int op;
@@ -361,21 +366,17 @@ void tag_nbviterbi(mdl_t *mdl, const seq_t *seq, uint32_t N,
 						lst[d] += (*psi)[t][yp][y];
 				}
 			}
-			// 2nd, init the back with the N first
 			uint32_t *bk = &(*back)[t][y * N];
-			for (uint32_t n = 0; n < N; n++)
-				bk[n] = n;
-			// 3rd, search the N highest values
-			for (uint32_t i = N; i < N * Y; i++) {
-				// Search the smallest current value
-				uint32_t idx = 0;
-				for (uint32_t n = 1; n < N; n++)
-					if (lst[bk[n]] < lst[bk[idx]])
-						idx = n;
-				// And replace it if needed
-				if (lst[i] > lst[bk[idx]])
-					bk[idx] = i;
+			// 2nd, build a priority queue
+			heap_t *nbest = heap_new(cmp_nbest, lst);
+			for (uint32_t i = 0; i < N * Y; i++) {
+				heap_offer(nbest, &indices[i]);
 			}
+			// 3rd, get the n best values from priority queue
+			for (uint32_t n = 0; n < N; n++) {
+				bk[n] = *(uint32_t*)heap_poll(nbest);
+				}
+			heap_free(nbest);
 			// 4th, get the new scores
 			for (uint32_t n = 0; n < N; n++)
 				cur[y * N + n] = lst[bk[n]];
@@ -612,3 +613,16 @@ void tag_eval(mdl_t *mdl, double *te, double *se) {
 	*se = (double)serr / scnt * 100.0;
 }
 
+/* cmp_viterbi:
+ * Compare two indices in an array of scores (lst). Used for priotiy queue in n-best tagging.
+ */
+int cmp_nbest(const void * e1, const void * e2, const void * lst) {
+	const uint32_t *i1 = e1;
+	const uint32_t *i2 = e2;
+	const double *score = lst;
+
+	if (score[*i1]>score[*i2])
+		return 1;
+	else
+		return -1;
+}

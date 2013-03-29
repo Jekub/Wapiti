@@ -44,5 +44,7 @@ void tag_nbviterbi(mdl_t *mdl, const seq_t *seq, uint32_t N,
 void tag_label(mdl_t *mdl, FILE *fin, FILE *fout);
 void tag_eval(mdl_t *mdl, double *te, double *se);
 
+int cmp_nbest(const void * e1, const void * e2, const void * lst);
+
 #endif
 
