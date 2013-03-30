@@ -368,13 +368,21 @@ void tag_nbviterbi(mdl_t *mdl, const seq_t *seq, uint32_t N,
 			}
 			uint32_t *bk = &(*back)[t][y * N];
 			// 2nd, build a priority queue
+			// since n-best lists are already sorted for each previous state,
+			// only add 1-best per previous state to queue
 			heap_t *nbest = heap_new(cmp_nbest, lst);
-			for (uint32_t i = 0; i < N * Y; i++) {
-				heap_offer(nbest, &indices[i]);
+			for (uint32_t yp = 0; yp < Y; yp++) {
+				heap_offer(nbest, &indices[yp*N]);
 			}
 			// 3rd, get the n best values from priority queue
 			for (uint32_t n = 0; n < N; n++) {
-				bk[n] = *(uint32_t*)heap_poll(nbest);
+				uint32_t bst = *(uint32_t*)heap_poll(nbest);
+				bk[n] = bst;
+				// if hypothesis pulled from queue is n-best hypothesis for a previous state,
+				// add n+1-best hypothesis for this state to priority queue
+				// (except if it is the last one)
+				if (n+1 < N)
+					heap_offer(nbest, &indices[bst+1]);
 				}
 			heap_free(nbest);
 			// 4th, get the new scores
