@@ -522,9 +522,12 @@ dat_t *rdr_readdat(rdr_t *rdr, FILE *file, bool lbl) {
 void rdr_load(rdr_t *rdr, FILE *file) {
 	const char *err = "broken file, invalid reader format";
 	int autouni = rdr->autouni;
+	fpos_t pos;
+	fgetpos(file, &pos);
 	if (fscanf(file, "#rdr#%"PRIu32"/%"PRIu32"/%d\n",
 			&rdr->npats, &rdr->ntoks, &autouni) != 3) {
 		// This for compatibility with previous file format
+		fsetpos(file, &pos);
 		if (fscanf(file, "#rdr#%"PRIu32"/%"PRIu32"\n",
 				&rdr->npats, &rdr->ntoks) != 2)
 			fatal(err);

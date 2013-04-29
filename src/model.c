@@ -284,12 +284,15 @@ void mdl_load(mdl_t *mdl, FILE *file) {
 	const char *err = "invalid model format";
 	uint64_t nact = 0;
 	int type;
-	if (fscanf(file, "#mdl#%d#%"SCNu64"\n", &type, &nact) == 2)
+	if (fscanf(file, "#mdl#%d#%"SCNu64"\n", &type, &nact) == 2) {
 		mdl->type = type;
-	else if (fscanf(file, "#mdl#%"SCNu64"\n", &nact) == 1)
-		mdl->type = 0;
-	else
-		fatal(err);
+	} else {
+		rewind(file);
+		if (fscanf(file, "#mdl#%"SCNu64"\n", &nact) == 1)
+			mdl->type = 0;
+		else
+			fatal(err);
+	}
 	rdr_load(mdl->reader, file);
 	mdl_sync(mdl);
 	for (uint64_t i = 0; i < nact; i++) {

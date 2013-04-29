@@ -4,6 +4,8 @@
     Add precision specifier for model dumping
     Add update mode to modify a model
     Lots of english corrections in the manual
+    Fix bug in model format compatibility
+    Fix memory allocation with large models
 
 23/04/2012
   Release v1.4.0: Forced decoding, optimizer state, and bug fixes
