@@ -85,7 +85,7 @@ qrk_t *qrk_new(void) {
 	qrk->count = 0;
 	qrk->lock  = false;
 	qrk->size  = size;
-	qrk->leafs = xmalloc(sizeof(leaf_t) * size);
+	qrk->leafs = xmalloc(sizeof(leaf_t *) * size);
 	return qrk;
 }
 
