@@ -857,7 +857,8 @@ void grd_stfree(grd_st_t *grd_st) {
  */
 void grd_dospl(grd_st_t *grd_st, const seq_t *seq) {
 	grd_stcheck(grd_st, seq->len);
-	if (seq->len == 1 || grd_st->mdl->reader->nbi == 0)
+	rdr_t *rdr = grd_st->mdl->reader;
+	if (seq->len == 1 || (rdr->npats != 0 && rdr->nbi == 0))
 		grd_domaxent(grd_st, seq);
 	else if (grd_st->mdl->type == 0)
 		grd_domaxent(grd_st, seq);
