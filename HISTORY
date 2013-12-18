@@ -1,11 +1,13 @@
-??/??/2013
-  Release v?.?.?:
+18/12/2013
+  Release v1.5.0: Update mode and bug fixes
 
     Add precision specifier for model dumping
     Add update mode to modify a model
     Lots of english corrections in the manual
     Fix bug in model format compatibility
     Fix memory allocation with large models
+    Fix small memory bug in quark database
+    Fix bug with bigram features in raw mode
 
 23/04/2012
   Release v1.4.0: Forced decoding, optimizer state, and bug fixes

@@ -11,7 +11,7 @@ It currently implement maxent models, maximum entropy Markov models (MEMM) and l
 .P
 It can work in different mode depending on the first argument you give to it, either training a model, labeling new data, or dumping a model in readable form.
 .P
-The mode switch can be either "train", "label", or "dump". (only a prefix long enough to differentiate them is really needed)
+The mode switch can be either "train", "label", "dump", or "update". (only a prefix long enough to differentiate them is really needed)
 .SS Options
 .TP
 .B \-h | \-\-help
@@ -134,6 +134,17 @@ Enable forced decoding for labeling sequences that are already partially labeled
 .TP
 .B \-p | \-\-prec <int>
 Set the floating point precision of weights values.
+.TP
+.B \-\-all
+Force dumping of all features even the zero ones.
+
+.SS Update mode
+.TP
+.B \-m | \-\-model <file>
+Specifies a the model file to load and to update with the correction from the input file.
+.TP
+.B \-c | \-\-compact
+Force removal of blocks of zero features before saving the updated model file.
 
 .SH USAGE
 Wapiti can work in different modes. The mode determines the options that are available (see above) and what the model expects in the input and output files. In train mode, Wapiti expects a training dataset as input and outputs the trained model. In label mode, it expects data to label as input and will output the same data, augmented with the labels computed by the model. Finally, in dump mode, it expects a model as input and outputs it in a readable form.
@@ -276,6 +287,13 @@ Second, this can allow you to train bigger models. L-BFGS generally produces bet
 There is a tricky thing here. Compaction only removes the observation from the model not from the patterns. That is why, if you load the same data again, the compacted observations will be regenerated. To prevent this, loading a model before training prevents the generation of new observation keeping only the compacted model.
 
 But this conflicts with another feature, the incremental model construction, which allows us to load a model and add to it additional patterns in order to first train small models and increase them progressively. So if you specify both a model and a pattern file, the observation construction will be re-enabled and so the compaction will just have the effect of reducing the loading time.
+
+.SH MODEL DUMPING AND UPDATING
+The "dump" mode allow to dump a model in a text form human readable. By default the dump contains all non-zero features in a four column format, first the observation string produced by applying the pattern, next the two labels (the first one being '#' in case of unigram features), and finally the weight.
+
+The "update" mode allow to easily modify a model file by providing a patch file in the same format than the one produce by a dump. A feature from the patch file with non-zero weight will receive the new weight, if the weight is zero, the feature is removed from the model. All features not specified in the patch file are kept untouched.
+
+The recomanded way to proceed is to dump the original model with all features and full precision. Next modifying the weights as wanted in the dump file, and finally updateing the original model with the modified dump file.
 
 .SH EXAMPLES
 For training a very sparse CRF model on data in file 'train.txt' with patterns in file 'pattern' and using owl-qn algorithm, run the command:
