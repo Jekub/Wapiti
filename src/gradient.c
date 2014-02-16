@@ -43,7 +43,7 @@
 
 /* atm_inc:
  *   Atomically increment the value pointed by [ptr] by [inc]. If ATM_ANSI is
- *   defined this NOT atomic at all so caller must have to deal with this.
+ *   defined this is NOT atomic at all so caller must deal with this.
  */
 #ifdef ATM_ANSI
 static inline
@@ -71,13 +71,13 @@ void atm_inc(volatile double *value, double inc) {
  * Maxent gradient computation
  *
  *   Maxent or maximum entropy models are multi class logistic regression (see
- *   [1]. Then can be viewed as a special class of CRFs models where the there
- *   is no dependencies between the output labels. This mean that the
- *   normalization is local to each nodes and can be done a lot more efficiently
+ *   [1]. They can be viewed as a special class of CRFs models where there
+ *   are no dependencies between the output labels. This means that the
+ *   normalization is local to each node and can be done a lot more efficiently
  *   as we do not have to perform the forward backward procedure.
  *
  *   This code is used both when the maxent type of model is used and in other
- *   modes if the sequence length is one or if there is no bigrams features.
+ *   modes if the sequence length is one or if there are no bigrams features.
  *
  *   [1] A maximum entropy approach to natural language processing, A. Berger
  *       and S. Della Pietra and V. Della Pietra, Computational Linguistics,
@@ -135,14 +135,14 @@ void grd_domaxent(grd_st_t *grd_st, const seq_t *seq) {
  *
  *   Maximum entropy markov models are similar to linear-chains CRFs but with
  *   local normalization instead of global normalization (see [2]). This change
- *   make the computation a lot more simpler as at training time the gradient
- *   can be computed similarily to the maxent cases with the previous output
+ *   makes the computation a lot simpler as at training time the gradient
+ *   can be computed similarly to the maxent cases with the previous output
  *   label observed.
  *
- *   This mean that for bigram features we only have to consider the reference
- *   label at previous position instead of all possible labels, so we don't have
+ *   This means that for bigram features we only have to consider the reference
+ *   label at the previous position instead of all possible labels, so we don't have
  *   to perform the forward backward. Bigrams features are handle in the same
- *   way than unigrams features.
+ *   way as unigrams features.
  *
  *   [2] Maximum Entropy Markov Models for Information Extraction and
  *       Segmentation, A. McCallum and D. Freitag and F. Pereira, 2000,
@@ -225,39 +225,39 @@ void grd_domemm(grd_st_t *grd_st, const seq_t *seq) {
  *   This section is responsible for computing the gradient of the
  *   log-likelihood function to optimize over a single sequence.
  *
- *   There is two version of this code, one using dense matrix and one with
- *   sparse matrix. The sparse version use the fact that for L1 regularized
+ *   There are two versions of this code, one using a dense matrix and one with
+ *   a sparse matrix. The sparse version use the fact that for L1 regularized
  *   trainers, the bigrams scores will be very sparse so there is a way to
  *   reduce the amount of computation needed in the forward backward at the
  *   price of a more complex implementation. Due to the fact that using a sparse
- *   matrix have a cost, this implementation is slower on L2 regularized models
- *   and on lighty L1-regularized models, this is why there is also a classical
+ *   matrix has a cost, this implementation is slower on L2 regularized models
+ *   and on lighty L1-regularized models. This is why there is also a classical
  *   dense version of the algorithm used for example by the L-BFGS trainer.
  *
  *   The sparse matrix implementation is a bit tricky because we need to store
- *   all values in sequences in order to use the vector exponential who gives
- *   also a lot of performance improvement on vector able machine.
- *   We need four arrays noted <val>, <off>, <idx>, and <yp>. For each positions
- *   t, <off>[t] value indicate where the non-zero values for t starts in <val>.
- *   The other arrays gives the y and yp indices of these values. The easier one
- *   to retrieve is yp, the yp indice for value at <val>[<off>[t] + n] is stored
+ *   all values in sequences in order to use the vector exponential which also gives
+ *   a lot of performance improvement on vector-able machines.
+ *   We need four arrays noted <val>, <off>, <idx>, and <yp>. For each position
+ *   t, the <off>[t] value indicates where the non-zero values for t start in <val>.
+ *   The other arrays give the y and yp indices of these values. The easier one
+ *   to retrieve is yp, the yp index for the value at <val>[<off>[t] + n] is stored
  *   at the same position in <yp>.
  *   The y are more difficult: the indice y are stored with n between <idx>[y-1]
- *   and <idx>[y]. It may seems inefective but the matrix is indexed in the
+ *   and <idx>[y]. It may seem inefficient but the matrix is indexed in the
  *   other way, we go through the idx array, and for each y we get the yp and
  *   values, so in practice it's very efficient.
  *
  *   This can seem too complex but we have to keep in mind that Y are generally
- *   very low and any sparse-matrix have overhead so we have to reduce it to the
- *   minimum in order to get a real improvment. Dedicated library are optimized
- *   for bigger matrix where the overhead is not a so important problem.
+ *   very low and any sparse-matrix has overhead so we have to reduce it to the
+ *   minimum in order to get a real improvment. Dedicated libraries are optimized
+ *   for bigger matrices, where the overhead is not such an important problem.
  *   Another problem here is cache size. The optimization process will last most
- *   of his time in this function so it have to be well optimized and we already
- *   need a lot of memory for other data so we have to be carefull here if we
- *   don't want to flush the cache all the time. Sparse matrix require less
- *   memory than dense one only if we now in advance the number of non-zero
+ *   of the time in this function so it has to be well optimized and we already
+ *   need a lot of memory for other data so we have to be careful here if we
+ *   don't want to flush the cache all the time. Sparse matrices require less
+ *   memory than dense ones only if we know in advance the number of non-zero
  *   entries, which is not the case here, so we have to use a scheme which in
- *   the worst case use as less as possible memory.
+ *   the worst case uses as litle as possible memory.
  ******************************************************************************/
 
 /* grd_fldopsi:
@@ -265,19 +265,19 @@ void grd_domemm(grd_st_t *grd_st, const seq_t *seq) {
  *       Ψ_t(y',y,x) = \exp( ∑_k θ_k f_k(y',y,x_t) )
  *   So at position 't' in the sequence, for each couple (y',y) we have to sum
  *   weights of all features. Only the observations present at this position
- *   will have a non-nul weight so we can sum only on thoses. As we use only two
- *   kind of features: unigram and bigram, we can rewrite this as
+ *   will have a non-null weight so we can sum only on those. As we use only two
+ *   kinds of features: unigram and bigram, we can rewrite this as
  *       \exp (  ∑_k μ_k(y, x_t)     f_k(y, x_t)
  *             + ∑_k λ_k(y', y, x_t) f_k(y', y, x_t) )
- *   Where the first sum is over the unigrams features and the second is over
- *   bigrams ones.
- *   This allow us to compute Ψ efficiently in three steps
- *     1/ we sum the unigrams features weights by looping over actives
- *          unigrams observations. (we compute this sum once and use it
+ *   Where the first sum is over the unigram features and the second is over
+ *   bigram ones.
+ *   This allows us to compute Ψ efficiently in three steps
+ *     1/ we sum the unigrams features weights by looping over active
+ *          unigram observations. (we compute this sum once and use it
  *          for each value of y')
- *     2/ we add the bigrams features weights by looping over actives
- *          bigrams observations (we don't have to do this for t=0 since
- *          there is no bigrams here)
+ *     2/ we add the bigram feature weights by looping over active
+ *          bigram observations (we don't have to do this for t=0 since
+ *          there are no bigrams here)
  *     3/ we take the component-wise exponential of the resulting matrix
  *          (this can be done efficiently with vector maths)
  */
@@ -319,19 +319,19 @@ void grd_fldopsi(grd_st_t *grd_st, const seq_t *seq) {
  *   For the sparse version, we keep the two sum separate so we will have
  *   separate Ψ_t(y,x) and Ψ_t(y',y,x). The first one define a vector for
  *   unigram at each position, and the second one a matrix for bigrams.  This is
- *   where the trick is as we will store Ψ_t(y',y,x) - 1. If the sum is nul, his
+ *   where the trick is as we will store Ψ_t(y',y,x) - 1. If the sum is null, the
  *   exponential will be 1.0 and so we have to store 0.0.  As most of the sum
- *   are expected to be nul the resulting matrix will be very sparse and we will
+ *   are expected to be null the resulting matrix will be very sparse and we will
  *   save computation in the forward-backward.
  *
  *   So we compute Ψ differently here
- *     1/ we sum the unigrams features weights by looping over actives
- *          unigrams observations and store them in |psiuni|.
- *     2/ we sum the bigrams features weights by looping over actives
+ *     1/ we sum the unigram feature weights by looping over active
+ *          unigram observations and store them in |psiuni|.
+ *     2/ we sum the bigram feature weights by looping over actives
  *          bigrams observations (we don't have to do this for t=0 since
- *          there is no bigrams here) and we store the non-nul one in the
+ *          there is no bigrams here) and we store the non-null ones in the
  *          sparse matrix.
- *     3/ we take the component-wise exponential of the unigrams vectors,
+ *     3/ we take the component-wise exponential of the unigram vectors,
  *          and the component-wise exponential of the sparse matrix minus
  *          one. (here also this can be done efficiently with vector
  *          maths)
@@ -382,13 +382,13 @@ void grd_spdopsi(grd_st_t *grd_st, const seq_t *seq) {
 }
 
 /* grd_flfwdbwd:
- *   Now, we go to the forward-backward algorithm. As this part of the code rely
+ *   Now, we go to the forward-backward algorithm. As this part of the code relies
  *   on a lot of recursive sums and products of exponentials, we have to take
  *   care of numerical problems.
  *   First the forward recursion
  *       | α_1(y) = Ψ_1(y,x)
  *       | α_t(y) = ∑_{y'} α_{t-1}(y') * Ψ_t(y',y,x)
- *   Next come the backward recursion which is very similar
+ *   Next comes the backward recursion which is very similar
  *       | β_T(y') = 1
  *       | β_t(y') = ∑_y β_{t+1}(y) * Ψ_{t+1}(y',y,x)
  *   The numerical problems can appear here. To solve them we will scale the α_t
@@ -445,7 +445,7 @@ void grd_flfwdbwd(grd_st_t *grd_st, const seq_t *seq) {
 }
 
 /* grd_spfwdbwd:
- *   And the sparse version which is a bit more cmoplicated but follow the same
+ *   And the sparse version which is a bit more cmoplicated but follows the same
  *   general path. First the forward recursion
  *       | α_1(y) = Ψ_1(y,x)
  *       | α_t(y) = Ψ_t(y,x) * (   ∑_{y'} α_{t-1}(y')
@@ -459,7 +459,7 @@ void grd_flfwdbwd(grd_st_t *grd_st, const seq_t *seq) {
  *       | β_t(y') = ∑_y v_{t+1}(y) + ∑_y v_{t+1}(y) * (Ψ_{t+1}(y',y,x) - 1)
  *   with
  *       v_{t+1}(y) = β_{t+1}(y) * Ψ_{t+1}(y,x)
- *   And here also we reduce the number of multiplication if the matrix is
+ *   And here also we reduce the number of multiplications if the matrix is
  *   really sparse.
  */
 void grd_spfwdbwd(grd_st_t *grd_st, const seq_t *seq) {
@@ -541,7 +541,7 @@ void grd_spfwdbwd(grd_st_t *grd_st, const seq_t *seq) {
  *
  *   The second is very simple to compute as we just have to sum over the
  *   actives observations in the sequence and will be done by the grd_subemp.
- *   The first one is more tricky as it involve computing the probability p_θ.
+ *   The first one is more tricky as it involves computing the probability p_θ.
  *   This is where we use all the previous computations. Again we separate the
  *   computations for unigrams and bigrams here.
  *
@@ -552,8 +552,8 @@ void grd_spfwdbwd(grd_st_t *grd_st, const seq_t *seq) {
  *   use the local normalization constants.
  *
  *   We must also take care of not clearing previous value of the gradient
- *   vector but just adding the contribution of this sequence. This allow to
- *   compute it easily the gradient over more than one sequence.
+ *   vector but just adding the contribution of this sequence. This allows us
+ *   to easily compute the gradient over more than one sequence.
  */
 void grd_flupgrad(grd_st_t *grd_st, const seq_t *seq) {
 	const mdl_t *mdl = grd_st->mdl;
@@ -591,9 +591,9 @@ void grd_flupgrad(grd_st_t *grd_st, const seq_t *seq) {
 }
 
 /* grd_spupgrad:
- *   The sparse matrix make things a bit more complicated here as we cannot
+ *   The sparse matrix makes things a bit more complicated here as we cannot
  *   directly multiply with the original Ψ_t(y',y,x) because we have split it
- *   two components and the second one is sparse, so we have to make a quite
+ *   over two components and the second one is sparse, so we have to make a quite
  *   complex workaround to fix that. We have to explicitly build the expectation
  *   matrix. We first fill it with the unigram component and next multiply it
  *   with the bigram one.
@@ -654,7 +654,7 @@ void grd_spupgrad(grd_st_t *grd_st, const seq_t *seq) {
 }
 
 /* grd_subemp:
- *   Substract from the gradient, the expectation over the empirical
+ *   Subtract from the gradient, the expectation over the empirical
  *   distribution. This is the second step of the gradient computation shared
  *   by the non-sparse and sparse version.
  */
@@ -733,11 +733,11 @@ void grd_logloss(grd_st_t *grd_st, const seq_t *seq) {
 }
 
 /* grd_docrf:
- *   This function compute the gradient and value of the negative log-likelihood
+ *   This function computes the gradient and value of the negative log-likelihood
  *   of the model over a single training sequence.
  *
  *   This function will not clear the gradient before computation, but instead
- *   just accumulate the values for the given sequence in it. This allow to
+ *   just accumulates the values for the given sequence in it. This allows us to
  *   easily compute the gradient over a set of sequences.
  */
 void grd_docrf(grd_st_t *grd_st, const seq_t *seq) {
@@ -766,15 +766,15 @@ void grd_docrf(grd_st_t *grd_st, const seq_t *seq) {
  *   The gradient computation is multi-threaded, you first have to call the
  *   function 'grd_setup' to prepare the workers pool, and next you can use
  *   'grd_gradient' to ask for the full gradient as many time as you want. Each
- *   time the gradient is computed over the full training set, using the curent
+ *   time the gradient is computed over the full training set, using the current
  *   value of the parameters and applying the regularization. If need the
- *   pseudo-gradient can also be computed. When you have done, you have to call
+ *   pseudo-gradient can also be computed. When you are done, you have to call
  *   'grd_cleanup' to free the allocated memory.
  *
- *   This require an additional vector of size <nftr> per thread after the
+ *   This requires an additional vector of size <nftr> per thread after the
  *   first, so it can take a lot of memory to compute big models on a lot of
  *   threads. It is strongly discouraged to ask for more threads than you have
- *   cores, or to more thread than you have memory to hold vectors.
+ *   cores, or to ask for more threads than you have memory to hold vectors.
  ******************************************************************************/
 
 /* grd_stcheck:
@@ -782,7 +782,7 @@ void grd_docrf(grd_st_t *grd_st, const seq_t *seq) {
  *   linear-chain codepath can be computed for a sequence of the given length.
  */
 void grd_stcheck(grd_st_t *grd_st, uint32_t len) {
-	// Check if user ask for clearing the state tracker or if he requested a
+	// Check if user asked to cleare the state tracker or if he requested a
 	// bigger tracker. In this case we have to free the previous allocated
 	// memory.
 	if (len == 0 || (len > grd_st->len && grd_st->len != 0)) {
@@ -822,7 +822,7 @@ void grd_stcheck(grd_st_t *grd_st, uint32_t len) {
 }
 
 /* grd_stnew:
- *   Allocation memory for gradient computation state. This allocate memory for
+ *   Allocation memory for gradient computation state. This allocates memory for
  *   the longest sequence present in the data set.
  */
 grd_st_t *grd_stnew(mdl_t *mdl, double *g) {
