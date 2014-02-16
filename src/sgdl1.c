@@ -57,12 +57,12 @@ typedef struct sgd_idx_s {
 } sgd_idx_t;
 
 /* applypenalty:
- *   This macro is quite ugly as it make a lot of things and use local variables
- *   of the function below. I'm sorry for this but this is allow to not
- *   duplicate the code below. Due to the way unigrams and bigrams observation
+ *   This macro is quite ugly as it makes a lot of things and uses local variables
+ *   from the function below. I'm sorry for this but this is necessary, to avoid
+ *   code duplication below. Due to the way unigram and bigram observations
  *   are stored we must use this two times. As this macro is dangerous when
  *   called outsize of sgd-l1 we undef it just after.
- *   This function match exactly the APPLYPENALTY function defined in [1] pp 481
+ *   This function exactly matches the APPLYPENALTY function defined in [1] pp 481
  *   and the formula on the middle of the page 480.
  */
 #define applypenalty(f) do {                               \
@@ -77,8 +77,8 @@ typedef struct sgd_idx_s {
  *   already present, we do nothing, else we add it.
  */
 static void sgd_add(uint64_t *obs, uint32_t *cnt, uint64_t new) {
-	// First check if value is already in the array, we do a linear probing
-	// as it is simpler and since these array will be very short in
+	// First check if the value is already in the array. We do linear probing
+	// as it is simpler and since these arrays will be very short in
 	// practice, it's efficient enough.
 	for (uint32_t p = 0; p < *cnt; p++)
 		if (obs[p] == new)
@@ -99,10 +99,10 @@ void trn_sgdl1(mdl_t *mdl) {
 	const uint32_t  S = mdl->train->nseq;
 	const uint32_t  K = mdl->opt->maxiter;
 	      double   *w = mdl->theta;
-	// First we have to build and index who hold, for each sequences, the
-	// list of actives observations.
-	// The index is a simple table indexed by sequences number. Each entry
-	// point to two lists of observations terminated by <none>, one for
+	// First we have to build an index that holds, for each sequences, the
+	// list of active observations.
+	// The index is a simple table indexed by sequence number. Each entry
+	// points to two lists of observations terminated by <none>, one for
 	// unigrams obss and one for bigrams obss.
 	info("    - Build the index\n");
 	sgd_idx_t *idx  = xmalloc(sizeof(sgd_idx_t) * S);
@@ -127,17 +127,17 @@ void trn_sgdl1(mdl_t *mdl) {
 		memcpy(idx[s].bobs, bobs, bcnt * sizeof(uint64_t));
 	}
 	info("      Done\n");
-	// We will process sequences in random order in each iteration, so we
+	// We will process the sequences in random order in each iteration, so we
 	// will have to permute them. The current permutation is stored in a
 	// vector called <perm> shuffled at the start of each iteration. We
 	// just initialize it with the identity permutation.
-	// As we use the same gradient function than the other trainers, we need
+	// As we use the same gradient function as the other trainers, we need
 	// an array to store it. These functions accumulate the gradient so we
-	// need to clear it at start and before each new computation. As we now
-	// which features are active and so which gradient cell are updated, we
-	// can clear them selectively instead of fully clear the gradient each
-	// time.
-	// We also need an aditional vector named <q> who hold the penalty
+	// need to clear it at the start and before each new computation.
+	// Because we know which features are active, we know which gradient cells
+	// are updated, which allows us to  clear them selectively instead of fully
+	// clearing the gradient each time.
+	// We also need an aditional vector named <q> that holds the penalty
 	// already applied to each features.
 	uint32_t *perm = xmalloc(sizeof(uint32_t) * S);
 	for (uint32_t s = 0; s < S; s++)
@@ -146,15 +146,15 @@ void trn_sgdl1(mdl_t *mdl) {
 	double *q = xmalloc(sizeof(double) * F);
 	for (uint64_t f = 0; f < F; f++)
 		g[f] = q[f] = 0.0;
-	// We can now start training the model, we perform the requested number
-	// of iteration, each of these going through all the sequences. For
-	// computing the decay, we will need to keep track of the number of
-	// already processed sequences, this is tracked by the <i> variable.
+	// We can now start training the model. We perform the requested number
+	// of iterations, each going through all the sequences. To
+	// compute the decay, we will need to keep track of the number of
+	// already processed sequences. This is tracked by the <i> variable.
 	double u = 0.0;
 	grd_st_t *grd_st = grd_stnew(mdl, g);
 	for (uint32_t k = 0, i = 0; k < K && !uit_stop; k++) {
-		// First we shuffle the sequence by making a lot of random swap
-		// of entry in the permutation index.
+		// First we shuffle the sequence by making a lot of random swaps
+		// of entries in the permutation index.
 		for (uint32_t s = 0; s < S; s++) {
 			const uint32_t a = rand() % S;
 			const uint32_t b = rand() % S;
@@ -162,7 +162,7 @@ void trn_sgdl1(mdl_t *mdl) {
 			perm[a] = perm[b];
 			perm[b] = t;
 		}
-		// And so, we can process sequence in a random order
+		// And so, we can process the sequence in a random order
 		for (uint32_t sp = 0; sp < S && !uit_stop; sp++, i++) {
 			const uint32_t s = perm[sp];
 			const seq_t *seq = mdl->train->seq[s];
@@ -178,9 +178,9 @@ void trn_sgdl1(mdl_t *mdl) {
 			const double alpha = mdl->opt->sgdl1.alpha;
 			const double nk = n0 * pow(alpha, (double)i / S);
 			u = u + nk * mdl->opt->rho1 / S;
-			// Now we apply the update to all unigrams and bigrams
-			// observations actives in the current sequence. We must
-			// not forget to clear the gradient for the next
+			// Now we apply the update to all unigram and bigram
+			// observations active in the current sequence.
+			// We must not forget to clear the gradient for the next
 			// sequence.
 			for (uint32_t n = 0; idx[s].uobs[n] != none; n++) {
 				uint64_t f = mdl->uoff[idx[s].uobs[n]];
@@ -201,7 +201,7 @@ void trn_sgdl1(mdl_t *mdl) {
 		}
 		if (uit_stop)
 			break;
-		// Repport progress back to the user
+		// Report progress back to the user
 		if (!uit_progress(mdl, k + 1, -1.0))
 			break;
 	}
