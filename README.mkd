@@ -3,33 +3,126 @@
     Copyright (c) 2009-2013  CNRS
     All rights reserved.
 
-For more detailed information see the [homepage](http://wapiti.limsi.fr).
+For more detailed information see the homepage: [http://wapiti.limsi.fr/](http://wapiti.limsi.fr/)
 
+## Introduction
 Wapiti is a very fast toolkit for segmenting and labeling sequences with
-discriminative models. It is based on maxent models, maximum entropy Markov
-models and linear-chain CRF and proposes various optimization and regularization
-methods to improve both the computational complexity and the prediction
-performance of standard models. Wapiti is ranked first on the sequence tagging
-task for more than a year on MLcomp web site.
+discriminative models. It is based on **[maxent](http://en.wikipedia.org/wiki/Maximum_entropy_classifier) models**, **maximum entropy Markov models** and **linear-chain [CRF](http://en.wikipedia.org/wiki/Conditional_random_field)** and proposes various optimization and regularization methods to improve
+both the computational complexity and the prediction performance of standard models.
 
-Wapiti is developed by LIMSI-CNRS and was partially funded by ANR projects
-CroTaL (ANR-07-MDCO-003) and MGA (ANR-07-BLAN-0311-02).
+Wapiti is ranked first on the sequence tagging task for more than a year on [MLcomp](http://mlcomp.org) web site.
 
-For suggestions, comments, or patchs, you can contact me at lavergne@limsi.fr
+Wapiti is developed by [LIMSI-CNRS](http://www.limsi.fr) and was partially funded by the following ANR projects:
+
+* [CroTaL](http://crotal.gforge.inria.fr/) (ANR-07-MDCO-003)  
+* [MGA]() (ANR-07-BLAN-0311-02).
+
+For suggestions, comments, or patchs, you can contact me at [lavergne@limsi.fr](mailto:lavergne@limsi.fr)
 
 If you use Wapiti for research purpose, please use the following citation:
 
-    @inproceedings{lavergne2010practical,
-        author    = {Lavergne, Thomas and Capp\'{e}, Olivier and Yvon,
-                     Fran\c{c}ois},
-        title     = {Practical Very Large Scale {CRFs}},
-        booktitle = {Proceedings the 48th Annual Meeting of the Association
-                     for Computational Linguistics ({ACL})},
-        month     = {July},
-        year      = {2010},
-        location  = {Uppsala, Sweden},
-        publisher = {Association for Computational Linguistics},
-        pages     = {504--513},
-        url       = {http://www.aclweb.org/anthology/P10-1052}
-    }
+	@inproceedings{lavergne2010practical,
+		author    = {Lavergne, Thomas and Capp\'{e}, Olivier and Yvon, Fran\c{c}ois},
+		title     = {Practical Very Large Scale {CRFs}},
+		booktitle = {Proceedings the 48th Annual Meeting of the Association for
+		Computational Linguistics ({ACL})},
+		month     = {July},
+		year      = {2010},
+		location  = {Uppsala, Sweden},
+		publisher = {Association for Computational Linguistics},
+		pages     = {504--513},
+		url       = {http://www.aclweb.org/anthology/P10-1052}
+	}
 
+## Features
+
+* **Handle large label and feature sets**:  
+Wapiti was used to train models with more than one thousand labels and models with several billions features. Training time still increase with the size of these set, but provided you have computing power and enough memory, Wapiti will handle them without problems.
+
+* **L-BFGS, OWL-QN, SGD-L1, BCD, and RPROP training algorithms**:  
+Wapiti implements all the standard training algorithms. All these algorithms are highly-optimized and can be combined to improve both computational and generalization performances.
+
+* **L1, L2, or Elastic-net regularization**:  
+Wapiti provides different regularization methods which allow reducing overfitting and efficient features selections.
+
+* **Powerful features extraction system**:  
+Wapiti uses an extended version of the CRF++ patterns for extracting features, which reduces both the amount of pre-processing required and the size of datafiles.
+
+* **Multi-threaded and vectorized implementation**:  
+To further improve their performances, all optimization algorithms can take advantage of SSE instructions, if available. The Quasi-Newton and RPROP optimization algorithms are parallelized and scale very well on multi-processors.
+
+* **N-best Viterbi output**:  
+Viterbi decoding can output the classical best label sequence as well as the n-best ones. Decoding can be done with the classical Viterbi for CRF or through posteriors which are slower but generaly lead to better result and give normalized scores.
+
+* **Compact model creation**:  
+When used with L1 or elastic-net penalties, Wapiti is able to remove unused features and creates compact models which load faster and use less memory, speeding up the labeling.
+
+* **Sparse forward-backward**:  
+A specific sparse forward-backward procedure is used during the training to take advantage of the sparsity of the model and speedup computation.
+
+* **Written in standard C99+POSIX**:  
+Wapiti source code is written almost entirely in standard C99 and should work on any computer. However, the multi-threading code is written using POSIX threads and the SSE code is written for x86 platform. Both are optional and can be disabled or rewritten for other platforms.
+
+* **Open source**:  
+BSD Licence
+
+## Models
+The following models can be downloaded and used with Wapiti.  
+We provide models for **POS-tagging** of **english**, **german**, and **arabic** data,  
+as well as a model to joinly perform **POS-tagging** and **segmentation** of **arabic**.
+
+* **English** POS-tagging: [model.gz (3Mo)](http://wapiti.limsi.fr/model-pos.en.gz)
+* **German** POS-tagging: [model.gz (8Mo)](http://wapiti.limsi.fr/model-pos.de.gz)
+* **Arabic** POS-tagging: [model.gz (19Mo)](http://wapiti.limsi.fr/model-pos.ar.gz)
+* **Arabic** POS-tagging and segmentation: [model.gz (30Mo)](http://wapiti.limsi.fr/model-seg.ar.gz)
+
+## Regularization
+Regularization improves numerical stability of the training, reduces the risk of overfitting and allows to automatically select relevant features. Wapiti implements the most used regularization method.
+
+* **L2-penalty** or **Gaussian prior**  
+that ensures good stability and reduces overfitting but without doing feature selection.
+
+* **L1-penalty** or **Laplacian prior**  
+that is primarily used as a feature selection tool and can dramatically reduce the model size. However, it is not as good as the L2-penalty for numerical stability of second-order optimization algorithms.
+
+* **Elastic-net penalty**  
+combines the advantages of the two previous regularization methods and allows to select features while keeping the second-order algorithms numerically stable.
+
+## Optimization algorithms
+Learning a CRF model amounts to minimizing numerically the empirical risk. Wapiti provides different optimization algorithms:
+
+* **Quasi-Newton L-BFGS** and **OWL-QN**:  
+The L-BFGS is classical and efficient limited memory quasi-Newton algorithm and OWL-QN is an adaptation of it to optimize function not differentiable in zero like L1 regularized function. It's main advantage is guaranteed convergence and precision but this come at the price of memory requirement. It optimize the whole function at each iteration using the whole training dataset
+
+* **Resilient propagation** (**R-PROP**)  
+is a first order method who only use the gradient sign and a per-coordinate dynamic step size. It converge very quickly and is generally as precise as L-BFGS. Typically only around 30 iterations are needed. It require less memory than L-BFGS as it doesn't need the hessian approximation and the update is fully multi-threaded as well as gradient computation. The R-PROP+ and R-PROP- variants are implemented, the former is generally more efficient but the later require less memory. Both L2 and L1 variants are implemented.
+
+* **Stochastic gradient descent** (**SGD-L1**)  
+is a more naive algorithm who optimize the whole function using a single sequence at a time. It's main advantage is that it converge to a not so bad solution very quickly but it will generally fail to reach the optimum. Doing a few SGD iteration allow to quickly find a good approximation of the model that can be improved using quasi-Newton method.
+
+* **Block-wise coordinate descent** (**BCD**)  
+is more specific algorithm who optimize a block of feature sharing the same test on the observation using all the sequences where these features are actives. It can be very effective when your features actives only in a few sequences but it's performance can be dramatics when features appear in almost all sequences. Use it only on suitable data.
+
+## Licence
+Wapiti is licenced under the term of the two-clause BSD Licence:
+
+	Copyright (c) 2009-2013  CNRS
+	All rights reserved.
+	Redistribution and use in source and binary forms, with or without
+	modification, are permitted provided that the following conditions are met:
+	* Redistributions of source code must retain the above copyright
+	notice, this list of conditions and the following disclaimer.
+	* Redistributions in binary form must reproduce the above copyright
+	notice, this list of conditions and the following disclaimer in the
+	documentation and/or other materials provided with the distribution.
+	THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+	AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+	IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+	ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
+	LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+	CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
+	SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
+	INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+	CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+	ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+	POSSIBILITY OF SUCH DAMAGE.</pre></blockquote>
