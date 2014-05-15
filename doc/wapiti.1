@@ -82,13 +82,13 @@ Enables gradient clipping for the L-BFGS. This will set to 0 the gradient compon
 Specifies the size of the history to keep in L-BFGS to approximate the inverse of the diagonal of the Hessian. Increasing this value lead to better approximation, so generally less iterations but increase memory usage. The default is 5.
 .TP
 .B \-\-maxls <integer>
-Set the maximum number of linesearch step in L-BFGS to perform before giving up.
+Set the maximum number of linesearch step in L-BFGS to perform before giving up. Default value is 40.
 .TP
 .B \-\-eta0 <float>
-Set the learning rate for SGD trainer.
+Set the learning rate for SGD trainer. Default value is 0.8.
 .TP
 .B \-\-alpha <float>
-Set the alpha value of the exponential decay in SGD trainer.
+Set the alpha value of the exponential decay in SGD trainer. Default value is 0.85.
 .TP
 .B \-\-kappa <float>
 Set the kappa parameter for BCD trainer. Default is 1.5, increasing this value make the algorithm more stable but also slower. Try to increase it if you have numerical instability.
