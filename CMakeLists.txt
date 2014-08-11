@@ -18,12 +18,8 @@ elseif(UNIX)
 endif()
 message ("Swig sources list: ${SOURCES_SWIG}")
 
-
 #SET_SOURCE_FILES_PROPERTIES( ${SOURCES} PROPERTIES LANGUAGE CXX )
 
 add_library( wapiti SHARED ${SOURCES} ${SOURCES_SWIG})
 
 set( CMAKE_VERBOSE_MAKEFILE on )
-
-#add_subdirectory("src")
-
