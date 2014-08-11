@@ -92,7 +92,7 @@ struct opt_s {
 
 extern const opt_t opt_defaults;
 
-void opt_parse(int argc, char *argv[argc], opt_t *opt);
+void opt_parse(int argc, char **argv, opt_t *opt);
 
 #endif
 

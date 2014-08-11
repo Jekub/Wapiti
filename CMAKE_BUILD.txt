@@ -1,0 +1,5 @@
+1. cd <wapiti_root> 
+2. mkdir build; cd build
+3. cmake ..
+4. make
+5. In the build folder there will be a libraty libwapiti.*

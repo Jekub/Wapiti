@@ -1,3 +1,10 @@
+# Patched by Vyacheslav Zholudev
+The source code was patched not to use VLA (i.e. main(int argc, char*[argc] argv), instead main(int argc, char** argv) is used)
+To build the code: 
+  mkdir build; cd build; cmake ..; make libwapiti.so/dylib will appear in the same directory. The jar file can we found at src/swig
+
+
+
 # Wapiti - A linear-chain CRF tool
 
     Copyright (c) 2009-2013  CNRS

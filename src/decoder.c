@@ -313,7 +313,7 @@ void tag_viterbi(mdl_t *mdl, const seq_t *seq,
  *   previous function but will be slower to do it.
  */
 void tag_nbviterbi(mdl_t *mdl, const seq_t *seq, uint32_t N,
-                   uint32_t out[][N], double sc[], double psc[][N]) {
+                   uint32_t **out, double sc[], double **psc) {
 	const uint32_t Y = mdl->nlbl;
 	const uint32_t T = seq->len;
 	double   *vpsi  = xvm_new(T * Y * Y);
