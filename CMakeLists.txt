@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 2.8)
 project( wapiti )
 
-set(CMAKE_C_FLAGS "-std=c99")
+set(CMAKE_C_FLAGS "-std=c99 -D__USE_MINGW_ANSI_STDIO")
+set(JAVA_HOME "C:/Program Files/Java/jdk1.8.0_25")
 
 set(CMAKE_SKIP_BUILD_RPATH FALSE)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
