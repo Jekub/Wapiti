@@ -34,7 +34,9 @@
 
 #include <unistd.h>
 #include <sys/time.h>
+#if !defined(WIN32) && !defined(_WIN32)
 #include <sys/resource.h>
+#endif
 
 #include "wapiti.h"
 #include "decoder.h"
