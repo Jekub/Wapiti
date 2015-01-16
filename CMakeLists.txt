@@ -2,7 +2,6 @@ cmake_minimum_required(VERSION 2.8)
 project( wapiti )
 
 set(CMAKE_C_FLAGS "-std=c99 -D__USE_MINGW_ANSI_STDIO")
-set(JAVA_HOME "C:/Program Files/Java/jdk1.8.0_25")
 
 set(CMAKE_SKIP_BUILD_RPATH FALSE)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
@@ -30,6 +29,7 @@ message ("Swig sources list: ${SOURCES_SWIG}")
 
 #SET_SOURCE_FILES_PROPERTIES( ${SOURCES} PROPERTIES LANGUAGE CXX )
 
-add_library( wapiti SHARED ${SOURCES} ${SOURCES_SWIG})
+add_executable( wapiti-cmd ${SOURCES} )
+add_library( wapiti SHARED ${SOURCES} ${SOURCES_SWIG} )
 
 set( CMAKE_VERBOSE_MAKEFILE on )
