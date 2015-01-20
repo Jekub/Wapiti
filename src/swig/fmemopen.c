@@ -45,7 +45,6 @@ FILE* open_file_temp(const char *filename, const char *mode)
 
     fd = _open_osfhandle((intptr_t)hFile, _O_TEXT);
     return _fdopen(fd, mode);
-    
 }
 
 FILE *fmemopen(void *buf, size_t size, const char *mode)
@@ -58,11 +57,11 @@ FILE *fmemopen(void *buf, size_t size, const char *mode)
     if (0 == GetTempFileName(temppath, "WAP", 0, filename))
         return NULL;
 
-    if (0 == init_file(filename, buf, size))
+    if (0 != init_file(filename, buf, size))
         return NULL;
-    
-    return open_file_temp(filename, mode);}
 
+    return open_file_temp(filename, mode);
+}
 
 #elif !defined(linux)
 
