@@ -1,3 +1,7 @@
+# This modified version is modified yet again by Christopher Boumenot.
+
+The modified modified version adds support for Windows.
+
 # This is a modified version of Wapiti 1.5, patched by Vyacheslav Zholudev
 
 The present modified version brings to the latest Wapiti release the following features:
