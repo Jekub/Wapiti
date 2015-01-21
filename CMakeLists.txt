@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 project( wapiti )
 
-set(CMAKE_C_FLAGS "-std=c99 -D__USE_MINGW_ANSI_STDIO")
+set(CMAKE_C_FLAGS "-std=c99")
 
 set(CMAKE_SKIP_BUILD_RPATH FALSE)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
@@ -24,6 +24,10 @@ AUX_SOURCE_DIRECTORY(src/swig SOURCES_SWIG)
 if(APPLE)
 elseif(UNIX)
   list(REMOVE_ITEM SOURCES_SWIG src/swig/fmemopen.c)
+elseif(MINGW)
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D__USE_MINGW_ANSI_STDIO")
+  set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -static -static-libgcc -static-libstdc++")
+  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static -static-libgcc -static-libstdc++")
 endif()
 message ("Swig sources list: ${SOURCES_SWIG}")
 
