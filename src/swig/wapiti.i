@@ -151,7 +151,7 @@ void printModelPath(mdl_t* mdl);
             if (file == NULL) {
                 pfatal("cannot open input model file: %s", mdl->opt->model);
             }
-            mdl_load(mdl, file);
+            mdl_load(mdl, rdr_readline, file);
 
             return mdl;
     }
