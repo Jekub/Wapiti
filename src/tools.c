@@ -142,6 +142,17 @@ char *xstrdup(const char *str) {
 	return res;
 }
 
+/* xstrndup:
+ *   As the previous one, this is a safe version of xstrndup who fail on
+ *   allocation error.
+ */
+char *xstrndup(const char *str, size_t size) {
+	const size_t len = size + 1;
+	char *res = xmalloc(sizeof(char) * len);
+	memcpy(res, str, len);
+	return res;
+}
+
 /******************************************************************************
  * Netstring for persistent storage
  *
@@ -157,17 +168,24 @@ char *xstrdup(const char *str) {
  *   Read a string from the given file in netstring format. The string is
  *   returned as a newly allocated bloc of memory 0-terminated.
  */
-char *ns_readstr(FILE *file) {
-	uint32_t len;
-	if (fscanf(file, "%"SCNu32":", &len) != 1)
-		pfatal("cannot read from file");
-	char *buf = xmalloc(len + 1);
-	if (fread(buf, len, 1, file) != 1)
-		pfatal("cannot read from file");
-	if (fgetc(file) != ',')
-		fatal("invalid format");
-	buf[len] = '\0';
-	fgetc(file);
+char *ns_readstr(readline_cb_t readline_cb, void *rl_data) {
+        uint32_t len;
+        char *line = readline_cb(rl_data);
+        
+        if (sscanf(line, "%"SCNu32":", &len) != 1)
+            pfatal("invalid format");
+        
+        char *colon = strchr(line, ':');
+        if (colon == NULL)
+            pfatal("invalid format");
+
+        char *comma = colon + len + 1;
+        if (comma[0] != ',')
+            pfatal("invalid format");
+
+        char *buf = xstrndup(colon + 1, len);
+        buf[len] = '\0';
+
 	return buf;
 }
 

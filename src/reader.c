@@ -121,7 +121,8 @@ void rdr_freedat(dat_t *dat) {
  *   available memory, a buffer large enough is allocated and returned. The
  *   caller is responsible to free it. On end-of-file, NULL is returned.
  */
-char *rdr_readline(FILE *file) {
+char *rdr_readline(void *rl_data) {
+        FILE *file = (FILE*)rl_data;
 	if (feof(file))
 		return NULL;
 	// Initialize the buffer
@@ -160,14 +161,15 @@ char *rdr_readline(FILE *file) {
 	return xrealloc(buffer, len + 1);
 }
 
+
 /* rdr_loadpat:
  *   Load and compile patterns from given file and store them in the reader. As
  *   we compile patterns, syntax errors in them will be raised at this time.
  */
-void rdr_loadpat(rdr_t *rdr, FILE *file) {
-	while (!feof(file)) {
+void rdr_loadpat(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data) {
+        while (true) {
 		// Read raw input line
-		char *line = rdr_readline(file);
+                char *line = readline_cb(rl_data);
 		if (line == NULL)
 			break;
 		// Remove comments and trailing spaces
@@ -197,22 +199,21 @@ void rdr_loadpat(rdr_t *rdr, FILE *file) {
 	}
 }
 
+
 /* rdr_readraw:
  *   Read a raw sequence from given file: a set of lines terminated by end of
  *   file or by an empty line. Return NULL if file end was reached before any
  *   sequence was read.
  */
-raw_t *rdr_readraw(rdr_t *rdr, FILE *file) {
-	if (feof(file))
-		return NULL;
+raw_t *rdr_readraw(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data) {
 	// Prepare the raw sequence object
 	uint32_t size = 32, cnt = 0;
 	raw_t *raw = xmalloc(sizeof(raw_t) + sizeof(char *) * size);
 	// And read the next sequence in the file, this will skip any blank line
 	// before reading the sequence stoping at end of file or on a new blank
 	// line.
-	while (!feof(file)) {
-		char *line = rdr_readline(file);
+	while (true) {
+                char *line = readline_cb(rl_data);
 		if (line == NULL)
 			break;
 		// Check for empty line marking the end of the current sequence
@@ -251,6 +252,7 @@ raw_t *rdr_readraw(rdr_t *rdr, FILE *file) {
 	raw->len = cnt;
 	return raw;
 }
+
 
 /* rdr_mapobs:
  *   Map an observation to its identifier, automatically adding a 'u' prefix in
@@ -462,8 +464,8 @@ seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl) {
  *   to be labeled.
  *   Return NULL if end of file occure before anything as been read.
  */
-seq_t *rdr_readseq(rdr_t *rdr, FILE *file, bool lbl) {
-	raw_t *raw = rdr_readraw(rdr, file);
+seq_t *rdr_readseq(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data, bool lbl) {
+        raw_t *raw = rdr_readraw(rdr, readline_cb, rl_data);
 	if (raw == NULL)
 		return NULL;
 	seq_t *seq = rdr_raw2seq(rdr, raw, lbl);
@@ -476,7 +478,7 @@ seq_t *rdr_readseq(rdr_t *rdr, FILE *file, bool lbl) {
  *   take and interpret his parameters like the single sequence reading
  *   function.
  */
-dat_t *rdr_readdat(rdr_t *rdr, FILE *file, bool lbl) {
+dat_t *rdr_readdat(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data, bool lbl) {
 	// Prepare dataset
 	uint32_t size = 1000;
 	dat_t *dat = xmalloc(sizeof(dat_t));
@@ -485,9 +487,9 @@ dat_t *rdr_readdat(rdr_t *rdr, FILE *file, bool lbl) {
 	dat->lbl = lbl;
 	dat->seq = xmalloc(sizeof(seq_t *) * size);
 	// Load sequences
-	while (!feof(file)) {
+	while (true) {
 		// Read the next sequence
-		seq_t *seq = rdr_readseq(rdr, file, lbl);
+                seq_t *seq = rdr_readseq(rdr, readline_cb, rl_data, lbl);
 		if (seq == NULL)
 			break;
 		// Grow the buffer if needed
@@ -513,22 +515,21 @@ dat_t *rdr_readdat(rdr_t *rdr, FILE *file, bool lbl) {
 	return dat;
 }
 
+
 /* rdr_load:
  *   Read from the given file a reader saved previously with rdr_save. The given
  *   reader must be empty, comming fresh from rdr_new. Be carefull that this
  *   function performs almost no checks on the input data, so if you modify the
  *   reader and make a mistake, it will probably result in a crash.
  */
-void rdr_load(rdr_t *rdr, FILE *file) {
+void rdr_load(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data) {
 	const char *err = "broken file, invalid reader format";
 	int autouni = rdr->autouni;
-	fpos_t pos;
-	fgetpos(file, &pos);
-	if (fscanf(file, "#rdr#%"PRIu32"/%"PRIu32"/%d\n",
+        char *line = readline_cb(rl_data);
+	if (sscanf(line, "#rdr#%"PRIu32"/%"PRIu32"/%d\n",
 			&rdr->npats, &rdr->ntoks, &autouni) != 3) {
 		// This for compatibility with previous file format
-		fsetpos(file, &pos);
-		if (fscanf(file, "#rdr#%"PRIu32"/%"PRIu32"\n",
+		if (sscanf(line, "#rdr#%"PRIu32"/%"PRIu32"\n",
 				&rdr->npats, &rdr->ntoks) != 2)
 			fatal(err);
 	}
@@ -537,7 +538,7 @@ void rdr_load(rdr_t *rdr, FILE *file) {
 	if (rdr->npats != 0) {
 		rdr->pats = xmalloc(sizeof(pat_t *) * rdr->npats);
 		for (uint32_t p = 0; p < rdr->npats; p++) {
-			char *pat = ns_readstr(file);
+                        char *pat = ns_readstr(readline_cb, rl_data);
 			rdr->pats[p] = pat_comp(pat);
 			switch (tolower(pat[0])) {
 				case 'u': rdr->nuni++; break;
@@ -547,9 +548,10 @@ void rdr_load(rdr_t *rdr, FILE *file) {
 			}
 		}
 	}
-	qrk_load(rdr->lbl, file);
-	qrk_load(rdr->obs, file);
+	qrk_load(rdr->lbl, readline_cb, rl_data);
+	qrk_load(rdr->obs, readline_cb, rl_data);
 }
+
 
 /* rdr_save:
  *   Save the reader to the given file so it can be loaded back. The save format

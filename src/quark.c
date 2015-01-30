@@ -33,6 +33,7 @@
 #include <string.h>
 
 #include "quark.h"
+#include "reader.h"
 #include "tools.h"
 
 /******************************************************************************
@@ -238,19 +239,21 @@ void qrk_save(const qrk_t *qrk, FILE *file) {
  *   not already present. If all keys are single lines and the given map is
  *   initilay empty, this will load a map exactly as saved by qrk_save.
  */
-void qrk_load(qrk_t *qrk, FILE *file) {
+void qrk_load(qrk_t *qrk, readline_cb_t readline_cb, void *rl_data) {
 	uint64_t cnt = 0;
-	if (fscanf(file, "#qrk#%"SCNu64"\n", &cnt) != 1) {
-		if (ferror(file) != 0)
-			pfatal("cannot read from file");
+        char *line;
+
+        line = readline_cb(rl_data);
+	if (sscanf(line, "#qrk#%"SCNu64"\n", &cnt) != 1) {
 		pfatal("invalid format");
 	}
 	for (uint64_t n = 0; n < cnt; ++n) {
-		char *str = ns_readstr(file);
+                char *str = ns_readstr(readline_cb, rl_data);
 		qrk_str2id(qrk, str);
 		free(str);
 	}
 }
+
 
 /* qrk_count:
  *   Return the number of mappings stored in the quark.

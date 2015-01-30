@@ -100,7 +100,7 @@ static void dotrain(mdl_t *mdl) {
 		FILE *file = fopen(mdl->opt->model, "r");
 		if (file == NULL)
 			pfatal("cannot open input model file");
-		mdl_load(mdl, file);
+		mdl_load(mdl, rdr_readline, file);
 	}
 	// Load the pattern file. This will unlock the database if previously
 	// locked by loading a model.
@@ -109,7 +109,7 @@ static void dotrain(mdl_t *mdl) {
 		FILE *file = fopen(mdl->opt->pattern, "r");
 		if (file == NULL)
 			pfatal("cannot open pattern file");
-		rdr_loadpat(mdl->reader, file);
+		rdr_loadpat(mdl->reader, rdr_readline, file);
 		fclose(file);
 		qrk_lock(mdl->reader->obs, false);
 	}
@@ -123,7 +123,7 @@ static void dotrain(mdl_t *mdl) {
 		if (file == NULL)
 			pfatal("cannot open input data file");
 	}
-	mdl->train = rdr_readdat(mdl->reader, file, true);
+	mdl->train = rdr_readdat(mdl->reader, rdr_readline, file, true);
 	if (mdl->opt->input != NULL)
 		fclose(file);
 	qrk_lock(mdl->reader->lbl, true);
@@ -137,7 +137,7 @@ static void dotrain(mdl_t *mdl) {
 		FILE *file = fopen(mdl->opt->devel, "r");
 		if (file == NULL)
 			pfatal("cannot open development file");
-		mdl->devel = rdr_readdat(mdl->reader, file, true);
+		mdl->devel = rdr_readdat(mdl->reader, rdr_readline, file, true);
 		fclose(file);
 	}
 	// Initialize the model. If a previous model was loaded, this will be
@@ -195,7 +195,7 @@ static void dolabel(mdl_t *mdl) {
 	FILE *file = fopen(mdl->opt->model, "r");
 	if (file == NULL)
 		pfatal("cannot open input model file");
-	mdl_load(mdl, file);
+	mdl_load(mdl, rdr_readline, file);
 	// Open input and output files
 	FILE *fin = stdin, *fout = stdout;
 	if (mdl->opt->input != NULL) {
@@ -231,7 +231,7 @@ static void dodump(mdl_t *mdl) {
 		if (fin == NULL)
 			pfatal("cannot open input data file");
 	}
-	mdl_load(mdl, fin);
+	mdl_load(mdl, rdr_readline, fin);
 	if (mdl->opt->input != NULL)
 		fclose(fin);
 	// Open output file
@@ -294,7 +294,7 @@ static void doupdt(mdl_t *mdl) {
 	FILE *Min = fopen(mdl->opt->model, "r");
 	if (Min == NULL)
 		pfatal("cannot open model file %s", mdl->opt->model);
-	mdl_load(mdl, Min);
+	mdl_load(mdl, rdr_readline, Min);
 	fclose(Min);
 	// Open patch file
 	info("* Update model\n");

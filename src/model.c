@@ -280,25 +280,28 @@ void mdl_save(mdl_t *mdl, FILE *file) {
  *   The returned model is synced and the quarks are locked. You must give to
  *   this function an empty model fresh from mdl_new.
  */
-void mdl_load(mdl_t *mdl, FILE *file) {
+void mdl_load(mdl_t *mdl, readline_cb_t readline_cb, void *rl_data) {
 	const char *err = "invalid model format";
 	uint64_t nact = 0;
 	int type;
-	if (fscanf(file, "#mdl#%d#%"SCNu64"\n", &type, &nact) == 2) {
+        char *line;
+
+        line = readline_cb(rl_data);
+	if (sscanf(line, "#mdl#%d#%"SCNu64"\n", &type, &nact) == 2) {
 		mdl->type = type;
-	} else {
-		rewind(file);
-		if (fscanf(file, "#mdl#%"SCNu64"\n", &nact) == 1)
-			mdl->type = 0;
-		else
-			fatal(err);
+	} else if (sscanf(line, "#mdl#%"SCNu64"\n", &nact) == 1) {
+            mdl->type = 0;
+        } else {
+              fatal(err);
 	}
-	rdr_load(mdl->reader, file);
+        rdr_load(mdl->reader, readline_cb, rl_data);
 	mdl_sync(mdl);
 	for (uint64_t i = 0; i < nact; i++) {
 		uint64_t f;
 		double v;
-		if (fscanf(file, "%"SCNu64"=%la\n", &f, &v) != 2)
+                
+                line = readline_cb(rl_data);
+		if (sscanf(line, "%"SCNu64"=%la\n", &f, &v) != 2)
 			fatal(err);
 		mdl->theta[f] = v;
 	}

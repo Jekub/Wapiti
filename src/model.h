@@ -36,6 +36,7 @@
 #include "options.h"
 #include "sequence.h"
 #include "reader.h"
+#include "tools.h"
 
 typedef struct timeval tms_t;
 
@@ -97,6 +98,6 @@ void mdl_free(mdl_t *mdl);
 void mdl_sync(mdl_t *mdl);
 void mdl_compact(mdl_t *mdl);
 void mdl_save(mdl_t *mdl, FILE *file);
-void mdl_load(mdl_t *mdl, FILE *file);
+void mdl_load(mdl_t *mdl, readline_cb_t readline_cb, void *rl_data);
 
 #endif

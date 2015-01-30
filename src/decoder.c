@@ -435,7 +435,7 @@ void tag_label(mdl_t *mdl, FILE *fin, FILE *fout) {
 	while (!feof(fin)) {
 		// So, first read an input sequence keeping the raw_t object
 		// available, and label it with Viterbi.
-		raw_t *raw = rdr_readraw(mdl->reader, fin);
+                raw_t *raw = rdr_readraw(mdl->reader, rdr_readline, fin);
 		if (raw == NULL)
 			break;
 		seq_t *seq = rdr_raw2seq(mdl->reader, raw,

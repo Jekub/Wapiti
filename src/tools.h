@@ -32,6 +32,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+typedef char* (*readline_cb_t)(void *);
+
 #define unused(v) ((void)(v))
 #define none ((uint64_t)-1)
 
@@ -46,8 +48,9 @@ void info(const char *msg, ...);
 void *xmalloc(size_t size);
 void *xrealloc(void *ptr, size_t size);
 char *xstrdup(const char *str);
+char *xstrndup(const char *str, size_t size);
 
-char *ns_readstr(FILE *file);
+char *ns_readstr(readline_cb_t readline_cb, void *rl_data);
 void ns_writestr(FILE *file, const char *str);
 
 #endif

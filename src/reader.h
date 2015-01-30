@@ -35,6 +35,7 @@
 #include "pattern.h"
 #include "quark.h"
 #include "sequence.h"
+#include "tools.h"
 
 /* rdr_t:
  *   The reader object who hold all informations needed to parse the input file:
@@ -60,16 +61,18 @@ void rdr_freeraw(raw_t *raw);
 void rdr_freeseq(seq_t *seq);
 void rdr_freedat(dat_t *dat);
 
-void rdr_loadpat(rdr_t *rdr, FILE *file);
-raw_t *rdr_readraw(rdr_t *rdr, FILE *file);
-seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl);
-seq_t *rdr_readseq(rdr_t *rdr, FILE *file, bool lbl);
-dat_t *rdr_readdat(rdr_t *rdr, FILE *file, bool lbl);
 
-void rdr_load(rdr_t *rdr, FILE *file);
+void rdr_loadpat(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data);
+raw_t *rdr_readraw(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data);
+seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl);
+seq_t *rdr_readseq(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data, bool lbl);
+dat_t *rdr_readdat(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data, bool lbl);
+
+
+void rdr_load(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data);
 void rdr_save(const rdr_t *rdr, FILE *file);
 
-char *rdr_readline(FILE *file);
+char *rdr_readline(void *rl_data);
 
 #endif
 
