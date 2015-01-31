@@ -28,7 +28,7 @@
 #include <stdio.h>
 
 typedef char *(*gets_cb_t)(void *);
-typedef void  (*puts_cb_t)(void *, char *);
+typedef int   (*puts_cb_t)(void *, char *);
 
 
 /* iol_t:
@@ -45,5 +45,6 @@ struct iol_s {
 
 iol_t *iol_new(FILE *in, FILE *out);
 iol_t *iol_new2(gets_cb_t gets_cb, void *in, puts_cb_t puts_cb, void *out);
+void iol_free(iol_t *iol);
 
 #endif

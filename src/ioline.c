@@ -30,7 +30,7 @@
 #include "tools.h"
 
 static char *iol_gets(void *in);
-static void  iol_puts(void *out, char *line);
+static int   iol_puts(void *out, char *line);
 
 iol_t *iol_new(FILE *in, FILE *out) {
     iol_t *iol = xmalloc(sizeof(iol_t));
@@ -48,6 +48,10 @@ iol_t *iol_new2(gets_cb_t gets_cb, void *in, puts_cb_t puts_cb, void *out) {
     iol->puts_cb = puts_cb;
     iol->out     = out;
     return iol;
+}
+
+void iol_free(iol_t *iol) {
+    free(iol);
 }
 
 
@@ -100,8 +104,8 @@ static char *iol_gets(void *in) {
  *   Puts a line to <out>.  A new line character is appended to the end of
  *   the line.
  */
-static void iol_puts(void *out, char *line) {
+static int iol_puts(void *out, char *line) {
         FILE *file = (FILE*)out;
-        fprintf(file, "%s\n", line);
+        return fprintf(file, "%s\n", line);
 }
 
