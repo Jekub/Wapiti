@@ -357,9 +357,12 @@ int main(int argc, char *argv[argc]) {
 	opt_parse(argc, argv, &opt);
 	// Next we prepare the model
         iol_t *io_iol = create_iol(&opt);
-        iol_t *model_iol = create_model_iol(&opt);
+        iol_t *model_iol;
+	switch (opt.mode) {
+	        case 2:  model_iol = io_iol; break;
+                default: model_iol = create_model_iol(&opt); break;
+	}
 	mdl_t *mdl = mdl_new(rdr_new(model_iol, opt.maxent));
-
 	mdl->opt = &opt;
 	// And switch to requested mode
 	switch (opt.mode) {
