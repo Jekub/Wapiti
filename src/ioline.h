@@ -28,23 +28,24 @@
 #include <stdio.h>
 
 typedef char *(*gets_cb_t)(void *);
-typedef int   (*puts_cb_t)(void *, char *);
-
+typedef int   (*puts_cb_t)(void *, char *, ...);
+typedef int   (*print_cb_t)(void *, char *, ...);
 
 /* iol_t:
  *   Represents a class to do IO in a line by line basis.
  */
 typedef struct iol_s iol_t;
 struct iol_s {
-    gets_cb_t gets_cb; // callback to get a line of input
-    puts_cb_t puts_cb; // callback to put a line of output
+    gets_cb_t gets_cb;   // callback to get a line from in
+    puts_cb_t puts_cb;   // callback to put a line to out
+    print_cb_t print_cb; // callback to print a line to out
 
-    void *in;        // state passed to the gets callback
-    void *out;       // state passed to the puts callback
+    void *in;          // state passed to the gets callback
+    void *out;         // state passed to the puts callback
 };    
 
 iol_t *iol_new(FILE *in, FILE *out);
-iol_t *iol_new2(gets_cb_t gets_cb, void *in, puts_cb_t puts_cb, void *out);
+iol_t *iol_new2(gets_cb_t gets_cb, void *in, print_cb_t print_cb, void *out);
 void iol_free(iol_t *iol);
 
 #endif

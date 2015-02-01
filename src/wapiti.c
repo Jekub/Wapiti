@@ -67,7 +67,7 @@ static const struct {
 };
 static const uint32_t trn_cnt = sizeof(trn_lst) / sizeof(trn_lst[0]);
 
-static void dotrain(mdl_t *mdl) {
+static void dotrain(mdl_t *mdl, iol_t *iol) {
 	// Check if the user requested the type or trainer list. If this is not
 	// the case, search them in the lists.
 	if (!strcmp(mdl->opt->type, "list")) {
@@ -97,10 +97,7 @@ static void dotrain(mdl_t *mdl) {
 	// Load a previous model to train again if specified by the user.
 	if (mdl->opt->model != NULL) {
 		info("* Load previous model\n");
-		FILE *file = fopen(mdl->opt->model, "r");
-		if (file == NULL)
-			pfatal("cannot open input model file");
-		mdl_load(mdl, rdr_readline, file);
+		mdl_load(mdl);
 	}
 	// Load the pattern file. This will unlock the database if previously
 	// locked by loading a model.
@@ -109,23 +106,17 @@ static void dotrain(mdl_t *mdl) {
 		FILE *file = fopen(mdl->opt->pattern, "r");
 		if (file == NULL)
 			pfatal("cannot open pattern file");
-		rdr_loadpat(mdl->reader, rdr_readline, file);
+		iol_t *iol = iol_new(file, NULL);
+		rdr_loadpat(mdl->reader, iol);
 		fclose(file);
+		iol_free(iol);
 		qrk_lock(mdl->reader->obs, false);
 	}
 	// Load the training data. When this is done we lock the quarks as we
 	// don't want to put in the model, informations present only in the
 	// devlopment set.
 	info("* Load training data\n");
-	FILE *file = stdin;
-	if (mdl->opt->input != NULL) {
-		file = fopen(mdl->opt->input, "r");
-		if (file == NULL)
-			pfatal("cannot open input data file");
-	}
-	mdl->train = rdr_readdat(mdl->reader, rdr_readline, file, true);
-	if (mdl->opt->input != NULL)
-		fclose(file);
+	mdl->train = rdr_readdat(mdl->reader, iol, true);
 	qrk_lock(mdl->reader->lbl, true);
 	qrk_lock(mdl->reader->obs, true);
 	if (mdl->train == NULL || mdl->train->nseq == 0)
@@ -135,9 +126,11 @@ static void dotrain(mdl_t *mdl) {
 	if (mdl->opt->devel != NULL) {
 		info("* Load development data\n");
 		FILE *file = fopen(mdl->opt->devel, "r");
+		iol_t *iol = iol_new(file, NULL);
 		if (file == NULL)
 			pfatal("cannot open development file");
-		mdl->devel = rdr_readdat(mdl->reader, rdr_readline, file, true);
+		mdl->devel = rdr_readdat(mdl->reader, iol, true);
+		iol_free(iol);
 		fclose(file);
 	}
 	// Initialize the model. If a previous model was loaded, this will be
@@ -171,76 +164,32 @@ static void dotrain(mdl_t *mdl) {
 	}
 	// And save the trained model
 	info("* Save the model\n");
-	file = stdout;
-	if (mdl->opt->output != NULL) {
-		file = fopen(mdl->opt->output, "w");
-		if (file == NULL)
-			pfatal("cannot open output model");
-	}
-	mdl_save(mdl, file);
-	if (mdl->opt->output != NULL)
-		fclose(file);
+	mdl_save(mdl, iol);
 	info("* Done\n");
 }
 
 /*******************************************************************************
  * Labeling
  ******************************************************************************/
-static void dolabel(mdl_t *mdl) {
+static void dolabel(mdl_t *mdl, iol_t *iol) {
 	// First, load the model provided by the user. This is mandatory to
 	// label new datas ;-)
-	if (mdl->opt->model == NULL)
-		fatal("you must specify a model");
 	info("* Load model\n");
-	FILE *file = fopen(mdl->opt->model, "r");
-	if (file == NULL)
-		pfatal("cannot open input model file");
-	mdl_load(mdl, rdr_readline, file);
-	// Open input and output files
-	FILE *fin = stdin, *fout = stdout;
-	if (mdl->opt->input != NULL) {
-		fin = fopen(mdl->opt->input, "r");
-		if (fin == NULL)
-			pfatal("cannot open input data file");
-	}
-	if (mdl->opt->output != NULL) {
-		fout = fopen(mdl->opt->output, "w");
-		if (fout == NULL)
-			pfatal("cannot open output data file");
-	}
+	mdl_load(mdl);
+
 	// Do the labelling
 	info("* Label sequences\n");
-	tag_label(mdl, fin, fout);
+	tag_label(mdl, iol);
 	info("* Done\n");
-	// And close files
-	if (mdl->opt->input != NULL)
-		fclose(fin);
-	if (mdl->opt->output != NULL)
-		fclose(fout);
 }
 
 /*******************************************************************************
  * Dumping
  ******************************************************************************/
-static void dodump(mdl_t *mdl) {
+static void dodump(mdl_t *mdl, iol_t *iol) {
 	// Load input model file
 	info("* Load model\n");
-	FILE *fin = stdin;
-	if (mdl->opt->input != NULL) {
-		fin = fopen(mdl->opt->input, "r");
-		if (fin == NULL)
-			pfatal("cannot open input data file");
-	}
-	mdl_load(mdl, rdr_readline, fin);
-	if (mdl->opt->input != NULL)
-		fclose(fin);
-	// Open output file
-	FILE *fout = stdout;
-	if (mdl->opt->output != NULL) {
-		fout = fopen(mdl->opt->output, "w");
-		if (fout == NULL)
-			pfatal("cannot open output data file");
-	}
+	mdl_load(mdl);
 	// Dump model
 	info("* Dump model\n");
 	const uint32_t Y = mdl->nlbl;
@@ -258,8 +207,8 @@ static void dodump(mdl_t *mdl) {
 				if (!mdl->opt->all && w[y] == 0.0)
 					continue;
 				const char *ly = qrk_id2str(Qlbl, y);
-				fprintf(fout, "%s\t#\t%s\t", obs, ly);
-				fprintf(fout, fmt, w[y]);
+				iol->print_cb(iol->out, "%s\t#\t%s\t", obs, ly);
+				iol->print_cb(iol->out, fmt, w[y]);
 				empty = false;
 			}
 		}
@@ -270,46 +219,32 @@ static void dodump(mdl_t *mdl) {
 					continue;
 				const char *ly  = qrk_id2str(Qlbl, d % Y);
 				const char *lyp = qrk_id2str(Qlbl, d / Y);
-				fprintf(fout, "%s\t%s\t%s\t", obs, lyp, ly);
-				fprintf(fout, fmt, w[d]);
+				iol->print_cb(iol->out, "%s\t%s\t%s\t", obs, lyp, ly);
+				iol->print_cb(iol->out, fmt, w[d]);
 				empty = false;
 			}
 		}
 		if (!empty)
-			fprintf(fout, "\n");
+			iol->print_cb(iol->out, "\n");
 	}
-	if (mdl->opt->output != NULL)
-		fclose(fout);
 }
 
 
 /*******************************************************************************
  * Updating
  ******************************************************************************/
-static void doupdt(mdl_t *mdl) {
+static void doupdt(mdl_t *mdl, iol_t *iol) {
 	// Load input model file
 	info("* Load model\n");
-	if (mdl->opt->model == NULL)
-		fatal("no model file provided");
-	FILE *Min = fopen(mdl->opt->model, "r");
-	if (Min == NULL)
-		pfatal("cannot open model file %s", mdl->opt->model);
-	mdl_load(mdl, rdr_readline, Min);
-	fclose(Min);
+	mdl_load(mdl);
+
 	// Open patch file
 	info("* Update model\n");
-	FILE *fin = stdin;
-	if (mdl->opt->input != NULL) {
-		fin = fopen(mdl->opt->input, "r");
-		if (fin == NULL)
-			pfatal("cannot open update file");
-	}
 	int nline = 0;
-	while (!feof(fin)) {
-		char *raw = rdr_readline(fin);
-		if (raw == NULL)
+	while (true) {
+		char *line = iol->gets_cb(iol->in);
+		if (line == NULL)
 			break;
-		char *line = raw;
 		nline++;
 		// First we split the line in space separated tokens. We expect
 		// four of them and skip empty lines.
@@ -328,7 +263,7 @@ static void doupdt(mdl_t *mdl) {
 			*line++ = '\0';
 		}
 		if (ntoks == 0) {
-			free(raw);
+			free(line);
 			continue;
 		} else if (ntoks != 4) {
 			fatal("invalid line at %d", nline);
@@ -359,10 +294,8 @@ static void doupdt(mdl_t *mdl) {
 			double *w = mdl->theta + mdl->boff[obs];
 			w[yp * Y + y] = wgh;
 		}
-		free(raw);
+		free(line);
 	}
-	if (mdl->opt->input != NULL)
-		fclose(fin);
 	// If requested compact the model.
 	if (mdl->opt->compact) {
 		const uint64_t O = mdl->nobs;
@@ -374,17 +307,46 @@ static void doupdt(mdl_t *mdl) {
 	}
 	// And save the updated model
 	info("* Save the model\n");
-	FILE *file = stdout;
-	if (mdl->opt->output != NULL) {
-		file = fopen(mdl->opt->output, "w");
-		if (file == NULL)
-			pfatal("cannot open output model");
-	}
-	mdl_save(mdl, file);
-	if (mdl->opt->output != NULL)
-		fclose(file);
+	mdl_save(mdl, iol);
 	info("* Done\n");
 }
+
+static iol_t *create_iol(opt_t *opt) {
+	FILE *fin = stdin, *fout = stdout;
+	if (opt->input != NULL) {
+		fin = fopen(opt->input, "r");
+		if (fin == NULL)
+			pfatal("cannot open input data file");
+	}
+	if (opt->output != NULL) {
+		fout = fopen(opt->output, "w");
+		if (fout == NULL)
+			pfatal("cannot open output data file");
+	}
+ 
+        return iol_new(fin, fout);
+}
+
+static void close_iol(iol_t *iol) {
+	if (iol->in != NULL)
+		fclose(iol->in);
+	if (iol->out != NULL)
+		fclose(iol->out);
+}
+
+static iol_t *create_model_iol(opt_t *opt) {
+        if (opt->model == NULL) 
+            fatal("you must specify a model");
+
+	FILE *fin = fopen(opt->model, "r");
+	if (fin == NULL)
+            pfatal("cannot open model file %s", opt->model);
+
+        iol_t *iol = iol_new(fin, NULL);
+        return iol;
+}
+
+
 
 /*******************************************************************************
  * Entry point
@@ -394,16 +356,20 @@ int main(int argc, char *argv[argc]) {
 	opt_t opt = opt_defaults;
 	opt_parse(argc, argv, &opt);
 	// Next we prepare the model
-	mdl_t *mdl = mdl_new(rdr_new(opt.maxent));
+        iol_t *io_iol = create_iol(&opt);
+        iol_t *model_iol = create_model_iol(&opt);
+	mdl_t *mdl = mdl_new(rdr_new(model_iol, opt.maxent));
+
 	mdl->opt = &opt;
 	// And switch to requested mode
 	switch (opt.mode) {
-		case 0: dotrain(mdl); break;
-		case 1: dolabel(mdl); break;
-		case 2: dodump(mdl);  break;
-		case 3: doupdt(mdl);  break;
+                case 0: dotrain(mdl, io_iol); break;
+                case 1: dolabel(mdl, io_iol); break;
+	        case 2: dodump(mdl, io_iol);  break;
+	        case 3: doupdt(mdl, io_iol);  break;
 	}
 	// And cleanup
+	close_iol(io_iol);
 	mdl_free(mdl);
 	return EXIT_SUCCESS;
 }

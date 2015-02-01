@@ -32,7 +32,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
-typedef char* (*readline_cb_t)(void *);
+#include "ioline.h"
 
 #define unused(v) ((void)(v))
 #define none ((uint64_t)-1)
@@ -50,7 +50,7 @@ void *xrealloc(void *ptr, size_t size);
 char *xstrdup(const char *str);
 char *xstrndup(const char *str, size_t size);
 
-char *ns_readstr(readline_cb_t readline_cb, void *rl_data);
-void ns_writestr(FILE *file, const char *str);
+char *ns_readstr(iol_t *iol);
+void ns_writestr(iol_t *iol, const char *str);
 
 #endif

@@ -263,16 +263,16 @@ void mdl_compact(mdl_t *mdl) {
 /* mdl_save:
  *   Save a model to be restored later in a platform independant way.
  */
-void mdl_save(mdl_t *mdl, FILE *file) {
+void mdl_save(mdl_t *mdl, iol_t *iol) {
 	uint64_t nact = 0;
 	for (uint64_t f = 0; f < mdl->nftr; f++)
 		if (mdl->theta[f] != 0.0)
 			nact++;
-	fprintf(file, "#mdl#%d#%"PRIu64"\n", mdl->type, nact);
-	rdr_save(mdl->reader, file);
+        iol->puts_cb(iol->out, "#mdl#%d#%"PRIu64"\n", mdl->type, nact);
+	rdr_save(mdl->reader, iol);
 	for (uint64_t f = 0; f < mdl->nftr; f++)
 		if (mdl->theta[f] != 0.0)
-			fprintf(file, "%"PRIu64"=%la\n", f, mdl->theta[f]);
+                        iol->puts_cb(iol->out, "%"PRIu64"=%la\n", f, mdl->theta[f]);
 }
 
 /* mdl_load:
@@ -280,27 +280,27 @@ void mdl_save(mdl_t *mdl, FILE *file) {
  *   The returned model is synced and the quarks are locked. You must give to
  *   this function an empty model fresh from mdl_new.
  */
-void mdl_load(mdl_t *mdl, readline_cb_t readline_cb, void *rl_data) {
+void mdl_load(mdl_t *mdl) {
 	const char *err = "invalid model format";
 	uint64_t nact = 0;
 	int type;
         char *line;
 
-        line = readline_cb(rl_data);
+        line = mdl->reader->iol->gets_cb(mdl->reader->iol->in);
 	if (sscanf(line, "#mdl#%d#%"SCNu64"\n", &type, &nact) == 2) {
 		mdl->type = type;
 	} else if (sscanf(line, "#mdl#%"SCNu64"\n", &nact) == 1) {
-            mdl->type = 0;
+                mdl->type = 0;
         } else {
-              fatal(err);
+                fatal(err);
 	}
-        rdr_load(mdl->reader, readline_cb, rl_data);
+        rdr_load(mdl->reader);
 	mdl_sync(mdl);
 	for (uint64_t i = 0; i < nact; i++) {
 		uint64_t f;
 		double v;
                 
-                line = readline_cb(rl_data);
+                line = mdl->reader->iol->gets_cb(mdl->reader->iol->in);
 		if (sscanf(line, "%"SCNu64"=%la\n", &f, &v) != 2)
 			fatal(err);
 		mdl->theta[f] = v;

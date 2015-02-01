@@ -35,6 +35,7 @@
 #include <string.h>
 
 #include "tools.h"
+#include "ioline.h"
 
 /*******************************************************************************
  * Error handling and memory managment
@@ -168,9 +169,9 @@ char *xstrndup(const char *str, size_t size) {
  *   Read a string from the given file in netstring format. The string is
  *   returned as a newly allocated bloc of memory 0-terminated.
  */
-char *ns_readstr(readline_cb_t readline_cb, void *rl_data) {
+char *ns_readstr(iol_t *iol) {
         uint32_t len;
-        char *line = readline_cb(rl_data);
+        char *line = iol->gets_cb(iol->in);
         
         if (sscanf(line, "%"SCNu32":", &len) != 1)
             pfatal("invalid format");
@@ -192,9 +193,9 @@ char *ns_readstr(readline_cb_t readline_cb, void *rl_data) {
 /* ns_writestr:
  *   Write a string in the netstring format to the given file.
  */
-void ns_writestr(FILE *file, const char *str) {
+void ns_writestr(iol_t *iol, const char *str) {
 	const uint32_t len = strlen(str);
-	if (fprintf(file, "%"PRIu32":%s,\n", len, str) < 0)
+        if (iol->puts_cb(iol->out, "%"PRIu32":%s,\n", len, str) < 0)
 		pfatal("cannot write to file");
 }
 

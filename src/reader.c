@@ -38,6 +38,7 @@
 #include "reader.h"
 #include "sequence.h"
 #include "tools.h"
+#include "ioline.h"
 
 /*******************************************************************************
  * Datafile reader
@@ -65,7 +66,7 @@
  *   list of features. They must either start with a prefix 'u', 'b', or '*', or
  *   you must set autouni to true in order to automatically add a 'u' prefix.
  */
-rdr_t *rdr_new(bool autouni) {
+rdr_t *rdr_new(iol_t *iol, bool autouni) {
 	rdr_t *rdr = xmalloc(sizeof(rdr_t));
 	rdr->autouni = autouni;
 	rdr->npats = rdr->nuni = rdr->nbi = 0;
@@ -73,6 +74,7 @@ rdr_t *rdr_new(bool autouni) {
 	rdr->pats = NULL;
 	rdr->lbl = qrk_new();
 	rdr->obs = qrk_new();
+        rdr->iol = iol;
 	return rdr;
 }
 
@@ -86,6 +88,7 @@ void rdr_free(rdr_t *rdr) {
 	free(rdr->pats);
 	qrk_free(rdr->lbl);
 	qrk_free(rdr->obs);
+        iol_free(rdr->iol);
 	free(rdr);
 }
 
@@ -116,60 +119,14 @@ void rdr_freedat(dat_t *dat) {
 	free(dat);
 }
 
-/* rdr_readline:
- *   Read an input line from <file>. The line can be of any size limited only by
- *   available memory, a buffer large enough is allocated and returned. The
- *   caller is responsible to free it. On end-of-file, NULL is returned.
- */
-char *rdr_readline(void *rl_data) {
-        FILE *file = (FILE*)rl_data;
-	if (feof(file))
-		return NULL;
-	// Initialize the buffer
-	uint32_t len = 0, size = 16;
-	char *buffer = xmalloc(size);
-	// We read the line chunk by chunk until end of line, file or error
-	while (!feof(file)) {
-		if (fgets(buffer + len, size - len, file) == NULL) {
-			// On NULL return there is two possible cases, either an
-			// error or the end of file
-			if (ferror(file))
-				pfatal("cannot read from file");
-			// On end of file, we must check if we have already read
-			// some data or not
-			if (len == 0) {
-				free(buffer);
-				return NULL;
-			}
-			break;
-		}
-		// Check for end of line, if this is not the case enlarge the
-		// buffer and go read more data
-		len += strlen(buffer + len);
-		if (len == size - 1 && buffer[len - 1] != '\n') {
-			size = size * 1.4;
-			buffer = xrealloc(buffer, size);
-			continue;
-		}
-		break;
-	}
-	// At this point empty line should have already catched so we just
-	// remove the end of line if present and resize the buffer to fit the
-	// data
-	if (buffer[len - 1] == '\n')
-		buffer[--len] = '\0';
-	return xrealloc(buffer, len + 1);
-}
-
-
 /* rdr_loadpat:
  *   Load and compile patterns from given file and store them in the reader. As
  *   we compile patterns, syntax errors in them will be raised at this time.
  */
-void rdr_loadpat(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data) {
+void rdr_loadpat(rdr_t *rdr, iol_t *iol) {
         while (true) {
 		// Read raw input line
-                char *line = readline_cb(rl_data);
+                char *line = iol->gets_cb(iol->in);
 		if (line == NULL)
 			break;
 		// Remove comments and trailing spaces
@@ -205,7 +162,7 @@ void rdr_loadpat(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data) {
  *   file or by an empty line. Return NULL if file end was reached before any
  *   sequence was read.
  */
-raw_t *rdr_readraw(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data) {
+raw_t *rdr_readraw(iol_t *iol, bool autouni) {
 	// Prepare the raw sequence object
 	uint32_t size = 32, cnt = 0;
 	raw_t *raw = xmalloc(sizeof(raw_t) + sizeof(char *) * size);
@@ -213,7 +170,7 @@ raw_t *rdr_readraw(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data) {
 	// before reading the sequence stoping at end of file or on a new blank
 	// line.
 	while (true) {
-                char *line = readline_cb(rl_data);
+                char *line = iol->gets_cb(iol->in);
 		if (line == NULL)
 			break;
 		// Check for empty line marking the end of the current sequence
@@ -223,7 +180,7 @@ raw_t *rdr_readraw(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data) {
 		if (len == 0) {
 			free(line);
 			// Special case when no line was already read, we try
-			// again. This allow multiple blank lines beetwen
+			// again. This allow multiple blank lines between
 			// sequences.
 			if (cnt == 0)
 				continue;
@@ -238,7 +195,7 @@ raw_t *rdr_readraw(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data) {
 		raw->lines[cnt++] = line;
 		// In autouni mode, there will be only unigram features so we
 		// can use small sequences to improve multi-theading.
-		if (rdr->autouni)
+		if (autouni)
 			break;
 	}
 	// If no lines was read, we just free allocated memory and return NULL
@@ -464,8 +421,8 @@ seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl) {
  *   to be labeled.
  *   Return NULL if end of file occure before anything as been read.
  */
-seq_t *rdr_readseq(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data, bool lbl) {
-        raw_t *raw = rdr_readraw(rdr, readline_cb, rl_data);
+seq_t *rdr_readseq(rdr_t *rdr, iol_t *iol, bool lbl) {
+        raw_t *raw = rdr_readraw(iol, rdr->autouni);
 	if (raw == NULL)
 		return NULL;
 	seq_t *seq = rdr_raw2seq(rdr, raw, lbl);
@@ -478,7 +435,7 @@ seq_t *rdr_readseq(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data, bool lb
  *   take and interpret his parameters like the single sequence reading
  *   function.
  */
-dat_t *rdr_readdat(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data, bool lbl) {
+dat_t *rdr_readdat(rdr_t *rdr, iol_t *iol, bool lbl) {
 	// Prepare dataset
 	uint32_t size = 1000;
 	dat_t *dat = xmalloc(sizeof(dat_t));
@@ -489,7 +446,7 @@ dat_t *rdr_readdat(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data, bool lb
 	// Load sequences
 	while (true) {
 		// Read the next sequence
-                seq_t *seq = rdr_readseq(rdr, readline_cb, rl_data, lbl);
+                seq_t *seq = rdr_readseq(rdr, iol, lbl);
 		if (seq == NULL)
 			break;
 		// Grow the buffer if needed
@@ -522,10 +479,10 @@ dat_t *rdr_readdat(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data, bool lb
  *   function performs almost no checks on the input data, so if you modify the
  *   reader and make a mistake, it will probably result in a crash.
  */
-void rdr_load(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data) {
+void rdr_load(rdr_t *rdr) {
 	const char *err = "broken file, invalid reader format";
 	int autouni = rdr->autouni;
-        char *line = readline_cb(rl_data);
+        char *line = rdr->iol->gets_cb(rdr->iol->in);
 	if (sscanf(line, "#rdr#%"PRIu32"/%"PRIu32"/%d\n",
 			&rdr->npats, &rdr->ntoks, &autouni) != 3) {
 		// This for compatibility with previous file format
@@ -538,7 +495,7 @@ void rdr_load(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data) {
 	if (rdr->npats != 0) {
 		rdr->pats = xmalloc(sizeof(pat_t *) * rdr->npats);
 		for (uint32_t p = 0; p < rdr->npats; p++) {
-                        char *pat = ns_readstr(readline_cb, rl_data);
+                        char *pat = ns_readstr(rdr->iol);
 			rdr->pats[p] = pat_comp(pat);
 			switch (tolower(pat[0])) {
 				case 'u': rdr->nuni++; break;
@@ -548,8 +505,8 @@ void rdr_load(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data) {
 			}
 		}
 	}
-	qrk_load(rdr->lbl, readline_cb, rl_data);
-	qrk_load(rdr->obs, readline_cb, rl_data);
+	qrk_load(rdr->lbl, rdr->iol);
+	qrk_load(rdr->obs, rdr->iol);
 }
 
 
@@ -557,13 +514,13 @@ void rdr_load(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data) {
  *   Save the reader to the given file so it can be loaded back. The save format
  *   is plain text and portable accros computers.
  */
-void rdr_save(const rdr_t *rdr, FILE *file) {
-	if (fprintf(file, "#rdr#%"PRIu32"/%"PRIu32"/%d\n",
-			rdr->npats, rdr->ntoks, rdr->autouni) < 0)
+void rdr_save(const rdr_t *rdr, iol_t *iol) {
+        if (iol->puts_cb(iol->out, "#rdr#%"PRIu32"/%"PRIu32"/%d\n",
+                     rdr->npats, rdr->ntoks, rdr->autouni) < 0)
 		pfatal("cannot write to file");
 	for (uint32_t p = 0; p < rdr->npats; p++)
-		ns_writestr(file, rdr->pats[p]->src);
-	qrk_save(rdr->lbl, file);
-	qrk_save(rdr->obs, file);
+		ns_writestr(iol, rdr->pats[p]->src);
+	qrk_save(rdr->lbl, iol);
+	qrk_save(rdr->obs, iol);
 }
 

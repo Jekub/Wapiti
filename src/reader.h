@@ -36,6 +36,7 @@
 #include "quark.h"
 #include "sequence.h"
 #include "tools.h"
+#include "ioline.h"
 
 /* rdr_t:
  *   The reader object who hold all informations needed to parse the input file:
@@ -53,24 +54,25 @@ struct rdr_s {
 	pat_t    **pats;       // [P]  List of precompiled patterns
 	qrk_t     *lbl;        //      Labels database
 	qrk_t     *obs;        //      Observation database
+        iol_t     *iol;        //      Class to handle line based IO.
 };
 
-rdr_t *rdr_new(bool autouni);
+rdr_t *rdr_new(iol_t *iol, bool autouni);
 void rdr_free(rdr_t *rdr);
-void rdr_freeraw(raw_t *raw);
+void rdr_freeraw(raw_t *raw_t);
 void rdr_freeseq(seq_t *seq);
 void rdr_freedat(dat_t *dat);
 
 
-void rdr_loadpat(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data);
-raw_t *rdr_readraw(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data);
+void rdr_loadpat(rdr_t *rdr, iol_t *iol);
+raw_t *rdr_readraw(iol_t *iol, bool autouni);
 seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl);
-seq_t *rdr_readseq(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data, bool lbl);
-dat_t *rdr_readdat(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data, bool lbl);
+seq_t *rdr_readseq(rdr_t *rdr, iol_t *iol, bool lbl);
+dat_t *rdr_readdat(rdr_t *rdr, iol_t *iol, bool lbl);
 
 
-void rdr_load(rdr_t *rdr, readline_cb_t readline_cb, void *rl_data);
-void rdr_save(const rdr_t *rdr, FILE *file);
+void rdr_load(rdr_t *rdr);
+void rdr_save(const rdr_t *rdr, iol_t *iol);
 
 char *rdr_readline(void *rl_data);
 

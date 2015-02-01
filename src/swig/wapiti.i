@@ -142,16 +142,17 @@ void printModelPath(mdl_t* mdl);
             opt_t *opt = get_default_opt();
 
             opt_parse(argc, argv, opt);
-            mdl_t *mdl = mdl_new(rdr_new(opt->maxent));
-            mdl->opt = opt;
-            if (mdl->opt->model == NULL)
+            if (opt->model == NULL)
                 fatal("you must specify a model");
-            info("[Wapiti] Loading model: \"%s\"\n", mdl->opt->model);
-            FILE *file = fopen(mdl->opt->model, "r");
+            info("[Wapiti] Loading model: \"%s\"\n", opt->model);
+            FILE *file = fopen(opt->model, "r");
             if (file == NULL) {
-                pfatal("cannot open input model file: %s", mdl->opt->model);
+                pfatal("cannot open input model file: %s", opt->model);
             }
-            mdl_load(mdl, rdr_readline, file);
+            iol_t *iol = iol_new(file, NULL);
+            mdl_t *mdl = mdl_new(rdr_new(iol, opt->maxent));
+            mdl->opt = opt;
+            mdl_load(mdl);
 
             return mdl;
     }
@@ -177,7 +178,8 @@ void printModelPath(mdl_t* mdl);
 
     	// Do the labelling
     	//info("* Label sequences\n");
-    	tag_label(mdl, fin, fout);
+        iol_t *iol = iol_new(fin, fout);
+    	tag_label(mdl, iol);
 
 #if defined(WIN32) || defined(_WIN32)
         rewind(fout);

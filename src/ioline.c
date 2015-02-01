@@ -30,23 +30,25 @@
 #include "tools.h"
 
 static char *iol_gets(void *in);
-static int   iol_puts(void *out, char *line);
+static int   iol_puts(void *out, char *msg, ...);
+static int   iol_print(void *out, char *msg, ...);
 
 iol_t *iol_new(FILE *in, FILE *out) {
     iol_t *iol = xmalloc(sizeof(iol_t));
-    iol->gets_cb = iol_gets,
-    iol->in      = in;
-    iol->puts_cb = iol_puts;
-    iol->out     = out;
+    iol->gets_cb  = iol_gets,
+    iol->in       = in;
+    iol->puts_cb  = iol_puts;
+    iol->print_cb = iol_print;
+    iol->out      = out;
     return iol;
 }
 
-iol_t *iol_new2(gets_cb_t gets_cb, void *in, puts_cb_t puts_cb, void *out) {
+iol_t *iol_new2(gets_cb_t gets_cb, void *in, print_cb_t print_cb, void *out) {
     iol_t *iol = xmalloc(sizeof(iol_t));
-    iol->gets_cb = gets_cb;
-    iol->in      = in;
-    iol->puts_cb = puts_cb;
-    iol->out     = out;
+    iol->gets_cb  = gets_cb;
+    iol->in       = in;
+    iol->print_cb = print_cb;
+    iol->out      = out;
     return iol;
 }
 
@@ -96,7 +98,7 @@ static char *iol_gets(void *in) {
 	// remove the end of line if present and resize the buffer to fit the
 	// data
 	if (buffer[len - 1] == '\n')
-		buffer[--len] = '\0';
+            buffer[--len] = '\0';
 	return xrealloc(buffer, len + 1);
 }
 
@@ -104,8 +106,25 @@ static char *iol_gets(void *in) {
  *   Puts a line to <out>.  A new line character is appended to the end of
  *   the line.
  */
-static int iol_puts(void *out, char *line) {
+static int iol_puts(void *out, char *msg, ...) {
         FILE *file = (FILE*)out;
-        return fprintf(file, "%s\n", line);
+	va_list args;
+	va_start(args, msg);
+	int rc = vfprintf(file, msg, args);
+        fprintf(file, "\n");
+	va_end(args);
+        return rc;
+}
+
+/* iol_puts:
+ *   Print a line to <out>.
+ */
+static int iol_print(void *out, char *msg, ...) {
+        FILE *file = (FILE*)out;
+	va_list args;
+	va_start(args, msg);
+	int rc = vfprintf(file, msg, args);
+	va_end(args);
+        return rc;
 }
 

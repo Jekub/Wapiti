@@ -415,7 +415,7 @@ void tag_nbviterbi(mdl_t *mdl, const seq_t *seq, uint32_t N,
  *   output error rates during the labelling and detailed statistics per label
  *   at the end.
  */
-void tag_label(mdl_t *mdl, FILE *fin, FILE *fout) {
+void tag_label(mdl_t *mdl, iol_t *iol) {
 	qrk_t *lbls = mdl->reader->lbl;
 	const uint32_t Y = mdl->nlbl;
 	const uint32_t N = mdl->opt->nbest;
@@ -432,10 +432,10 @@ void tag_label(mdl_t *mdl, FILE *fin, FILE *fout) {
 	// Next read the input file sequence by sequence and label them, we have
 	// to take care of not discarding the raw input as we want to send it
 	// back to the output with the additional predicted labels.
-	while (!feof(fin)) {
+        while (true) {
 		// So, first read an input sequence keeping the raw_t object
 		// available, and label it with Viterbi.
-                raw_t *raw = rdr_readraw(mdl->reader, rdr_readline, fin);
+                raw_t *raw = rdr_readraw(iol, mdl->reader->autouni);
 		if (raw == NULL)
 			break;
 		seq_t *seq = rdr_raw2seq(mdl->reader, raw,
@@ -452,22 +452,21 @@ void tag_label(mdl_t *mdl, FILE *fin, FILE *fout) {
 		// the predicted labels
 		for (uint32_t n = 0; n < N; n++) {
 			if (mdl->opt->outsc)
-				fprintf(fout, "# %d %f\n", (int)n, scs[n]);
+                            iol->print_cb(iol->out, "# %d %f\n", (int)n, scs[n]);
 			for (uint32_t t = 0; t < T; t++) {
 				if (!mdl->opt->label)
-					fprintf(fout, "%s\t", raw->lines[t]);
+                                    iol->print_cb(iol->out, "%s\t", raw->lines[t]);
 				uint32_t lbl = out[t * N + n];
 				const char *lblstr = qrk_id2str(lbls, lbl);
-				fprintf(fout, "%s", lblstr);
+                                iol->print_cb(iol->out, "%s", lblstr);
 				if (mdl->opt->outsc) {
-					fprintf(fout, "\t%s", lblstr);
-					fprintf(fout, "/%f", psc[t * N + n]);
+                                    iol->print_cb(iol->out, "\t%s", lblstr);
+                                    iol->print_cb(iol->out, "/%f", psc[t * N + n]);
 				}
-				fprintf(fout, "\n");
+                                iol->print_cb(iol->out, "\n");
 			}
-			fprintf(fout, "\n");
+                        iol->print_cb(iol->out, "\n");
 		}
-		fflush(fout);
 		// If user provided reference labels, use them to collect
 		// statistics about how well we have performed here. Labels
 		// unseen at training time are discarded.
