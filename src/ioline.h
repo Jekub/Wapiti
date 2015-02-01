@@ -37,7 +37,6 @@ typedef int   (*print_cb_t)(void *, char *, ...);
 typedef struct iol_s iol_t;
 struct iol_s {
     gets_cb_t gets_cb;   // callback to get a line from in
-    puts_cb_t puts_cb;   // callback to put a line to out
     print_cb_t print_cb; // callback to print a line to out
 
     void *in;          // state passed to the gets callback

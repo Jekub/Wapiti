@@ -515,7 +515,7 @@ void rdr_load(rdr_t *rdr) {
  *   is plain text and portable accros computers.
  */
 void rdr_save(const rdr_t *rdr, iol_t *iol) {
-        if (iol->puts_cb(iol->out, "#rdr#%"PRIu32"/%"PRIu32"/%d\n",
+        if (iol->print_cb(iol->out, "#rdr#%"PRIu32"/%"PRIu32"/%d\n",
                      rdr->npats, rdr->ntoks, rdr->autouni) < 0)
 		pfatal("cannot write to file");
 	for (uint32_t p = 0; p < rdr->npats; p++)

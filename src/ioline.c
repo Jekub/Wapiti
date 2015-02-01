@@ -30,14 +30,12 @@
 #include "tools.h"
 
 static char *iol_gets(void *in);
-static int   iol_puts(void *out, char *msg, ...);
 static int   iol_print(void *out, char *msg, ...);
 
 iol_t *iol_new(FILE *in, FILE *out) {
     iol_t *iol = xmalloc(sizeof(iol_t));
     iol->gets_cb  = iol_gets,
     iol->in       = in;
-    iol->puts_cb  = iol_puts;
     iol->print_cb = iol_print;
     iol->out      = out;
     return iol;
@@ -102,21 +100,7 @@ static char *iol_gets(void *in) {
 	return xrealloc(buffer, len + 1);
 }
 
-/* iol_puts:
- *   Puts a line to <out>.  A new line character is appended to the end of
- *   the line.
- */
-static int iol_puts(void *out, char *msg, ...) {
-        FILE *file = (FILE*)out;
-	va_list args;
-	va_start(args, msg);
-	int rc = vfprintf(file, msg, args);
-        fprintf(file, "\n");
-	va_end(args);
-        return rc;
-}
-
-/* iol_puts:
+/* iol_print:
  *   Print a line to <out>.
  */
 static int iol_print(void *out, char *msg, ...) {

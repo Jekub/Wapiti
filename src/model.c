@@ -268,11 +268,11 @@ void mdl_save(mdl_t *mdl, iol_t *iol) {
 	for (uint64_t f = 0; f < mdl->nftr; f++)
 		if (mdl->theta[f] != 0.0)
 			nact++;
-        iol->puts_cb(iol->out, "#mdl#%d#%"PRIu64"\n", mdl->type, nact);
+        iol->print_cb(iol->out, "#mdl#%d#%"PRIu64"\n", mdl->type, nact);
 	rdr_save(mdl->reader, iol);
 	for (uint64_t f = 0; f < mdl->nftr; f++)
 		if (mdl->theta[f] != 0.0)
-                        iol->puts_cb(iol->out, "%"PRIu64"=%la\n", f, mdl->theta[f]);
+                        iol->print_cb(iol->out, "%"PRIu64"=%la\n", f, mdl->theta[f]);
 }
 
 /* mdl_load:

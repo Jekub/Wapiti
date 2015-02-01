@@ -195,7 +195,7 @@ char *ns_readstr(iol_t *iol) {
  */
 void ns_writestr(iol_t *iol, const char *str) {
 	const uint32_t len = strlen(str);
-        if (iol->puts_cb(iol->out, "%"PRIu32":%s,\n", len, str) < 0)
+        if (iol->print_cb(iol->out, "%"PRIu32":%s,\n", len, str) < 0)
 		pfatal("cannot write to file");
 }
 

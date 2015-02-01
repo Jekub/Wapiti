@@ -226,7 +226,7 @@ const char *qrk_id2str(const qrk_t *qrk, uint64_t id) {
  *   number correspond to the id.
  */
 void qrk_save(const qrk_t *qrk, iol_t *iol) {
-        if (iol->puts_cb(iol->out, "#qrk#%"PRIu64"\n", qrk->count) < 0)
+        if (iol->print_cb(iol->out, "#qrk#%"PRIu64"\n", qrk->count) < 0)
 		pfatal("cannot write to file");
 	if (qrk->count == 0)
 		return;
