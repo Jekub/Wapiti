@@ -62,13 +62,11 @@ void iol_free(iol_t *iol) {
  */
 static char *iol_gets(void *in) {
         FILE *file = (FILE*)in;
-	if (feof(file))
-		return NULL;
 	// Initialize the buffer
 	uint32_t len = 0, size = 16;
 	char *buffer = xmalloc(size);
 	// We read the line chunk by chunk until end of line, file or error
-	while (!feof(file)) {
+	for(;;) {
 		if (fgets(buffer + len, size - len, file) == NULL) {
 			// On NULL return there is two possible cases, either an
 			// error or the end of file
