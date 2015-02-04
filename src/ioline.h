@@ -28,7 +28,6 @@
 #include <stdio.h>
 
 typedef char *(*gets_cb_t)(void *);
-typedef int   (*puts_cb_t)(void *, char *, ...);
 typedef int   (*print_cb_t)(void *, char *, ...);
 
 /* iol_t:
