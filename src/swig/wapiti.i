@@ -6,7 +6,7 @@
 
 %include "std_string.i"
 
-%feature("director") IOLine;
+%feature("director") WapitiIO;
 %feature("director") WapitiModel;
 
 %include "ioline.hh"

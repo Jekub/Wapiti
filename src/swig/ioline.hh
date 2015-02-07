@@ -1,6 +1,13 @@
 #include <iostream>
 #include <string>
 
+class WapitiIO {
+public:
+    virtual ~WapitiIO() {}
+    virtual char *readline() { std::cout << "you called me!\n"; return NULL; }
+    virtual void append(char *data) {}
+};
+
 extern "C" {
     #include "../decoder.h"
     #include "../ioline.h"
@@ -9,16 +16,9 @@ extern "C" {
     #include "../reader.h"
 }
 
-class IOLine {
-public:
-    virtual ~IOLine() {}
-    virtual char *readline() { return NULL; }
-    virtual void append(char *data) {}
-};
-
 char *wapiti_gets_cb(void *x) {
-    IOLine *ioline = static_cast<IOLine*>(x);
-    char *p = ioline->readline();
+    WapitiIO *io = static_cast<WapitiIO*>(x);
+    char *p = io->readline();
 
     if (p != NULL) {
         int len = strlen(p);
@@ -31,7 +31,7 @@ char *wapiti_gets_cb(void *x) {
 }
 
 int wapiti_print_cb(void *x, char *format, ...) {
-    IOLine *ioline = static_cast<IOLine*>(x);
+    WapitiIO *io = static_cast<WapitiIO*>(x);
     
     va_list args;
     va_start(args, format);
@@ -43,7 +43,7 @@ int wapiti_print_cb(void *x, char *format, ...) {
     if (len > 0)
         buf[len] = '\0';
 
-    ioline->append(buf);
+    io->append(buf);
     free(buf);
 
     return len;
@@ -51,20 +51,20 @@ int wapiti_print_cb(void *x, char *format, ...) {
 
 class WapitiModel {
 private:
-    IOLine *_ioline;
+    WapitiIO *_io;
     iol_t *_iol;
     rdr_t *_rdr;
     mdl_t *_mdl;
 
 public:
-    WapitiModel(IOLine *ioline) {
-        _ioline = ioline;
+    WapitiModel(WapitiIO *io) {
+        _io = io;
 
         _iol = iol_new2(
             wapiti_gets_cb, 
-            static_cast<void*>(ioline), 
+            static_cast<void*>(io), 
             wapiti_print_cb, 
-            static_cast<void*>(ioline));
+            static_cast<void*>(io));
 
         _rdr = rdr_new(_iol, opt_defaults.maxent);
         _mdl = mdl_new(_rdr);
@@ -79,12 +79,12 @@ public:
         mdl_free(_mdl);
     }
 
-    void label(IOLine *lines) {
+    void label(WapitiIO *io) {
         iol_t *iol = iol_new2(
             wapiti_gets_cb,
-            lines,
+            io,
             wapiti_print_cb,
-            lines);
+            io);
 
         tag_label(_mdl, iol);
         iol_free(iol);
