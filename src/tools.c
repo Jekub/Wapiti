@@ -170,22 +170,34 @@ char *xstrndup(const char *str, size_t size) {
  *   returned as a newly allocated bloc of memory 0-terminated.
  */
 char *ns_readstr(iol_t *iol) {
-        uint32_t len;
+        int len = 0;
+        int i = 0;
         char *line = iol->gets_cb(iol->in);
         
-        if (sscanf(line, "%"SCNu32":", &len) != 1)
+        if (sscanf(line, "%d:", &len) != 1)
             pfatal("invalid format");
-        
+
         char *colon = strchr(line, ':');
         if (colon == NULL)
             pfatal("invalid format");
 
         char *comma = colon + len + 1;
-        if (comma[0] != ',')
+        if (comma[0] != ',') {
+            printf("\n====================================\n");
+            printf("line=>> %s <<\n", line);
+            printf("colon='%s', comma='%s', len='%d'\n", colon, comma, len);
+            
+            for (i = 0; i < 26; i++)
+                printf("%2x-", (int)line[i]);
+            printf("\n====================================\n");
+
             pfatal("invalid format");
+        }
 
         char *buf = xstrndup(colon + 1, len);
         buf[len] = '\0';
+
+
 
 	return buf;
 }

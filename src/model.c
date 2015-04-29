@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <locale.h>
 
 #include "wapiti.h"
 #include "model.h"
@@ -265,10 +266,11 @@ void mdl_compact(mdl_t *mdl) {
  */
 void mdl_save(mdl_t *mdl, iol_t *iol) {
 	uint64_t nact = 0;
+        setlocale(LC_ALL, "C");
 	for (uint64_t f = 0; f < mdl->nftr; f++)
 		if (mdl->theta[f] != 0.0)
 			nact++;
-        iol->print_cb(iol->out, "#mdl#%d#%"PRIu64"\n", mdl->type, nact);
+        iol->print_cb(iol->out, "#mdl#%"PRIu32"#%"PRIu64"\n", mdl->type, nact);
 	rdr_save(mdl->reader, iol);
 	for (uint64_t f = 0; f < mdl->nftr; f++)
 		if (mdl->theta[f] != 0.0)
@@ -286,8 +288,10 @@ void mdl_load(mdl_t *mdl) {
 	int type;
         char *line;
 
+        setlocale(LC_ALL, "C");
+
         line = mdl->reader->iol->gets_cb(mdl->reader->iol->in);
-	if (sscanf(line, "#mdl#%d#%"SCNu64"\n", &type, &nact) == 2) {
+        if (sscanf(line, "#mdl#%"SCNu32"#%"SCNu64"\n", &type, &nact) == 2) {
 		mdl->type = type;
 	} else if (sscanf(line, "#mdl#%"SCNu64"\n", &nact) == 1) {
                 mdl->type = 0;

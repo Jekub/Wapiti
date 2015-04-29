@@ -63,7 +63,7 @@ typedef struct timeval tms_t;
 typedef struct mdl_s mdl_t;
 struct mdl_s {
 	const opt_t *opt;  //       options for training
-	int       type;    //       model type
+	uint32_t  type;    //       model type
 
 	// Size of various model parameters
 	uint32_t  nlbl;    //   Y   number of labels
