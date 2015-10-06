@@ -31,12 +31,14 @@
 
 static char *iol_gets(void *in);
 static int   iol_print(void *out, char *msg, ...);
+static int   iol_sprint(void *out, char *msg, ...);
 
 iol_t *iol_new(FILE *in, FILE *out) {
     iol_t *iol = xmalloc(sizeof(iol_t));
     iol->gets_cb  = iol_gets,
     iol->in       = in;
     iol->print_cb = iol_print;
+    iol->write_cb = NULL;
     iol->out      = out;
     return iol;
 }
@@ -46,7 +48,18 @@ iol_t *iol_new2(gets_cb_t gets_cb, void *in, print_cb_t print_cb, void *out) {
     iol->gets_cb  = gets_cb;
     iol->in       = in;
     iol->print_cb = print_cb;
+    iol->write_cb = NULL;
     iol->out      = out;
+    return iol;
+}
+
+iol_t *iol_new3(gets_cb_t gets_cb, write_cb_t write_cb) {
+    iol_t *iol = xmalloc(sizeof(iol_t));
+    iol->gets_cb  = gets_cb;
+    iol->in       = (void *)iol;
+    iol->print_cb = iol_sprint;
+    iol->write_cb = write_cb;
+    iol->out      = (void *)iol;
     return iol;
 }
 
@@ -108,5 +121,36 @@ static int iol_print(void *out, char *msg, ...) {
 	int rc = vfprintf(file, msg, args);
 	va_end(args);
         return rc;
+}
+
+/* iol_sprin
+     sprintf a line, and forward it to the write_cb_t.
+*/
+static int iol_sprint(void *out, char *msg, ...) {
+    char *p;
+    int n = 0;
+    size_t size = 128;
+    iol_t *iol = (iol_t*)out;
+    
+    p = xmalloc(size);
+
+    while (1) {
+        if (size >= 16384)
+            fatal("iol_sprintf");
+
+	va_list args;
+	va_start(args, msg);
+	n = vsnprintf(p, size, msg, args);
+	va_end(args);
+
+        if (n > -1 && n < size)
+            break;
+
+        size *= 2;
+        p = xrealloc(p, size);
+    }
+
+    iol->write_cb(p, n);
+    return n;
 }
 
