@@ -76,6 +76,7 @@ mdl_t *mdl_new(rdr_t *rdr) {
 	mdl->reader = rdr;
 	mdl->werr   = NULL;
 	mdl->total  = 0.0;
+        mdl->opt    = &opt_defaults;
 	return mdl;
 }
 
