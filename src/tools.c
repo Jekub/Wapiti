@@ -110,6 +110,13 @@ void info(const char *msg, ...) {
 	va_end(args);
 }
 
+/* xfree:
+    Free a pointer.
+ */
+void xfree(void *p) {
+    free(p);
+}
+
 /* xmalloc:
  *   A simple wrapper around malloc who violently fail if memory cannot be
  *   allocated, so it will never return NULL.
