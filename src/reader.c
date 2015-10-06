@@ -170,9 +170,11 @@ raw_t *rdr_readraw(iol_t *iol, bool autouni) {
 	// before reading the sequence stoping at end of file or on a new blank
 	// line.
 	while (true) {
-                char *line = iol->gets_cb(iol->in);
-		if (line == NULL)
+                char *p = iol->gets_cb(iol->in);
+		if (p == NULL)
 			break;
+
+                char *line = xstrdup(p);
 		// Check for empty line marking the end of the current sequence
 		int len = strlen(line);
 		while (len != 0 && isspace(line[len - 1]))
