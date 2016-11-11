@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 2.8)
 project( wapiti )
 
 set(CMAKE_C_FLAGS "-std=c99")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3")
 
 set(CMAKE_SKIP_BUILD_RPATH FALSE)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
