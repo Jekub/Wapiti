@@ -1,0 +1,33 @@
+init:
+  - git config --global core.autocrlf input
+
+cache:
+  - ninja-win.zip
+
+environment:
+  NINJA_U: https://github.com/ninja-build/ninja/releases/download/v1.7.2/ninja-win.zip
+  NINJA_A: ninja-win.zip
+
+install:
+  - if not exist "%NINJA_A%" appveyor DownloadFile "%NINJA_U%" -FileName "%NINJA_A%"
+  - 7z x "%NINJA_A%" -oc:\projects\deps\ninja > nul
+  - set PATH=c:\projects\deps\ninja;%PATH%
+
+before_build:
+  - call "%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" x64
+  - ninja --version
+  - cmake --version
+  - clang-cl -v
+  - set
+
+build_script:
+  - cmake -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_BUILD_TYPE=Release -G Ninja .
+  - ninja
+
+after_build:
+  - 7z a wapiti-llvm-x64.zip COPYING README.mkd wapiti.dll wapiti-cmd.exe
+  - appveyor PushArtifact wapiti-llvm-x64.zip
+
+artifacts:
+  - path: wapiti-llvm-x64.zip
+
