@@ -37,8 +37,13 @@
 #define unused(v) ((void)(v))
 #define none ((uint64_t)-1)
 
+#ifndef min
 #define min(a, b) ((a) < (b) ? (a) : (b))
+#endif
+
+#ifndef max
 #define max(a, b) ((a) < (b) ? (b) : (a))
+#endif
 
 void fatal(const char *msg, ...);
 void pfatal(const char *msg, ...);

@@ -26,11 +26,18 @@
  * SUPPORT, UPDATES, ENHANCEMENTS, OR MODIFICATIONS.
  */
 
-#if defined(WIN32) || !defined(_WIN32)
+#if defined(__llvm__) && defined(WIN32)
+#include "winsock2.h"
+#else
 #include <sys/time.h>
+#endif
 
 /* FILETIME of Jan 1 1970 00:00:00, the PostgreSQL epoch */
+#if defined(__llvm__) && defined(WIN32)
+static const unsigned __int64 epoch = 116444736000000000LL;
+#else
 static const unsigned __int64 epoch = UINT64CONST(116444736000000000);
+#endif
 
 /*
  * FILETIME represents the number of 100-nanosecond intervals since
@@ -95,7 +102,13 @@ init_win32_gettimeofday(void)
  * elapsed_time().
  */
 int
-gettimeofday(struct timeval * tp, struct timezone * tzp)
+gettimeofday(
+        struct timeval * tp, 
+#if defined(__llvm__) && defined(WIN32)
+        void * tzp)
+#else
+        struct timezone * tzp)
+#endif 
 {
 	FILETIME	file_time;
 	ULARGE_INTEGER ularge;
@@ -111,4 +124,4 @@ gettimeofday(struct timeval * tp, struct timezone * tzp)
 	return 0;
 }
 
-#endif
+/* #endif */

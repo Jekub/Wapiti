@@ -29,7 +29,9 @@
 #define thread_h
 
 #include <stdint.h>
+#if !defined(__llvm__) && defined(WIN32)
 #include <pthread.h>
+#endif
 
 #include "model.h"
 

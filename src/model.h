@@ -30,7 +30,11 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#if defined(__llvm__) && defined(WIN32)
+#include "winsock.h"
+#else
 #include <sys/time.h>
+#endif
 
 #include "wapiti.h"
 #include "options.h"
