@@ -32,7 +32,7 @@ artifacts:
   - path: wapiti-llvm-x64.zip
 
 deploy:
-  release: $(appveyor_repo_branch)
+  release: $(APPVEYOR_REPO_TAG_NAME)
   provider: GitHub
   auth_token:
     secure: XUHs7rAfk3ymN4Rn1ORzRZlZynQDMj3T2CxzaKusU/Zw6SYLBS8wSxt5y12+onZX
