@@ -1,3 +1,5 @@
+[![Build status](https://ci.appveyor.com/api/projects/status/ry6ki3d31qneg5po?svg=true)](https://ci.appveyor.com/project/boumenot/wapiti)
+
 # Wapiti
 
 This is a fork of [Wapiti][wapiti].  Please see the [original
