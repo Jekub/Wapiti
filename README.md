@@ -9,7 +9,7 @@ site][wapiti] for the definitive source.
 
 This version has been modified to support:
 
- * Support for Windows.
+ * Windows (x64).
  * Streaming IO interface for loading data in leiu of reading files
     off disk.
  * Intentional support for C# via P/Invoke.
