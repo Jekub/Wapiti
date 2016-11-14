@@ -1,3 +1,10 @@
 build/
 src/CMakeFiles
 *~
+CMakeCache.txt
+cmake_install.cmake
+CMakeFiles
+build.ninja
+rules.ninja
+.ninja_deps
+.ninja_log
