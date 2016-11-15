@@ -18,10 +18,12 @@ before_build:
   - ninja --version
   - cmake --version
   - clang-cl -v
+  - if "%APPVEYOR_REPO_TAG%"=="true" (set CMAKE_BUILD_TYPE=Release) else (set CMAKE_BUILD_TYPE=Debug)
   - set
 
+
 build_script:
-  - cmake -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -DCMAKE_BUILD_TYPE=Release -G Ninja .
+  - cmake -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl -G Ninja .
   - ninja
 
 after_build:
