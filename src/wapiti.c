@@ -359,6 +359,7 @@ int main(int argc, char *argv[argc]) {
     iol_t *io_iol = create_iol(&opt);
     iol_t *model_iol;
 	switch (opt.mode) {
+			case 0:  model_iol = io_iol; break;
 	        case 2:  model_iol = io_iol; break;
             default: model_iol = create_model_iol(&opt); break;
 	}
