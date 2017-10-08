@@ -132,7 +132,7 @@ void rdr_loadpat(rdr_t *rdr, iol_t *iol) {
 			break;
 		// Remove comments and trailing spaces
 		int end = strcspn(line, "#");
-		while (end != 0 && isspace(line[end - 1] & 0x7f))
+		while (end != 0 && isspace(line[end - 1] & 0xff))
 			end--;
 		if (end == 0) {
 			free(line);
@@ -177,7 +177,7 @@ raw_t *rdr_readraw(iol_t *iol, bool autouni) {
                 char *line = xstrdup(p);
 		// Check for empty line marking the end of the current sequence
 		int len = strlen(line);
-		while (len != 0 && isspace(line[len - 1] & 0x7f))
+		while (len != 0 && isspace(line[len - 1] & 0xff))
 			len--;
 		if (len == 0) {
 			free(line);
@@ -368,7 +368,7 @@ seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl) {
 	for (uint32_t t = 0; t < T; t++) {
 		// Get a copy of the raw line skiping leading space characters
 		const char *src = raw->lines[t];
-		while (isspace(*src & 0x7f))
+		while (isspace(*src & 0xff))
 			src++;
 		char *line = xstrdup(src);
 		// Split it in tokens
@@ -376,12 +376,12 @@ seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl) {
 		uint32_t cnt = 0;
 		while (*line != '\0') {
 			toks[cnt++] = line;
-			while (*line != '\0' && !isspace(*line & 0x7f))
+			while (*line != '\0' && !isspace(*line & 0xff))
 				line++;
 			if (*line == '\0')
 				break;
 			*line++ = '\0';
-			while (*line != '\0' && isspace(*line & 0x7f))
+			while (*line != '\0' && isspace(*line & 0xff))
 				line++;
 		}
 		// If user specified that data are labelled, move the last token

@@ -251,12 +251,12 @@ static void doupdt(mdl_t *mdl, iol_t *iol) {
 		char *toks[4];
 		int ntoks = 0;
 		while (ntoks < 4) {
-			while (isspace(*line))
+			while (isspace(*line && 0xff))
 				line++;
 			if (*line == '\0')
 				break;
 			toks[ntoks++] = line;
-			while (*line != '\0' && !isspace(*line))
+			while (*line != '\0' && !isspace(*line & 0xff))
 				line++;
 			if (*line == '\0')
 				break;
