@@ -74,7 +74,7 @@ void iol_free(iol_t *iol) {
  *   caller is responsible to free it. If the input is exhausted, NULL is returned.
  */
 static char *iol_gets(void *in) {
-        FILE *file = (FILE*)in;
+	FILE *file = (FILE*)in;
 	// Initialize the buffer
 	uint32_t len = 0, size = 16;
 	char *buffer = xmalloc(size);
@@ -107,7 +107,7 @@ static char *iol_gets(void *in) {
 	// remove the end of line if present and resize the buffer to fit the
 	// data
 	if (buffer[len - 1] == '\n')
-            buffer[--len] = '\0';
+		buffer[--len] = '\0';
 	return xrealloc(buffer, len + 1);
 }
 
@@ -115,7 +115,7 @@ static char *iol_gets(void *in) {
  *   Print a line to <out>.
  */
 static int iol_print(void *out, char *msg, ...) {
-        FILE *file = (FILE*)out;
+	FILE *file = (FILE*)out;
 	va_list args;
 	va_start(args, msg);
 	int rc = vfprintf(file, msg, args);
@@ -138,10 +138,10 @@ static int iol_sprint(void *out, char *msg, ...) {
         if (size >= 16384)
             fatal("iol_sprintf");
 
-	va_list args;
-	va_start(args, msg);
-	n = vsnprintf(p, size, msg, args);
-	va_end(args);
+		va_list args;
+		va_start(args, msg);
+		n = vsnprintf(p, size, msg, args);
+		va_end(args);
 
         if (n > -1 && n < size)
             break;

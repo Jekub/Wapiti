@@ -68,15 +68,15 @@
  */
 mdl_t *mdl_new(rdr_t *rdr) {
 	mdl_t *mdl = xmalloc(sizeof(mdl_t));
-	mdl->nlbl   = mdl->nobs  = mdl->nftr = 0;
-	mdl->kind   = NULL;
-	mdl->uoff   = mdl->boff  = NULL;
-	mdl->theta  = NULL;
-	mdl->train  = mdl->devel = NULL;
+	mdl->nlbl = mdl->nobs = mdl->nftr = 0;
+	mdl->kind = NULL;
+	mdl->uoff = mdl->boff = NULL;
+	mdl->theta = NULL;
+	mdl->train = mdl->devel = NULL;
 	mdl->reader = rdr;
-	mdl->werr   = NULL;
-	mdl->total  = 0.0;
-        mdl->opt    = &opt_defaults;
+	mdl->werr = NULL;
+	mdl->total = 0.0;
+	mdl->opt = &opt_defaults;
 	return mdl;
 }
 
@@ -287,28 +287,27 @@ void mdl_load(mdl_t *mdl) {
 	const char *err = "invalid model format";
 	uint64_t nact = 0;
 	int type;
-        char *line;
+	char *line;
 
-        setlocale(LC_ALL, "C");
+	setlocale(LC_ALL, "C");
 
-        line = mdl->reader->iol->gets_cb(mdl->reader->iol->in);
-        if (sscanf(line, "#mdl#%"SCNu32"#%"SCNu64"\n", &type, &nact) == 2) {
+	line = mdl->reader->iol->gets_cb(mdl->reader->iol->in);
+	if (sscanf(line, "#mdl#%"SCNu32"#%"SCNu64"\n", &type, &nact) == 2) {
 		mdl->type = type;
 	} else if (sscanf(line, "#mdl#%"SCNu64"\n", &nact) == 1) {
-                mdl->type = 0;
-        } else {
-                fatal(err);
+        mdl->type = 0;
+    } else {
+        fatal(err);
 	}
-        rdr_load(mdl->reader);
+    rdr_load(mdl->reader);
 	mdl_sync(mdl);
 	for (uint64_t i = 0; i < nact; i++) {
 		uint64_t f;
 		double v;
                 
-                line = mdl->reader->iol->gets_cb(mdl->reader->iol->in);
+        line = mdl->reader->iol->gets_cb(mdl->reader->iol->in);
 		if (sscanf(line, "%"SCNu64"=%la\n", &f, &v) != 2)
 			fatal(err);
 		mdl->theta[f] = v;
 	}
 }
-

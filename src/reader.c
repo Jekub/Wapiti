@@ -40,7 +40,8 @@
 #include "tools.h"
 #include "ioline.h"
 
-/*******************************************************************************
+
+ /*******************************************************************************
  * Datafile reader
  *
  *   And now come the data file reader which use the previous module to parse
@@ -143,19 +144,18 @@ void rdr_loadpat(rdr_t *rdr, iol_t *iol) {
 		pat_t *pat = pat_comp(line);
 		rdr->npats++;
 		switch (line[0]) {
-			case 'u': rdr->nuni++; break;
-			case 'b': rdr->nbi++; break;
-			case '*': rdr->nuni++;
-			          rdr->nbi++; break;
-			default:
-				fatal("unknown pattern type '%c'", line[0]);
+		case 'u': rdr->nuni++; break;
+		case 'b': rdr->nbi++; break;
+		case '*': rdr->nuni++;
+			rdr->nbi++; break;
+		default:
+			fatal("unknown pattern type '%c'", line[0]);
 		}
 		rdr->pats = xrealloc(rdr->pats, sizeof(char *) * rdr->npats);
 		rdr->pats[rdr->npats - 1] = pat;
 		rdr->ntoks = max(rdr->ntoks, pat->ntoks);
 	}
 }
-
 
 /* rdr_readraw:
  *   Read a raw sequence from given file: a set of lines terminated by end of
@@ -424,7 +424,7 @@ seq_t *rdr_raw2seq(rdr_t *rdr, const raw_t *raw, bool lbl) {
  *   Return NULL if end of file occure before anything as been read.
  */
 seq_t *rdr_readseq(rdr_t *rdr, iol_t *iol, bool lbl) {
-        raw_t *raw = rdr_readraw(iol, rdr->autouni);
+    raw_t *raw = rdr_readraw(iol, rdr->autouni);
 	if (raw == NULL)
 		return NULL;
 	seq_t *seq = rdr_raw2seq(rdr, raw, lbl);
@@ -448,7 +448,7 @@ dat_t *rdr_readdat(rdr_t *rdr, iol_t *iol, bool lbl) {
 	// Load sequences
 	while (true) {
 		// Read the next sequence
-                seq_t *seq = rdr_readseq(rdr, iol, lbl);
+        seq_t *seq = rdr_readseq(rdr, iol, lbl);
 		if (seq == NULL)
 			break;
 		// Grow the buffer if needed
@@ -484,7 +484,7 @@ dat_t *rdr_readdat(rdr_t *rdr, iol_t *iol, bool lbl) {
 void rdr_load(rdr_t *rdr) {
 	const char *err = "broken file, invalid reader format";
 	int autouni = rdr->autouni;
-        char *line = rdr->iol->gets_cb(rdr->iol->in);
+	char *line = rdr->iol->gets_cb(rdr->iol->in);
 	if (sscanf(line, "#rdr#%"PRIu32"/%"PRIu32"/%d\n",
 			&rdr->npats, &rdr->ntoks, &autouni) != 3) {
 		// This for compatibility with previous file format

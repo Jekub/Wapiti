@@ -54,7 +54,7 @@ struct rdr_s {
 	pat_t    **pats;       // [P]  List of precompiled patterns
 	qrk_t     *lbl;        //      Labels database
 	qrk_t     *obs;        //      Observation database
-        iol_t     *iol;        //      Class to handle line based IO.
+    iol_t     *iol;        //      Class to handle line based IO.
 };
 
 rdr_t *rdr_new(iol_t *iol, bool autouni);

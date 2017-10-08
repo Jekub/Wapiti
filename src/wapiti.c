@@ -324,7 +324,7 @@ static iol_t *create_iol(opt_t *opt) {
 			pfatal("cannot open output data file");
 	}
  
-        return iol_new(fin, fout);
+    return iol_new(fin, fout);
 }
 
 static void close_iol(iol_t *iol) {
@@ -335,15 +335,15 @@ static void close_iol(iol_t *iol) {
 }
 
 static iol_t *create_model_iol(opt_t *opt) {
-        if (opt->model == NULL) 
-            fatal("you must specify a model");
+    if (opt->model == NULL)
+        fatal("you must specify a model");
 
 	FILE *fin = fopen(opt->model, "r");
 	if (fin == NULL)
-            pfatal("cannot open model file %s", opt->model);
+		pfatal("cannot open model file %s", opt->model);
 
-        iol_t *iol = iol_new(fin, NULL);
-        return iol;
+    iol_t *iol = iol_new(fin, NULL);
+    return iol;
 }
 
 
@@ -352,22 +352,22 @@ static iol_t *create_model_iol(opt_t *opt) {
  * Entry point
  ******************************************************************************/
 int main(int argc, char *argv[argc]) {
-	// We first parse command line switchs
+		// We first parse command line switchs
 	opt_t opt = opt_defaults;
 	opt_parse(argc, argv, &opt);
 	// Next we prepare the model
-        iol_t *io_iol = create_iol(&opt);
-        iol_t *model_iol;
+    iol_t *io_iol = create_iol(&opt);
+    iol_t *model_iol;
 	switch (opt.mode) {
 	        case 2:  model_iol = io_iol; break;
-                default: model_iol = create_model_iol(&opt); break;
+            default: model_iol = create_model_iol(&opt); break;
 	}
 	mdl_t *mdl = mdl_new(rdr_new(model_iol, opt.maxent));
 	mdl->opt = &opt;
 	// And switch to requested mode
 	switch (opt.mode) {
-                case 0: dotrain(mdl, io_iol); break;
-                case 1: dolabel(mdl, io_iol); break;
+            case 0: dotrain(mdl, io_iol); break;
+            case 1: dolabel(mdl, io_iol); break;
 	        case 2: dodump(mdl, io_iol);  break;
 	        case 3: doupdt(mdl, io_iol);  break;
 	}
