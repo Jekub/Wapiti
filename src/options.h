@@ -37,6 +37,7 @@
  *   filled with parameters from command line.
  */
 typedef struct opt_s opt_t;
+// TODO(boumenot): this struct is needed for Interop.  The ordering and use of __packed__ should be better.
 struct opt_s {
 	int       mode;
 	char     *input,  *output;
@@ -71,7 +72,7 @@ struct opt_s {
 		double   kappa;
 	} bcd;
 	// Options specific to RPROP
-	struct {
+	struct __attribute__((__packed__)) {
 		double   stpmin;
 		double   stpmax;
 		double   stpinc;
