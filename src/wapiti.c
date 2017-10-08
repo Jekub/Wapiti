@@ -67,6 +67,63 @@ static const struct {
 };
 static const uint32_t trn_cnt = sizeof(trn_lst) / sizeof(trn_lst[0]);
 
+/* train:
+ * Interop method to support model training.  This method is based on
+ * dotrain.  There is no native caller of this method.
+ */
+int train(opt_t *opt, iol_t *model_iol, iol_t *pattern_iol) {
+	// 1. load the data into the model
+	mdl_t *mdl = mdl_new(rdr_new(model_iol, opt->maxent));
+	mdl->opt = opt;
+
+	// 2. verify
+	uint32_t typ = 0, trn = 0;
+	for (typ = 0; typ < typ_cnt; typ++)
+		if (!strcmp(mdl->opt->type, typ_lst[typ])) {
+			break;
+		}
+	if (typ == typ_cnt)
+		return -100/*invalid type*/;
+
+	mdl->type = typ;
+
+	for (trn = 0; trn < trn_cnt; trn++)
+		if (!strcmp(mdl->opt->algo, trn_lst[trn].name))
+			break;
+	if (trn == trn_cnt)
+		return -200/*invalid algo*/;
+
+	// 3. load the pattern
+	rdr_loadpat(mdl->reader, pattern_iol);
+	qrk_lock(mdl->reader->obs, false);
+
+	// 4. load the training data
+	mdl->train = rdr_readdat(mdl->reader, model_iol, true);
+
+	// 5. lock the quarks
+	qrk_lock(mdl->reader->lbl, true);
+	qrk_lock(mdl->reader->obs, true);
+
+	// 6. sync the model
+	mdl_sync(mdl);
+
+	// 7. train the model
+	uit_setup(mdl);
+	trn_lst[trn].train(mdl);
+	uit_cleanup(mdl);
+
+	// 8. compact the model
+	if (opt->compact)
+		mdl_compact(mdl);
+
+	// 9. save the model
+	mdl_save(mdl, model_iol);
+	return 0;
+}
+
+/*******************************************************************************
+* Training
+******************************************************************************/
 static void dotrain(mdl_t *mdl, iol_t *iol) {
 	// Check if the user requested the type or trainer list. If this is not
 	// the case, search them in the lists.
