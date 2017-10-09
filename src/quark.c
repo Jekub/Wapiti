@@ -33,7 +33,9 @@
 #include <string.h>
 
 #include "quark.h"
+#include "reader.h"
 #include "tools.h"
+#include "ioline.h"
 
 /******************************************************************************
  * Map object
@@ -223,13 +225,13 @@ const char *qrk_id2str(const qrk_t *qrk, uint64_t id) {
  *   file. We put one key per line so, if no key contains a new line, the line
  *   number correspond to the id.
  */
-void qrk_save(const qrk_t *qrk, FILE *file) {
-	if (fprintf(file, "#qrk#%"PRIu64"\n", qrk->count) < 0)
+void qrk_save(const qrk_t *qrk, iol_t *iol) {
+        if (iol->print_cb(iol->out, "#qrk#%"PRIu64"\n", qrk->count) < 0)
 		pfatal("cannot write to file");
 	if (qrk->count == 0)
 		return;
 	for (uint64_t n = 0; n < qrk->count; n++)
-		ns_writestr(file, qrk->leafs[n]->key);
+		ns_writestr(iol, qrk->leafs[n]->key);
 }
 
 /* qrk_load:
@@ -238,19 +240,20 @@ void qrk_save(const qrk_t *qrk, FILE *file) {
  *   not already present. If all keys are single lines and the given map is
  *   initilay empty, this will load a map exactly as saved by qrk_save.
  */
-void qrk_load(qrk_t *qrk, FILE *file) {
+void qrk_load(qrk_t *qrk, iol_t *iol) {
 	uint64_t cnt = 0;
-	if (fscanf(file, "#qrk#%"SCNu64"\n", &cnt) != 1) {
-		if (ferror(file) != 0)
-			pfatal("cannot read from file");
+        char *line = iol->gets_cb(iol->in);
+
+	if (sscanf(line, "#qrk#%"SCNu64"\n", &cnt) != 1) {
 		pfatal("invalid format");
 	}
 	for (uint64_t n = 0; n < cnt; ++n) {
-		char *str = ns_readstr(file);
+                char *str = ns_readstr(iol);
 		qrk_str2id(qrk, str);
 		free(str);
 	}
 }
+
 
 /* qrk_count:
  *   Return the number of mappings stored in the quark.

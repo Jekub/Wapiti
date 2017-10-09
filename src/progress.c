@@ -32,9 +32,15 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#if defined(__llvm__) && defined(WIN32)
+#include "winsock.h"
+#else
 #include <unistd.h>
 #include <sys/time.h>
+#endif
+#if !defined(WIN32) && !defined(_WIN32)
 #include <sys/resource.h>
+#endif
 
 #include "wapiti.h"
 #include "decoder.h"

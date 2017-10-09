@@ -35,6 +35,7 @@
 #include <string.h>
 
 #include "tools.h"
+#include "ioline.h"
 
 /*******************************************************************************
  * Error handling and memory managment
@@ -109,6 +110,13 @@ void info(const char *msg, ...) {
 	va_end(args);
 }
 
+/* xfree:
+    Free a pointer.
+ */
+void xfree(void *p) {
+    free(p);
+}
+
 /* xmalloc:
  *   A simple wrapper around malloc who violently fail if memory cannot be
  *   allocated, so it will never return NULL.
@@ -142,6 +150,17 @@ char *xstrdup(const char *str) {
 	return res;
 }
 
+/* xstrndup:
+ *   As the previous one, this is a safe version of xstrndup who fail on
+ *   allocation error.
+ */
+char *xstrndup(const char *str, size_t size) {
+	const size_t len = size + 1;
+	char *res = xmalloc(sizeof(char) * len);
+	memcpy(res, str, len);
+	return res;
+}
+
 /******************************************************************************
  * Netstring for persistent storage
  *
@@ -157,26 +176,45 @@ char *xstrdup(const char *str) {
  *   Read a string from the given file in netstring format. The string is
  *   returned as a newly allocated bloc of memory 0-terminated.
  */
-char *ns_readstr(FILE *file) {
-	uint32_t len;
-	if (fscanf(file, "%"SCNu32":", &len) != 1)
-		pfatal("cannot read from file");
-	char *buf = xmalloc(len + 1);
-	if (fread(buf, len, 1, file) != 1)
-		pfatal("cannot read from file");
-	if (fgetc(file) != ',')
-		fatal("invalid format");
-	buf[len] = '\0';
-	fgetc(file);
+char *ns_readstr(iol_t *iol) {
+        int len = 0;
+        int i = 0;
+        char *line = iol->gets_cb(iol->in);
+        
+        if (sscanf(line, "%d:", &len) != 1)
+            pfatal("invalid format");
+
+        char *colon = strchr(line, ':');
+        if (colon == NULL)
+            pfatal("invalid format");
+
+        char *comma = colon + len + 1;
+        if (comma[0] != ',') {
+            printf("\n====================================\n");
+            printf("line=>> %s <<\n", line);
+            printf("colon='%s', comma='%s', len='%d'\n", colon, comma, len);
+            
+            for (i = 0; i < 26; i++)
+                printf("%2x-", (int)line[i]);
+            printf("\n====================================\n");
+
+            pfatal("invalid format");
+        }
+
+        char *buf = xstrndup(colon + 1, len);
+        buf[len] = '\0';
+
+
+
 	return buf;
 }
 
 /* ns_writestr:
  *   Write a string in the netstring format to the given file.
  */
-void ns_writestr(FILE *file, const char *str) {
+void ns_writestr(iol_t *iol, const char *str) {
 	const uint32_t len = strlen(str);
-	if (fprintf(file, "%"PRIu32":%s,\n", len, str) < 0)
+        if (iol->print_cb(iol->out, "%"PRIu32":%s,\n", len, str) < 0)
 		pfatal("cannot write to file");
 }
 

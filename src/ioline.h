@@ -1,9 +1,6 @@
 /*
  *      Wapiti - A linear-chain CRF tool
  *
- * Copyright (c) 2009-2013  CNRS
- * All rights reserved.
- *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
  *     * Redistributions of source code must retain the above copyright
@@ -24,40 +21,32 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-#ifndef tools_h
-#define tools_h
 
-#include <stdarg.h>
-#include <stddef.h>
-#include <stdint.h>
+#ifndef ioline_h
+#define ioline_h
+
 #include <stdio.h>
 
-#include "ioline.h"
+typedef char *(*gets_cb_t)(void *);
+typedef int   (*print_cb_t)(void *, char *, ...);
+typedef void  (*write_cb_t)(char *, int);
 
-#define unused(v) ((void)(v))
-#define none ((uint64_t)-1)
+/* iol_t:
+ *   Represents a class to do IO in a line by line basis.
+ */
+typedef struct iol_s iol_t;
+struct iol_s {
+    gets_cb_t gets_cb;   // callback to get a line from in
+    print_cb_t print_cb; // callback to print a line to out
+    write_cb_t write_cb; // callback to write a line to out
 
-#ifndef min
-#define min(a, b) ((a) < (b) ? (a) : (b))
-#endif
+    void *in;          // state passed to the gets callback
+    void *out;         // state passed to the puts callback
+};    
 
-#ifndef max
-#define max(a, b) ((a) < (b) ? (b) : (a))
-#endif
-
-void fatal(const char *msg, ...);
-void pfatal(const char *msg, ...);
-void warning(const char *msg, ...);
-void info(const char *msg, ...);
-
-void *xmalloc(size_t size);
-void *xrealloc(void *ptr, size_t size);
-char *xstrdup(const char *str);
-char *xstrndup(const char *str, size_t size);
-
-void xfree(void *);
-
-char *ns_readstr(iol_t *iol);
-void ns_writestr(iol_t *iol, const char *str);
+iol_t *iol_new(FILE *in, FILE *out);
+iol_t *iol_new2(gets_cb_t gets_cb, void *in, print_cb_t print_cb, void *out);
+iol_t *iol_new3(gets_cb_t gets_cb, write_cb_t write_cb);
+void iol_free(iol_t *iol);
 
 #endif

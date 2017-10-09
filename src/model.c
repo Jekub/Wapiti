@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <locale.h>
 
 #include "wapiti.h"
 #include "model.h"
@@ -67,14 +68,15 @@
  */
 mdl_t *mdl_new(rdr_t *rdr) {
 	mdl_t *mdl = xmalloc(sizeof(mdl_t));
-	mdl->nlbl   = mdl->nobs  = mdl->nftr = 0;
-	mdl->kind   = NULL;
-	mdl->uoff   = mdl->boff  = NULL;
-	mdl->theta  = NULL;
-	mdl->train  = mdl->devel = NULL;
+	mdl->nlbl = mdl->nobs = mdl->nftr = 0;
+	mdl->kind = NULL;
+	mdl->uoff = mdl->boff = NULL;
+	mdl->theta = NULL;
+	mdl->train = mdl->devel = NULL;
 	mdl->reader = rdr;
-	mdl->werr   = NULL;
-	mdl->total  = 0.0;
+	mdl->werr = NULL;
+	mdl->total = 0.0;
+	mdl->opt = &opt_defaults;
 	return mdl;
 }
 
@@ -263,16 +265,17 @@ void mdl_compact(mdl_t *mdl) {
 /* mdl_save:
  *   Save a model to be restored later in a platform independant way.
  */
-void mdl_save(mdl_t *mdl, FILE *file) {
+void mdl_save(mdl_t *mdl, iol_t *iol) {
 	uint64_t nact = 0;
+        setlocale(LC_ALL, "C");
 	for (uint64_t f = 0; f < mdl->nftr; f++)
 		if (mdl->theta[f] != 0.0)
 			nact++;
-	fprintf(file, "#mdl#%d#%"PRIu64"\n", mdl->type, nact);
-	rdr_save(mdl->reader, file);
+        iol->print_cb(iol->out, "#mdl#%"PRIu32"#%"PRIu64"\n", mdl->type, nact);
+	rdr_save(mdl->reader, iol);
 	for (uint64_t f = 0; f < mdl->nftr; f++)
 		if (mdl->theta[f] != 0.0)
-			fprintf(file, "%"PRIu64"=%la\n", f, mdl->theta[f]);
+                        iol->print_cb(iol->out, "%"PRIu64"=%la\n", f, mdl->theta[f]);
 }
 
 /* mdl_load:
@@ -280,27 +283,31 @@ void mdl_save(mdl_t *mdl, FILE *file) {
  *   The returned model is synced and the quarks are locked. You must give to
  *   this function an empty model fresh from mdl_new.
  */
-void mdl_load(mdl_t *mdl, FILE *file) {
+void mdl_load(mdl_t *mdl) {
 	const char *err = "invalid model format";
 	uint64_t nact = 0;
 	int type;
-	if (fscanf(file, "#mdl#%d#%"SCNu64"\n", &type, &nact) == 2) {
+	char *line;
+
+	setlocale(LC_ALL, "C");
+
+	line = mdl->reader->iol->gets_cb(mdl->reader->iol->in);
+	if (sscanf(line, "#mdl#%"SCNu32"#%"SCNu64"\n", &type, &nact) == 2) {
 		mdl->type = type;
-	} else {
-		rewind(file);
-		if (fscanf(file, "#mdl#%"SCNu64"\n", &nact) == 1)
-			mdl->type = 0;
-		else
-			fatal(err);
+	} else if (sscanf(line, "#mdl#%"SCNu64"\n", &nact) == 1) {
+        mdl->type = 0;
+    } else {
+        fatal(err);
 	}
-	rdr_load(mdl->reader, file);
+    rdr_load(mdl->reader);
 	mdl_sync(mdl);
 	for (uint64_t i = 0; i < nact; i++) {
 		uint64_t f;
 		double v;
-		if (fscanf(file, "%"SCNu64"=%la\n", &f, &v) != 2)
+                
+        line = mdl->reader->iol->gets_cb(mdl->reader->iol->in);
+		if (sscanf(line, "%"SCNu64"=%la\n", &f, &v) != 2)
 			fatal(err);
 		mdl->theta[f] = v;
 	}
 }
-

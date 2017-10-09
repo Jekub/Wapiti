@@ -1,0 +1,48 @@
+image: Visual Studion 2017
+
+init:
+  - git config --global core.autocrlf input
+
+skip_commits:
+  files:
+    - build.cmd
+    - clean.cmd
+    - init.cmd
+    - README.md
+
+before_build:
+  - call "%VS140COMNTOOLS%\..\..\VC\vcvarsall.bat" x64
+  - echo %PATH%
+  - cmake --version
+  - clang-cl -v
+  - cl
+  - msbuild /version
+  - set
+
+build_script:
+  - cmake -G "Visual Studio 15 2017 Win64" -T LLVM-vs2014
+  - msbuild /t:Build /p:Configuration=Debug   /bl:debug.binlog
+  - msbuild /t:Build /p:Configuration=Release /bl:release.binlog
+
+after_build:
+  - 7z a wapiti-msvc-x64-debug.7z -mx9 COPYING README.md Debug/*
+  - 7z a wapiti-msvc-x64.7z       -mx9 COPYING README.md Release/*
+  - appveyor PushArtifact wapiti-msvc-x64.7z wapiti-msvc-x64-debug.7z
+
+artifacts:
+  - path: wapiti-msvc-x64.7z wapiti-msvc-x64-debug.7z
+
+on_failure:
+  - appveyor PushArtifact debug.binlog release.binlog
+
+deploy:
+  release: $(APPVEYOR_REPO_TAG_NAME)
+  provider: GitHub
+  auth_token:
+    secure: XUHs7rAfk3ymN4Rn1ORzRZlZynQDMj3T2CxzaKusU/Zw6SYLBS8wSxt5y12+onZX
+  artifact: wapiti-msvc-x64-debug.7z wapiti-msvc-x64.7z
+  draft: false
+  prerelease: false
+  on:
+    branch: master
+    appveyor_repo_tag: true

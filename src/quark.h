@@ -32,6 +32,9 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "tools.h"
+#include "ioline.h"
+
 typedef struct qrk_s qrk_t;
 
 qrk_t *qrk_new(void);
@@ -40,8 +43,8 @@ uint64_t qrk_count(const qrk_t *qrk);
 bool qrk_lock(qrk_t *qrk, bool lock);
 const char *qrk_id2str(const qrk_t *qrk, uint64_t id);
 uint64_t qrk_str2id(qrk_t *qrk, const char *key);
-void qrk_load(qrk_t *qrk, FILE *file);
-void qrk_save(const qrk_t *qrk, FILE *file);
+void qrk_load(qrk_t *qrk, iol_t *iol);
+void qrk_save(const qrk_t *qrk, iol_t *iol);
 
 #endif
 

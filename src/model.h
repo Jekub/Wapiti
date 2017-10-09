@@ -30,12 +30,17 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#if defined(__llvm__) && defined(WIN32)
+#include "winsock.h"
+#else
 #include <sys/time.h>
+#endif
 
 #include "wapiti.h"
 #include "options.h"
 #include "sequence.h"
 #include "reader.h"
+#include "tools.h"
 
 typedef struct timeval tms_t;
 
@@ -61,8 +66,8 @@ typedef struct timeval tms_t;
  */
 typedef struct mdl_s mdl_t;
 struct mdl_s {
-	opt_t    *opt;     //       options for training
-	int       type;    //       model type
+	const opt_t *opt;  //       options for training
+	uint32_t  type;    //       model type
 
 	// Size of various model parameters
 	uint32_t  nlbl;    //   Y   number of labels
@@ -96,7 +101,7 @@ mdl_t *mdl_new(rdr_t *rdr);
 void mdl_free(mdl_t *mdl);
 void mdl_sync(mdl_t *mdl);
 void mdl_compact(mdl_t *mdl);
-void mdl_save(mdl_t *mdl, FILE *file);
-void mdl_load(mdl_t *mdl, FILE *file);
+void mdl_save(mdl_t *mdl, iol_t *iol);
+void mdl_load(mdl_t *mdl);
 
 #endif

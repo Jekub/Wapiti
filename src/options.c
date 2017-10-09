@@ -52,7 +52,7 @@
  */
 static void opt_help(const char *pname) {
 	static const char msg[] =
-		"Global switchs:\n"
+		"Global switches:\n" 
 		"\t-h | --help      display this help message\n"
 		"\t   | --version   display version information\n"
 		"\n"
@@ -239,7 +239,7 @@ void opt_parse(int argc, char *argv[argc], opt_t *opt) {
 			else if (opt->output == NULL)
 				opt->output = argv[0];
 			else
-				fatal("too much input files on command line");
+				fatal("too many input files on command line");
 			argc--, argv++;
 			continue;
 		}
