@@ -293,7 +293,6 @@ void trn_bcd(mdl_t *mdl) {
 	//   Count active sequences per blocks
 	info("    - Build the index\n");
 	info("        1/2 -- scan the sequences\n");
-	uint64_t tot = 0;
 	uint32_t cnt[O], lcl[O];
 	for (uint64_t o = 0; o < O; o++)
 		cnt[o] = 0, lcl[o] = (uint32_t)-1;
@@ -310,8 +309,6 @@ void trn_bcd(mdl_t *mdl) {
 		for (uint64_t o = 0; o < O; o++)
 			cnt[o] += (lcl[o] == s);
 	}
-	for (uint64_t o = 0; o < O; o++)
-		tot += cnt[o];
 	// Allocate memory
 	uint32_t  *idx_cnt = xmalloc(sizeof(uint32_t  ) * O);
 	uint32_t **idx_lst = xmalloc(sizeof(uint32_t *) * O);

@@ -108,6 +108,10 @@ static void opt_help(const char *pname) {
 		"    %1$s update [options] [patch file] [output model]\n"
 		"\t-m | --model    FILE    model file to load\n"
 		"\t-c | --compact          compact model after training\n"
+		"\n"
+		"Generate mode\n"
+		"    %1$s generate [options] [input data] [output data]\n"
+		"\t-p | --pattern  FILE    patterns for extracting features\n"
 	;
 	fprintf(stderr, msg, pname);
 }
@@ -188,6 +192,7 @@ struct {
 	{2, "##", "--all",     'B', offsetof(opt_t, all         )},
 	{3, "-m", "--model",   'S', offsetof(opt_t, model       )},
 	{3, "-c", "--compact", 'B', offsetof(opt_t, compact     )},
+	{4, "-p", "--pattern", 'S', offsetof(opt_t, pattern     )},
 	{-1, NULL, NULL, '\0', 0}
 };
 
@@ -222,6 +227,8 @@ void opt_parse(int argc, char *argv[argc], opt_t *opt) {
 		opt->mode = 2;
 	} else if (!strcmp(argv[0], "u") || !strcmp(argv[0], "update")) {
 		opt->mode = 3;
+	} else if (!strcmp(argv[0], "g") || !strcmp(argv[0], "generate")) {
+		opt->mode = 4;
 	} else {
 		fatal("unknown mode <%s>", argv[0]);
 	}

@@ -387,6 +387,72 @@ static void doupdt(mdl_t *mdl) {
 }
 
 /*******************************************************************************
+ * Observation generation
+ ******************************************************************************/
+
+static void dogen(mdl_t *mdl) {
+	// Load the pattern file.
+	if (mdl->opt->pattern != NULL) {
+		info("* Load patterns\n");
+		FILE *file = fopen(mdl->opt->pattern, "r");
+		if (file == NULL)
+			pfatal("cannot open pattern file");
+		rdr_loadpat(mdl->reader, file);
+		fclose(file);
+	} else {
+		fatal("You must provide a pattern file in generate mode");
+	}
+	// Open input and output files
+	FILE *fin = stdin, *fout = stdout;
+	if (mdl->opt->input != NULL) {
+		fin = fopen(mdl->opt->input, "r");
+		if (fin == NULL)
+			pfatal("cannot open input data file");
+	}
+	if (mdl->opt->output != NULL) {
+		fout = fopen(mdl->opt->output, "w");
+		if (fout == NULL)
+			pfatal("cannot open output data file");
+	}
+	// Do the generation
+	qrk_t *obs = mdl->reader->obs;
+	uint64_t scnt = 0;
+	info("* Generate observations sequences\n");
+	while (!feof(fin)) {
+		// So, first read an input sequence.
+		seq_t *seq = rdr_readseq(mdl->reader, fin, false);
+		if (seq == NULL)
+			break;
+		const uint32_t T = seq->len;
+		for (uint32_t t = 0; t < T; t++) {
+			for (uint32_t o = 0; o < seq->pos[t].ucnt; o++) {
+				if (o != 0) fprintf(fout, "\t");
+				uint64_t i = seq->pos[t].uobs[o];
+				fprintf(fout, "%s", qrk_id2str(obs, i));
+			}
+			for (uint32_t o = 0; o < seq->pos[t].bcnt; o++) {
+				if (o != 0) fprintf(fout, "\t");
+				uint64_t i = seq->pos[t].bobs[o];
+				fprintf(fout, "%s", qrk_id2str(obs, i));
+			}
+			fprintf(fout, "\n");
+		}
+		fprintf(fout, "\n");
+		fflush(fout);
+		// And report our progress, at regular interval we display how
+		// many sequences were generated.
+		if (++scnt % 1000 == 0)
+			info("%10"PRIu64" sequences generated\n", scnt);
+	}
+	info("* Done\n");
+	// And close files
+	if (mdl->opt->input != NULL)
+		fclose(fin);
+	if (mdl->opt->output != NULL)
+		fclose(fout);
+}
+
+/*******************************************************************************
  * Entry point
  ******************************************************************************/
 int main(int argc, char *argv[argc]) {
@@ -402,6 +468,7 @@ int main(int argc, char *argv[argc]) {
 		case 1: dolabel(mdl); break;
 		case 2: dodump(mdl);  break;
 		case 3: doupdt(mdl);  break;
+		case 4: dogen(mdl);   break;
 	}
 	// And cleanup
 	mdl_free(mdl);

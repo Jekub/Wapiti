@@ -249,8 +249,11 @@ pat_t *pat_comp(char *p) {
 			int32_t off;
 			int nch;
 			item->absolute = false;
+			item->indirect = false;
 			if (sscanf(at, "[@%"SCNi32",%"SCNu32"%n", &off, &col, &nch) == 2)
 				item->absolute = true;
+			else if (sscanf(at, "[*%"SCNi32",%"SCNu32"%n", &off, &col, &nch) == 2)
+				item->indirect = true;
 			else if (sscanf(at, "[%"SCNi32",%"SCNu32"%n", &off, &col, &nch) != 2)
 				fatal("invalid pattern: %s", p);
 			item->offset = off;
@@ -331,6 +334,8 @@ char *pat_exec(const pat_t *pat, const tok_t *tok, uint32_t at) {
 					pos += T;
 				else
 					pos--;
+			} else if (item->indirect) {
+				pos = at + atoi(tok->toks[at][pos]);
 			} else {
 				pos += at;
 			}
